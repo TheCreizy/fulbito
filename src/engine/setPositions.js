@@ -57,20 +57,49 @@ export function setGoalieHasBall(matchDetails, thisGoalie) {
 
 function setupCornerPositions(matchDetails, attack, defence, cornerCoords, supportAttackCoords, supportDefCoords, isTop) {
   const taker = selectCornerTaker(attack)
+  taker.action = 'cross'
+
+  // Identificar centrales (CB) con mejor cabezazo para que suban al área rival
+  const cbs = attack.players.filter(p => (
+    common.isOnPitch(p) &&
+    p.playerID !== taker.playerID &&
+    (p.position === 'CB' || p.tacticalRole === 'CB' || p.tacticalRole === 'DFC' || p.tacticalRole === 'LÍBERO' || p.tacticalRole === 'STOP I' || p.tacticalRole === 'STOP D')
+  ))
+  cbs.sort((a, b) => ((b.skill.jumping || 0) + (Number(b.height) || 180)) - ((a.skill.jumping || 0) + (Number(a.height) || 180)))
+  const headingCBIds = new Set(cbs.slice(0, 2).map(c => c.playerID))
+
   for (let playerNum = 0; playerNum < 11; playerNum++) {
     const attP = attack.players[playerNum]
     const defP = defence.players[playerNum]
-    if (common.isOnPitch(attP)) {
-      if (playerNum < 5) attP.currentPOS = attP.originPOS.slice()
-      else attP.currentPOS = isTop ? common.getRandomTopPenaltyPosition(matchDetails) : common.getRandomBottomPenaltyPosition(matchDetails)
+    if (common.isOnPitch(attP) && attP.playerID !== taker.playerID) {
+      if (attP.position === 'GK') {
+        attP.currentPOS = attP.originPOS.slice()
+      } else if (headingCBIds.has(attP.playerID) || playerNum >= 5) {
+        // Delanteros, volantes ofensivos y los centrales cabeceadores van al área rival
+        attP.currentPOS = isTop
+          ? common.getRandomTopPenaltyPosition(matchDetails)
+          : common.getRandomBottomPenaltyPosition(matchDetails)
+        attP.intentPOS = attP.currentPOS.slice()
+      } else {
+        // Laterales y contención se quedan de retén en su campo
+        attP.currentPOS = attP.originPOS.slice()
+        attP.intentPOS = attP.currentPOS.slice()
+      }
     }
     if (common.isOnPitch(defP)) {
-      if (playerNum < 5) defP.currentPOS = defP.originPOS.slice()
-      else defP.currentPOS = isTop ? common.getRandomTopPenaltyPosition(matchDetails) : common.getRandomBottomPenaltyPosition(matchDetails)
+      if (playerNum === 0) defP.currentPOS = defP.originPOS.slice()
+      else defP.currentPOS = isTop
+        ? common.getRandomTopPenaltyPosition(matchDetails)
+        : common.getRandomBottomPenaltyPosition(matchDetails)
+      defP.intentPOS = defP.currentPOS.slice()
     }
   }
   taker.currentPOS = cornerCoords.slice()
-  const supportAtt = attack.players.find(p => common.isOnPitch(p) && p.playerID !== taker.playerID && p.position !== 'GK')
+  taker.intentPOS = cornerCoords.slice()
+  taker.hasBall = true
+  taker.action = 'cross'
+
+  const supportAtt = attack.players.find(p => common.isOnPitch(p) && p.playerID !== taker.playerID && p.position !== 'GK' && !headingCBIds.has(p.playerID))
   if (supportAtt) supportAtt.currentPOS = supportAttackCoords.slice()
   const supportDef = defence.players.find(p => common.isOnPitch(p) && p.position !== 'GK')
   if (supportDef) supportDef.currentPOS = supportDefCoords.slice()
@@ -528,24 +557,46 @@ export function setSecondTeamGoalScored(matchDetails) {
 }
 
 export function setBallSpecificGoalScoreValue(matchDetails, concedingTeam) {
-  matchDetails.ball.position = [matchDetails.pitchSize[0] / 2, matchDetails.pitchSize[1] / 2, 0]
+  const [pitchWidth, pitchHeight] = matchDetails.pitchSize
+  const centerX = pitchWidth / 2
+  const centerY = pitchHeight / 2
+  matchDetails.ball.position = [centerX, centerY, 0]
   matchDetails.ball.ballOverIterations = []
   matchDetails.ball.withPlayer = true
   matchDetails.ball.withTeam = concedingTeam.teamID
+
+  const otherTeam = concedingTeam.teamID === matchDetails.kickOffTeam.teamID ? matchDetails.secondTeam : matchDetails.kickOffTeam
+  const isOtherTeamTop = otherTeam.players[0].originPOS[1] < centerY
+
+  // Los rivales deben mantenerse estrictamente fuera del círculo central y en su propio campo
+  for (const rival of otherTeam.players) {
+    if (!common.isOnPitch(rival)) continue
+    if (isOtherTeamTop) {
+      if (rival.currentPOS[1] > centerY - 65) rival.currentPOS[1] = centerY - 65
+      if (rival.intentPOS[1] > centerY - 65) rival.intentPOS[1] = centerY - 65
+    } else {
+      if (rival.currentPOS[1] < centerY + 65) rival.currentPOS[1] = centerY + 65
+      if (rival.intentPOS[1] < centerY + 65) rival.intentPOS[1] = centerY + 65
+    }
+  }
 
   const activeField = concedingTeam.players.filter((p, idx) => idx > 0 && common.isOnPitch(p))
   const kicker = activeField[activeField.length - 1] || concedingTeam.players.find(common.isOnPitch) || concedingTeam.players[0]
   const waiter = activeField[activeField.length - 2] || kicker
 
-  kicker.currentPOS = [matchDetails.ball.position[0], matchDetails.ball.position[1]]
+  kicker.currentPOS = [centerX, centerY]
+  kicker.intentPOS = [centerX, centerY]
   kicker.hasBall = true
+  kicker.action = 'pass'
+  kicker.isKickoffPass = true
   matchDetails.ball.lastTouch.playerName = kicker.name
   matchDetails.ball.lastTouch.playerID = kicker.playerID
   matchDetails.ball.lastTouch.teamID = concedingTeam.teamID
   matchDetails.ball.lastTouch.deflection = false
   matchDetails.ball.Player = kicker.playerID
   if (waiter && waiter.playerID !== kicker.playerID) {
-    waiter.currentPOS = [matchDetails.ball.position[0] + 20, matchDetails.ball.position[1]]
+    waiter.currentPOS = [centerX + 18, centerY]
+    waiter.intentPOS = [centerX + 18, centerY]
   }
 }
 
@@ -672,9 +723,11 @@ export function formationCheck(origin, current) {
 }
 
 export function switchSide(matchDetails, team) {
+  const [pitchWidth, pitchHeight] = matchDetails.pitchSize
   for (const thisPlayer of team.players) {
     if (!thisPlayer.originPOS) throw new Error('Each player must have an origin position set')
-    thisPlayer.originPOS[1] = matchDetails.pitchSize[1] - thisPlayer.originPOS[1]
+    thisPlayer.originPOS[0] = pitchWidth - thisPlayer.originPOS[0]
+    thisPlayer.originPOS[1] = pitchHeight - thisPlayer.originPOS[1]
     if (common.isOnPitch(thisPlayer)) {
       thisPlayer.currentPOS = thisPlayer.originPOS.slice()
       thisPlayer.intentPOS = thisPlayer.originPOS.slice()
@@ -1144,7 +1197,8 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
     // D. Lateral ofensivo con libertad de subida en la banda del balón
     if ((role === 'LB' || role === 'RB') && !restDefencePlayers.some(rp => rp.playerID === player.playerID)) {
       const hasLateralOfensivo = hasTrait('lateral_ofensivo')
-      const targetDepth = distBallToGoalY < 240
+      const isWingOrOffensive = styleCfg.id === 'wingPlay' || kickingTeam.mentality === 'offensive' || hasLateralOfensivo
+      const targetDepth = (distBallToGoalY < 380 || isWingOrOffensive)
         ? (hasLateralOfensivo ? 155 : 205)
         : Math.max(220, distBallToGoalY + 55)
       const rawLatY = isTopTeam ? (pitchHeight - targetDepth) : targetDepth

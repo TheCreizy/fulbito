@@ -170,6 +170,14 @@ function buildPitchBannerFromEvent(ev, minuteLabel) {
         subtitle: `Pelotazo cruzado para abrir la cancha con ${ev.receiverName || 'la banda'} (${minuteLabel})`,
         duration: 1550
       }
+    case 'gkLongPass':
+      return {
+        type: 'play',
+        icon: '🧤',
+        title: `DESPEJE LARGO • ${(ev.playerName || '').toUpperCase()}`,
+        subtitle: `Pelotazo largo del arquero buscando a los delanteros (${minuteLabel})`,
+        duration: 1650
+      }
     case 'oneTwoPass':
       return {
         type: 'play',
@@ -216,6 +224,9 @@ export default function MatchSimulator({
   const [pitchBanner, setPitchBanner] = useState(null)
   const [goalBanner, setGoalBanner] = useState(null)
   const [foulOverlay, setFoulOverlay] = useState(null)
+  const [deadBallOverlay, setDeadBallOverlay] = useState(null)
+  const [pitchOrientation, setPitchOrientation] = useState('horizontal') // 'horizontal' | 'vertical'
+  const [showDetailPanels, setShowDetailPanels] = useState(false)
   const [penaltyWinner, setPenaltyWinner] = useState(null)
   const [soundMuted, setSoundMuted] = useState(false)
   const [commentaryList, setCommentaryList] = useState([
@@ -241,6 +252,8 @@ export default function MatchSimulator({
   const commentaryQueueRef = useRef([])
   const bannerTimeoutRef = useRef(null)
   const isFoulPausedRef = useRef(false)
+  const isDeadBallPausedRef = useRef(false)
+  const goalAnimRef = useRef({ time: 0, goalSide: null })
   const animStateRef = useRef({
     startTime: performance.now(),
     durationMs: 145,
@@ -303,17 +316,356 @@ export default function MatchSimulator({
     }, bannerObj.duration || 2100)
   }, [])
 
-  // Dibujar cancha 2D en el Canvas con interpolación suave 60fps entre prevSnapshot y currentPOS
-  const drawPitchInterpolated = useCallback((m, alpha = 1) => {
-    const canvas = canvasRef.current
-    if (!canvas || !m) return
-    const ctx = canvas.getContext('2d')
+  // Dibujar cancha Horizontal (1050x680 estilo Football Manager)
+  const drawPitchHorizontal = (ctx, m, alpha = 1, now = performance.now()) => {
+    const W = 1050
+    const H = 680
+    const padX = 35
+    const padY = 22
+    const playableW = W - 2 * padX
+    const playableH = H - 2 * padY
+    const t = Math.max(0, Math.min(1, alpha))
+
+    ctx.clearRect(0, 0, W, H)
+
+    // 1. Césped a franjas verticales estilo Football Manager
+    const stripeCount = 16
+    const stripeW = W / stripeCount
+    for (let i = 0; i < stripeCount; i++) {
+      ctx.fillStyle = i % 2 === 0 ? '#15803d' : '#166534'
+      ctx.fillRect(i * stripeW, 0, stripeW, H)
+    }
+
+    // 2. Líneas de cal reglamentarias
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.88)'
+    ctx.lineWidth = 3
+    ctx.strokeRect(padX, padY, playableW, playableH)
+
+    // Línea de mitad de cancha y círculo central
+    ctx.beginPath()
+    ctx.moveTo(W / 2, padY)
+    ctx.lineTo(W / 2, H - padY)
+    ctx.stroke()
+
+    ctx.beginPath()
+    ctx.arc(W / 2, H / 2, 72, 0, Math.PI * 2)
+    ctx.stroke()
+
+    ctx.fillStyle = '#fff'
+    ctx.beginPath()
+    ctx.arc(W / 2, H / 2, 4, 0, Math.PI * 2)
+    ctx.fill()
+
+    // Áreas grandes y chicas
+    const boxDepth = (175 / 1050) * playableW
+    const boxSpan = (340 / 680) * playableH
+    const boxTopY = (H - boxSpan) / 2
+    ctx.strokeRect(padX, boxTopY, boxDepth, boxSpan)
+    ctx.strokeRect(W - padX - boxDepth, boxTopY, boxDepth, boxSpan)
+
+    const smallDepth = (70 / 1050) * playableW
+    const smallSpan = (190 / 680) * playableH
+    const smallTopY = (H - smallSpan) / 2
+    ctx.strokeRect(padX, smallTopY, smallDepth, smallSpan)
+    ctx.strokeRect(W - padX - smallDepth, smallTopY, smallDepth, smallSpan)
+
+    // Puntos del penal
+    const spotDist = (95 / 1050) * playableW
+    ctx.beginPath()
+    ctx.arc(padX + spotDist, H / 2, 3.5, 0, Math.PI * 2)
+    ctx.arc(W - padX - spotDist, H / 2, 3.5, 0, Math.PI * 2)
+    ctx.fill()
+
+    // Córners
+    const rCorner = 14
+    ctx.beginPath(); ctx.arc(padX, padY, rCorner, 0, Math.PI * 0.5); ctx.stroke();
+    ctx.beginPath(); ctx.arc(padX, H - padY, rCorner, Math.PI * 1.5, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(W - padX, padY, rCorner, Math.PI * 0.5, Math.PI); ctx.stroke();
+    ctx.beginPath(); ctx.arc(W - padX, H - padY, rCorner, Math.PI, Math.PI * 1.5); ctx.stroke();
+
+    // Nombres de equipos impresos en el césped en los laterales de los arcos
+    ctx.save()
+    ctx.translate(padX + 46, H / 2)
+    ctx.rotate(-Math.PI / 2)
+    ctx.font = '900 24px "Chakra Petch", sans-serif'
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.20)'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(m.kickOffTeam.name.toUpperCase(), 0, 0)
+    ctx.restore()
+
+    ctx.save()
+    ctx.translate(W - padX - 46, H / 2)
+    ctx.rotate(Math.PI / 2)
+    ctx.font = '900 24px "Chakra Petch", sans-serif'
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.20)'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(m.secondTeam.name.toUpperCase(), 0, 0)
+    ctx.restore()
+
+    // Arcos 3D y oscilación armónica amortiguada en goles (sin(18t) * e^(-2.2t) * 12)
+    const goalH = (90 / 680) * playableH
+    const goalTopY = (H - goalH) / 2
+    const goalBottomY = goalTopY + goalH
+    const netDepth = 24
+
+    const goalElapsed = (now - (goalAnimRef.current.time || 0)) / 1000
+    const isGoalVibrating = goalElapsed >= 0 && goalElapsed < 2.5
+    const netVibe = isGoalVibrating ? Math.sin(18 * goalElapsed) * Math.exp(-2.2 * goalElapsed) * 12 : 0
+
+    // Red Izquierda
+    const leftNetBackX = padX - netDepth - (goalAnimRef.current.goalSide === 'left' ? netVibe : 0)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.12)'
+    ctx.fillRect(leftNetBackX, goalTopY, padX - leftNetBackX, goalH)
+    ctx.strokeStyle = '#facc15'
+    ctx.lineWidth = 3.5
+    ctx.beginPath(); ctx.moveTo(padX, goalTopY); ctx.lineTo(padX, goalBottomY); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'
+    ctx.lineWidth = 1
+    for (let gy = goalTopY + 7; gy < goalBottomY; gy += 7) {
+      ctx.beginPath(); ctx.moveTo(padX, gy); ctx.lineTo(leftNetBackX, gy); ctx.stroke();
+    }
+    for (let gx = leftNetBackX + 6; gx < padX; gx += 6) {
+      ctx.beginPath(); ctx.moveTo(gx, goalTopY); ctx.lineTo(gx, goalBottomY); ctx.stroke();
+    }
+
+    // Red Derecha
+    const rightNetBackX = W - padX + netDepth + (goalAnimRef.current.goalSide === 'right' ? netVibe : 0)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.12)'
+    ctx.fillRect(W - padX, goalTopY, rightNetBackX - (W - padX), goalH)
+    ctx.strokeStyle = '#facc15'
+    ctx.lineWidth = 3.5
+    ctx.beginPath(); ctx.moveTo(W - padX, goalTopY); ctx.lineTo(W - padX, goalBottomY); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'
+    ctx.lineWidth = 1
+    for (let gy = goalTopY + 7; gy < goalBottomY; gy += 7) {
+      ctx.beginPath(); ctx.moveTo(W - padX, gy); ctx.lineTo(rightNetBackX, gy); ctx.stroke();
+    }
+    for (let gx = W - padX + 6; gx < rightNetBackX; gx += 6) {
+      ctx.beginPath(); ctx.moveTo(gx, goalTopY); ctx.lineTo(gx, goalBottomY); ctx.stroke();
+    }
+
+    // Renderizar Jugadores en orientación horizontal
+    const renderTeamPlayersH = (team, prevPositions) => {
+      const primary = team.primaryColor || '#1d4ed8'
+      const secondary = team.secondaryColor || '#facc15'
+      const captainId = Number(team.setPieces?.captainID)
+      const currentIter = m.iterationCount || 0
+
+      team.players.forEach((p, idx) => {
+        if (!Array.isArray(p.currentPOS) || p.currentPOS[0] === 'NP' || p.sentOff) return
+        const targetEX = Number(p.currentPOS[0]) || 0
+        const targetEY = Number(p.currentPOS[1]) || 0
+        const prevPos = prevPositions?.[idx]
+        const startEX = (Array.isArray(prevPos) && prevPos[0] !== 'NP') ? Number(prevPos[0]) : targetEX
+        const startEY = (Array.isArray(prevPos) && prevPos[0] !== 'NP') ? Number(prevPos[1]) : targetEY
+
+        const interpEX = startEX + (targetEX - startEX) * t
+        const interpEY = startEY + (targetEY - startEY) * t
+
+        const rawHX = padX + (interpEY / 1050) * playableW
+        const rawHY = padY + (interpEX / 680) * playableH
+
+        const x = Math.max(padX + 6, Math.min(W - padX - 6, rawHX))
+        const y = Math.max(padY + 6, Math.min(H - padY - 6, rawHY))
+
+        if (!p.hasBall && p.offBallRun && p.offBallRun.untilIteration > currentIter) {
+          const runTargetHX = padX + (p.offBallRun.targetY / 1050) * playableW
+          const runTargetHY = padY + (p.offBallRun.targetX / 680) * playableH
+          const rdx = runTargetHX - x
+          const rdy = runTargetHY - y
+          const rDist = Math.sqrt(rdx * rdx + rdy * rdy)
+          if (rDist > 16) {
+            const arrowLen = Math.min(34, rDist * 0.55)
+            const endX = x + (rdx / rDist) * arrowLen
+            const endY = y + (rdy / rDist) * arrowLen
+            ctx.save()
+            ctx.beginPath()
+            ctx.setLineDash([3, 3])
+            ctx.moveTo(x, y)
+            ctx.lineTo(endX, endY)
+            ctx.strokeStyle = p.offBallRun.type === 'boxCrash'
+              ? 'rgba(250, 204, 21, 0.78)'
+              : 'rgba(56, 189, 248, 0.72)'
+            ctx.lineWidth = 2
+            ctx.stroke()
+            ctx.restore()
+          }
+        }
+
+        if (p.hasBall) {
+          ctx.beginPath()
+          ctx.arc(x, y, 22, 0, Math.PI * 2)
+          ctx.fillStyle = 'rgba(250, 204, 21, 0.38)'
+          ctx.fill()
+          ctx.strokeStyle = '#facc15'
+          ctx.lineWidth = 3
+          ctx.stroke()
+        }
+
+        if (currentIter - (p.lastGambetaIter || -99) <= 6) {
+          ctx.save()
+          ctx.font = '900 10.5px "Chakra Petch", sans-serif'
+          ctx.fillStyle = '#facc15'
+          ctx.strokeStyle = '#000'
+          ctx.lineWidth = 3
+          ctx.strokeText('★ GAMBETA', x, y - 22)
+          ctx.fillText('★ GAMBETA', x, y - 22)
+          ctx.restore()
+        }
+
+        if (currentIter - (p.lastCaudilloIter || -99) <= 7) {
+          ctx.save()
+          ctx.font = '900 10.5px "Chakra Petch", sans-serif'
+          ctx.fillStyle = '#f87171'
+          ctx.strokeStyle = '#000'
+          ctx.lineWidth = 3
+          ctx.strokeText('🛡️ PATRÓN', x, y - 22)
+          ctx.fillText('🛡️ PATRÓN', x, y - 22)
+          ctx.restore()
+        }
+
+        ctx.beginPath()
+        ctx.arc(x, y + 4, 15.5, 0, Math.PI * 2)
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.48)'
+        ctx.fill()
+
+        ctx.beginPath()
+        ctx.arc(x, y, 15.5, 0, Math.PI * 2)
+        ctx.fillStyle = p.position === 'GK' ? '#10b981' : primary
+        ctx.fill()
+        ctx.lineWidth = 3
+        ctx.strokeStyle = secondary
+        ctx.stroke()
+
+        ctx.fillStyle = p.position === 'GK' ? '#052e16' : secondary
+        ctx.font = 'bold 12.5px "Chakra Petch", sans-serif'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(String(p.shirtNumber || ''), x, y)
+
+        if (Number(p.id || p.playerID) === captainId) {
+          ctx.fillStyle = '#facc15'
+          ctx.fillRect(x + 9, y - 16, 11, 10)
+          ctx.fillStyle = '#000'
+          ctx.font = 'bold 9px sans-serif'
+          ctx.fillText('C', x + 14.5, y - 11)
+        }
+
+        if (p.stats?.cards?.yellow > 0) {
+          ctx.fillStyle = '#facc15'
+          ctx.fillRect(x - 18, y - 16, 7, 10)
+        }
+
+        const fit = Math.max(0, Math.min(100, Number(p.fitness ?? 100)))
+        const barW = 28
+        ctx.fillStyle = 'rgba(0,0,0,0.68)'
+        ctx.fillRect(x - barW / 2, y + 18, barW, 4)
+        ctx.fillStyle = fit > 65 ? '#4ade80' : (fit > 40 ? '#facc15' : '#ef4444')
+        ctx.fillRect(x - barW / 2, y + 18, (barW * fit) / 100, 4)
+
+        const lastName = p.name.split(' ').slice(-1)[0]
+        ctx.font = '700 13px "Chakra Petch", sans-serif'
+        ctx.fillStyle = '#ffffff'
+        ctx.strokeStyle = 'rgba(0,0,0,0.92)'
+        ctx.lineWidth = 3
+        ctx.strokeText(lastName, x, y + 33)
+        ctx.fillText(lastName, x, y + 33)
+      })
+    }
+
+    renderTeamPlayersH(m.kickOffTeam, m.prevSnapshot?.kickOffTeam)
+    renderTeamPlayersH(m.secondTeam, m.prevSnapshot?.secondTeam)
+
+    // Renderizar Pelota en horizontal con penetración de red en gol
+    if (m.ball && Array.isArray(m.ball.position)) {
+      const targetEX = Number(m.ball.position[0]) || 340
+      const targetEY = Number(m.ball.position[1]) || 525
+      const targetEZ = Math.max(0, Number(m.ball.position[2]) || 0)
+
+      const prevBall = m.prevSnapshot?.ball
+      const startEX = Array.isArray(prevBall) ? Number(prevBall[0]) : targetEX
+      const startEY = Array.isArray(prevBall) ? Number(prevBall[1]) : targetEY
+      const startEZ = Array.isArray(prevBall) ? Math.max(0, Number(prevBall[2]) || 0) : targetEZ
+
+      let rawTargetHX = padX + (targetEY / 1050) * playableW
+      let rawTargetHY = padY + (targetEX / 680) * playableH
+
+      let rawStartHX = padX + (startEY / 1050) * playableW
+      let rawStartHY = padY + (startEX / 680) * playableH
+
+      // Si hay animación de gol, la pelota penetra 18px en la red
+      if (isGoalVibrating) {
+        if (goalAnimRef.current.goalSide === 'left') {
+          rawTargetHX = padX - 18
+          rawStartHX = Math.min(rawStartHX, padX)
+        } else if (goalAnimRef.current.goalSide === 'right') {
+          rawTargetHX = W - padX + 18
+          rawStartHX = Math.max(rawStartHX, W - padX)
+        }
+      }
+
+      const bx = rawStartHX + (rawTargetHX - rawStartHX) * t
+      const by = rawStartHY + (rawTargetHY - rawStartHY) * t
+      const bz = startEZ + (targetEZ - startEZ) * t
+
+      const isInFlight = Array.isArray(m.ball.ballOverIterations) && m.ball.ballOverIterations.length > 0
+      const isShot = m.ball.kickType === 'shot' || m.ball.kickType === 'freekick'
+      const isPass = m.ball.kickType === 'pass' || m.ball.kickType === 'through' || m.ball.kickType === 'cross' || m.ball.kickType === 'switch'
+
+      if (isInFlight && isShot) {
+        const grad = ctx.createLinearGradient(rawStartHX, rawStartHY, bx, by)
+        grad.addColorStop(0, 'rgba(239, 68, 68, 0.15)')
+        grad.addColorStop(0.5, 'rgba(249, 115, 22, 0.75)')
+        grad.addColorStop(1, 'rgba(250, 204, 21, 0.98)')
+        ctx.save()
+        ctx.beginPath()
+        ctx.moveTo(rawStartHX, rawStartHY - startEZ * 0.4)
+        ctx.lineTo(bx, by - bz * 0.45)
+        ctx.strokeStyle = grad
+        ctx.lineWidth = 6.5
+        ctx.lineCap = 'round'
+        ctx.stroke()
+        ctx.restore()
+      } else if (isInFlight && isPass) {
+        ctx.save()
+        ctx.beginPath()
+        ctx.setLineDash([4, 4])
+        ctx.moveTo(rawStartHX, rawStartHY)
+        ctx.lineTo(bx, by)
+        ctx.strokeStyle = (m.ball.kickType === 'cross' || m.ball.kickType === 'switch')
+          ? 'rgba(56, 189, 248, 0.75)'
+          : 'rgba(255, 255, 255, 0.52)'
+        ctx.lineWidth = m.ball.kickType === 'switch' ? 2.6 : 2.2
+        ctx.stroke()
+        ctx.restore()
+      }
+
+      ctx.beginPath()
+      ctx.arc(bx + Math.min(12, bz * 0.4), by + 3 + Math.min(14, bz * 0.5), Math.max(4, 6 - bz * 0.08), 0, Math.PI * 2)
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)'
+      ctx.fill()
+
+      const ballRadius = Math.min(10.5, (isShot && isInFlight ? 7.4 : 6.2) + bz * 0.12)
+      ctx.beginPath()
+      ctx.arc(bx, by - Math.min(18, bz * 0.45), ballRadius, 0, Math.PI * 2)
+      ctx.fillStyle = (isShot && isInFlight) ? '#fde047' : '#ffffff'
+      ctx.fill()
+      ctx.lineWidth = 2
+      ctx.strokeStyle = (isShot && isInFlight) ? '#dc2626' : '#090d16'
+      ctx.stroke()
+    }
+  }
+
+  // Dibujar cancha 2D Vertical tradicional (PC Fútbol)
+  const drawPitchVertical = (ctx, m, alpha = 1, now = performance.now()) => {
     const [W, H, goalW] = m.pitchSize
     const t = Math.max(0, Math.min(1, alpha))
 
     ctx.clearRect(0, 0, W, H)
 
-    // 1. Césped a franjas estilo PC Fútbol 5.0
+    // 1. Césped a franjas estilo PC Fútbol
     const stripeCount = 14
     const stripeH = H / stripeCount
     for (let i = 0; i < stripeCount; i++) {
@@ -342,7 +694,7 @@ export default function MatchSimulator({
     ctx.arc(W / 2, H / 2, 4, 0, Math.PI * 2)
     ctx.fill()
 
-    // Áreas grandes y chicas (Superior e Inferior)
+    // Áreas grandes y chicas
     const boxW = W / 2
     const boxX = (W - boxW) / 2
     const boxH = H / 6
@@ -361,21 +713,28 @@ export default function MatchSimulator({
     ctx.arc(W / 2, H - pad - H / 11, 3.5, 0, Math.PI * 2)
     ctx.fill()
 
-    // Arcos (Superior e Inferior)
+    // Arcos 3D y oscilación armónica amortiguada en goles vertical
+    const goalElapsedV = (now - (goalAnimRef.current.time || 0)) / 1000
+    const isGoalVibratingV = goalElapsedV >= 0 && goalElapsedV < 2.5
+    const netVibeV = isGoalVibratingV ? Math.sin(18 * goalElapsedV) * Math.exp(-2.2 * goalElapsedV) * 10 : 0
+
     const gLeft = (W - goalW) / 2
+    const topNetY = Math.max(0, 2 - (goalAnimRef.current.goalSideV === 'top' ? netVibeV : 0))
     ctx.fillStyle = 'rgba(255, 255, 255, 0.28)'
-    ctx.fillRect(gLeft, 2, goalW, pad - 2)
-    ctx.fillRect(gLeft, H - pad, goalW, pad - 2)
+    ctx.fillRect(gLeft, topNetY, goalW, pad - topNetY)
     ctx.strokeStyle = '#facc15'
     ctx.lineWidth = 3.5
-    ctx.strokeRect(gLeft, 2, goalW, pad - 2)
-    ctx.strokeRect(gLeft, H - pad, goalW, pad - 2)
+    ctx.strokeRect(gLeft, pad - 2, goalW, 2)
 
-    // 3. Dibujar Jugadores de Ambos Equipos con interpolación suave
-    const renderTeamPlayers = (team, prevPositions) => {
+    const bottomNetY = Math.min(H, H - 2 + (goalAnimRef.current.goalSideV === 'bottom' ? netVibeV : 0))
+    ctx.fillRect(gLeft, H - pad, goalW, bottomNetY - (H - pad))
+    ctx.strokeRect(gLeft, H - pad, goalW, 2)
+
+    const renderTeamPlayersV = (team, prevPositions) => {
       const primary = team.primaryColor || '#1d4ed8'
       const secondary = team.secondaryColor || '#facc15'
       const captainId = Number(team.setPieces?.captainID)
+      const currentIter = m.iterationCount || 0
 
       team.players.forEach((p, idx) => {
         if (!Array.isArray(p.currentPOS) || p.currentPOS[0] === 'NP' || p.sentOff) return
@@ -390,8 +749,6 @@ export default function MatchSimulator({
         const x = Math.max(pad + 6, Math.min(W - pad - 6, interpX))
         const y = Math.max(pad + 6, Math.min(H - pad - 6, interpY))
 
-        // Flecha sutil de desmarque (Off-Ball Run) cuando el jugador pica al vacío o proyecta por la banda
-        const currentIter = m.iterationCount || 0
         if (!p.hasBall && p.offBallRun && p.offBallRun.untilIteration > currentIter) {
           const rdx = p.offBallRun.targetX - x
           const rdy = p.offBallRun.targetY - y
@@ -414,7 +771,6 @@ export default function MatchSimulator({
           }
         }
 
-        // Halo dorado si tiene la pelota
         if (p.hasBall) {
           ctx.beginPath()
           ctx.arc(x, y, 22, 0, Math.PI * 2)
@@ -425,7 +781,6 @@ export default function MatchSimulator({
           ctx.stroke()
         }
 
-        // Badge fugaz cuando acaba de meter una Gambeta 1v1
         if (currentIter - (p.lastGambetaIter || -99) <= 6) {
           ctx.save()
           ctx.font = '900 10.5px "Chakra Petch", sans-serif'
@@ -437,7 +792,6 @@ export default function MatchSimulator({
           ctx.restore()
         }
 
-        // Badge fugaz cuando un Caudillo acaba de meter una carga con el cuerpo
         if (currentIter - (p.lastCaudilloIter || -99) <= 7) {
           ctx.save()
           ctx.font = '900 10.5px "Chakra Petch", sans-serif'
@@ -449,13 +803,11 @@ export default function MatchSimulator({
           ctx.restore()
         }
 
-        // Sombra del jugador
         ctx.beginPath()
         ctx.arc(x, y + 4, 15.5, 0, Math.PI * 2)
         ctx.fillStyle = 'rgba(0, 0, 0, 0.48)'
         ctx.fill()
 
-        // Círculo de camiseta (más grande y nítido)
         ctx.beginPath()
         ctx.arc(x, y, 15.5, 0, Math.PI * 2)
         ctx.fillStyle = p.position === 'GK' ? '#10b981' : primary
@@ -464,14 +816,12 @@ export default function MatchSimulator({
         ctx.strokeStyle = secondary
         ctx.stroke()
 
-        // Dorsal (más grande)
         ctx.fillStyle = p.position === 'GK' ? '#052e16' : secondary
         ctx.font = 'bold 12.5px "Chakra Petch", sans-serif'
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
         ctx.fillText(String(p.shirtNumber || ''), x, y)
 
-        // Cinta de capitán "C"
         if (Number(p.id || p.playerID) === captainId) {
           ctx.fillStyle = '#facc15'
           ctx.fillRect(x + 9, y - 16, 11, 10)
@@ -480,13 +830,11 @@ export default function MatchSimulator({
           ctx.fillText('C', x + 14.5, y - 11)
         }
 
-        // Indicador de tarjeta amarilla
         if (p.stats?.cards?.yellow > 0) {
           ctx.fillStyle = '#facc15'
           ctx.fillRect(x - 18, y - 16, 7, 10)
         }
 
-        // Barra de energía física debajo del círculo
         const fit = Math.max(0, Math.min(100, Number(p.fitness ?? 100)))
         const barW = 28
         ctx.fillStyle = 'rgba(0,0,0,0.68)'
@@ -494,7 +842,6 @@ export default function MatchSimulator({
         ctx.fillStyle = fit > 65 ? '#4ade80' : (fit > 40 ? '#facc15' : '#ef4444')
         ctx.fillRect(x - barW / 2, y + 18, (barW * fit) / 100, 4)
 
-        // Apellido del jugador (más grande y con borde contrastado)
         const lastName = p.name.split(' ').slice(-1)[0]
         ctx.font = '700 13px "Chakra Petch", sans-serif'
         ctx.fillStyle = '#ffffff'
@@ -505,10 +852,9 @@ export default function MatchSimulator({
       })
     }
 
-    renderTeamPlayers(m.kickOffTeam, m.prevSnapshot?.kickOffTeam)
-    renderTeamPlayers(m.secondTeam, m.prevSnapshot?.secondTeam)
+    renderTeamPlayersV(m.kickOffTeam, m.prevSnapshot?.kickOffTeam)
+    renderTeamPlayersV(m.secondTeam, m.prevSnapshot?.secondTeam)
 
-    // 4. Dibujar la Pelota con diferenciación visual entre TIRO (estela de fuego dorada/roja) y PASE (línea táctica)
     if (m.ball && Array.isArray(m.ball.position)) {
       const targetBX = Number(m.ball.position[0]) || W / 2
       const targetBY = Number(m.ball.position[1]) || H / 2
@@ -519,8 +865,10 @@ export default function MatchSimulator({
       const startBY = Array.isArray(prevBall) ? Number(prevBall[1]) : targetBY
       const startBZ = Array.isArray(prevBall) ? Math.max(0, Number(prevBall[2]) || 0) : targetBZ
 
+      const minBY = (isGoalVibratingV && goalAnimRef.current.goalSideV === 'top') ? 2 : pad
+      const maxBY = (isGoalVibratingV && goalAnimRef.current.goalSideV === 'bottom') ? H - 2 : H - pad
       const bx = Math.max(pad, Math.min(W - pad, startBX + (targetBX - startBX) * t))
-      const by = Math.max(pad, Math.min(H - pad, startBY + (targetBY - startBY) * t))
+      const by = Math.max(minBY, Math.min(maxBY, startBY + (targetBY - startBY) * t))
       const bz = startBZ + (targetBZ - startBZ) * t
 
       const isInFlight = Array.isArray(m.ball.ballOverIterations) && m.ball.ballOverIterations.length > 0
@@ -528,7 +876,6 @@ export default function MatchSimulator({
       const isPass = m.ball.kickType === 'pass' || m.ball.kickType === 'through' || m.ball.kickType === 'cross' || m.ball.kickType === 'switch'
 
       if (isInFlight && isShot) {
-        // Estela de potencia visible para diferenciar claramente un TIRO AL ARCO de un pase
         const grad = ctx.createLinearGradient(startBX, startBY, bx, by)
         grad.addColorStop(0, 'rgba(239, 68, 68, 0.15)')
         grad.addColorStop(0.5, 'rgba(249, 115, 22, 0.75)')
@@ -543,7 +890,6 @@ export default function MatchSimulator({
         ctx.stroke()
         ctx.restore()
       } else if (isInFlight && isPass) {
-        // Línea punteada sutil de dirección de pase/centro/cambio de frente
         ctx.save()
         ctx.beginPath()
         ctx.setLineDash([4, 4])
@@ -557,13 +903,11 @@ export default function MatchSimulator({
         ctx.restore()
       }
 
-      // Sombra en el piso desplazada según altura Z
       ctx.beginPath()
       ctx.arc(bx + Math.min(12, bz * 0.4), by + 3 + Math.min(14, bz * 0.5), Math.max(4, 6 - bz * 0.08), 0, Math.PI * 2)
       ctx.fillStyle = 'rgba(0, 0, 0, 0.55)'
       ctx.fill()
 
-      // Esfera de la pelota (brilla en dorado/naranja cuando es un disparo al arco)
       const ballRadius = Math.min(10.5, (isShot && isInFlight ? 7.4 : 6.2) + bz * 0.12)
       ctx.beginPath()
       ctx.arc(bx, by - Math.min(18, bz * 0.45), ballRadius, 0, Math.PI * 2)
@@ -573,7 +917,19 @@ export default function MatchSimulator({
       ctx.strokeStyle = (isShot && isInFlight) ? '#dc2626' : '#090d16'
       ctx.stroke()
     }
-  }, [])
+  }
+
+  // Despachador de renderizado con interpolación suave 60fps
+  const drawPitchInterpolated = useCallback((m, alpha = 1, now = performance.now()) => {
+    const canvas = canvasRef.current
+    if (!canvas || !m) return
+    const ctx = canvas.getContext('2d')
+    if (pitchOrientation === 'horizontal') {
+      drawPitchHorizontal(ctx, m, alpha, now)
+    } else {
+      drawPitchVertical(ctx, m, alpha, now)
+    }
+  }, [pitchOrientation])
 
   // Loop de renderizado 60fps para interpolar suavemente entre ticks
   useEffect(() => {
@@ -583,7 +939,7 @@ export default function MatchSimulator({
       if (m) {
         const { startTime, durationMs } = animStateRef.current
         const alpha = durationMs > 0 ? Math.min(1, (now - startTime) / durationMs) : 1
-        drawPitchInterpolated(m, alpha)
+        drawPitchInterpolated(m, alpha, now)
       }
       rafId = requestAnimationFrame(renderLoop)
     }
@@ -657,7 +1013,7 @@ export default function MatchSimulator({
   // Ejecutar 1 tick de partido
   const stepOneTick = useCallback(async () => {
     let m = matchRef.current
-    if (!m || phase !== 'playing' || isFoulPausedRef.current) return
+    if (!m || phase !== 'playing' || isFoulPausedRef.current || isDeadBallPausedRef.current) return
 
     // Si estamos interpolando una transición de pelota parada, esperar a que termine antes del próximo tick
     const now = performance.now()
@@ -690,30 +1046,40 @@ export default function MatchSimulator({
       const bannerObj = buildPitchBannerFromEvent(ev, minLabel)
       if (bannerObj) showPitchEventBanner(bannerObj)
 
+      const isDeadBall = ['goal', 'penalty', 'foul', 'freekick', 'corner', 'throwIn', 'goalKick', 'offside'].includes(ev.type) || ev.deadBall
+
       if (ev.type === 'goal') {
         soundEngine.playGoalRoar()
         setGoalBanner(`¡GOOOOOL DE ${ev.teamName.toUpperCase()}! (${ev.playerName})`)
+        const scoringTeam = ev.teamID === m.kickOffTeam.teamID ? m.kickOffTeam : m.secondTeam
+        const isAttackingBottomOrRight = (scoringTeam?.players?.[0]?.originPOS?.[1] || 0) < (m.pitchSize[1] / 2)
+        const sideH = isAttackingBottomOrRight ? 'right' : 'left'
+        const sideV = isAttackingBottomOrRight ? 'bottom' : 'top'
+        goalAnimRef.current = { time: performance.now(), goalSide: sideH, goalSideV: sideV }
         setTimeout(() => setGoalBanner(null), 3200)
       } else if (ev.type === 'redCard' || ev.type === 'yellowCard') {
         soundEngine.playWhistle('short')
         soundEngine.playCardBeep()
-      } else if (ev.type === 'foul' || ev.type === 'freekick') {
-        soundEngine.playWhistle('short')
-        isFoulPausedRef.current = true
-        setFoulOverlay({
-          offender: ev.playerName,
-          victim: ev.victimName,
-          teamName: ev.teamName
-        })
-        const foulPauseMs = speed === 'x4' ? 600 : 1800
-        setTimeout(() => {
-          setFoulOverlay(null)
-          isFoulPausedRef.current = false
-        }, foulPauseMs)
-      } else if (ev.type === 'penalty' || ev.type === 'offside') {
+      } else if (isDeadBall) {
         soundEngine.playWhistle('short')
       } else if (ev.type === 'shot') {
         soundEngine.playShotKick()
+      }
+
+      // Pausa de 1.5s con cartel flotante y silbato en todas las pelotas paradas
+      if (isDeadBall) {
+        isDeadBallPausedRef.current = true
+        setDeadBallOverlay({
+          type: ev.type,
+          icon: bannerObj?.icon || '⏱️',
+          title: bannerObj?.title || 'PELOTA PARADA',
+          subtitle: bannerObj?.subtitle || `${minLabel} • Reanudación del juego`
+        })
+        const pauseMs = speed === 'x4' ? 500 : 1500
+        setTimeout(() => {
+          setDeadBallOverlay(null)
+          isDeadBallPausedRef.current = false
+        }, pauseMs)
       }
     }
 
@@ -931,7 +1297,7 @@ export default function MatchSimulator({
   const mvpPlayer = [...ratedT1, ...ratedT2].sort((a, b) => b.matchRating - a.matchRating || (b.stats?.goals || 0) - (a.stats?.goals || 0))[0]
 
   return (
-    <div className="main-container">
+    <div className={`main-container ${pitchOrientation === 'horizontal' ? 'main-container-match-horizontal' : ''}`}>
       {/* Marcador Electrónico LED Estilo PC Fútbol */}
       <div className="tv-scoreboard">
         <div className="score-teams-row">
@@ -999,6 +1365,15 @@ export default function MatchSimulator({
               </button>
             </>
           )}
+
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={() => setPitchOrientation(prev => prev === 'horizontal' ? 'vertical' : 'horizontal')}
+            title="Cambiar orientación de la cancha"
+          >
+            {pitchOrientation === 'horizontal' ? '🔄 Vista Vertical' : '🔄 Vista Horizontal (FM)'}
+          </button>
 
           <button
             type="button"
@@ -1144,257 +1519,568 @@ export default function MatchSimulator({
       )}
 
       {/* Grilla Principal: Cancha 2D a la izquierda + Cabina de Transmisión y Estadísticas a la derecha */}
-      <div className="match-layout-grid">
-        {/* Cancha 2D con Cartel Superior de Eventos */}
-        <div className="canvas-wrapper">
-          {pitchBanner && (
-            <div className={`pitch-event-banner banner-${pitchBanner.type}`}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
-                <span style={{ fontSize: '1.35rem' }}>{pitchBanner.icon}</span>
-                <div>
-                  <div style={{ fontFamily: 'Chakra Petch, sans-serif', fontWeight: 900, fontSize: '0.88rem', lineHeight: 1.1 }}>
-                    {pitchBanner.title}
-                  </div>
-                  <div style={{ fontSize: '0.72rem', opacity: 0.92, fontWeight: 700 }}>
-                    {pitchBanner.subtitle}
-                  </div>
+      {/* Visualización del Partido: Horizontal FM (por defecto) o Vertical Tradicional */}
+      {pitchOrientation === 'horizontal' ? (
+        <div className="fm-match-container">
+          {/* 4 FM Top Cards: Formación 1 | Estadísticas comparativas | Incidencias | Formación 2 */}
+          <div className="fm-top-cards">
+            {/* Card 1: Team 1 */}
+            <div className="fm-card">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <span className="score-kit-dot" style={{ background: t1.primaryColor, borderColor: t1.secondaryColor, width: 14, height: 14 }} />
+                  <span style={{ fontWeight: 800, fontSize: '0.9rem', color: '#f8fafc' }}>{t1.name}</span>
+                </div>
+                <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 700 }}>
+                  {t1.formation}
+                </span>
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#cbd5e1', display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
+                <span>Mentalidad:</span>
+                <b style={{ color: t1.mentality === 'offensive' ? '#f87171' : t1.mentality === 'defensive' ? '#60a5fa' : '#4ade80' }}>
+                  {t1.mentality === 'offensive' ? 'Ofensiva' : t1.mentality === 'defensive' ? 'Defensiva' : 'Equilibrada'}
+                </b>
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#cbd5e1', display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
+                <span>Estilo:</span>
+                <b style={{ color: '#facc15' }}>{t1.playStyle || 'balanced'}</b>
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'flex', justifyContent: 'space-between' }}>
+                <span>Cambios:</span>
+                <b style={{ color: '#fff' }}>{t1.substitutionsUsed || 0} / 5</b>
+              </div>
+            </div>
+
+            {/* Card 2: Match Stats con barras comparativas */}
+            <div className="fm-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#facc15' }}>ESTADÍSTICAS DEL PARTIDO</span>
+                <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Posesión: {poss1}% - {poss2}%</span>
+              </div>
+              <div className="stat-bar-track" style={{ height: '5px', marginBottom: '0.35rem' }}>
+                <div style={{ width: `${poss1}%`, background: t1.primaryColor || '#facc15', transition: 'width 0.3s' }} />
+                <div style={{ width: `${poss2}%`, background: t2.primaryColor || '#38bdf8', transition: 'width 0.3s' }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.35rem', fontSize: '0.72rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1px 4px', background: 'rgba(0,0,0,0.25)', borderRadius: '2px' }}>
+                  <span style={{ color: '#94a3b8' }}>Tiros:</span>
+                  <b style={{ color: '#fff' }}>{s1.shots.total}({s1.shots.on}) - {s2.shots.total}({s2.shots.on})</b>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1px 4px', background: 'rgba(0,0,0,0.25)', borderRadius: '2px' }}>
+                  <span style={{ color: '#94a3b8' }}>Pases:</span>
+                  <b style={{ color: '#fff' }}>{s1.passesCompleted || 0} - {s2.passesCompleted || 0}</b>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1px 4px', background: 'rgba(0,0,0,0.25)', borderRadius: '2px' }}>
+                  <span style={{ color: '#94a3b8' }}>Córners:</span>
+                  <b style={{ color: '#fff' }}>{s1.corners} - {s2.corners}</b>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1px 4px', background: 'rgba(0,0,0,0.25)', borderRadius: '2px' }}>
+                  <span style={{ color: '#94a3b8' }}>Faltas:</span>
+                  <b style={{ color: '#fff' }}>{s1.fouls || 0} - {s2.fouls || 0}</b>
                 </div>
               </div>
             </div>
-          )}
 
-          <canvas
-            ref={canvasRef}
-            width={PITCH_CONFIG.pitchWidth}
-            height={PITCH_CONFIG.pitchHeight}
-            className="pitch-canvas"
-          />
-
-          {goalBanner && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '46%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                background: 'linear-gradient(180deg, #fde047 0%, #ca8a04 100%)',
-                color: '#020617',
-                padding: '0.85rem 1.5rem',
-                borderRadius: '2px',
-                fontFamily: 'Chakra Petch, sans-serif',
-                fontWeight: 900,
-                fontSize: '1.35rem',
-                boxShadow: '0 0 40px rgba(250, 204, 21, 0.95)',
-                border: '3px solid #fff',
-                textAlign: 'center',
-                zIndex: 30
-              }}
-            >
-              ⚽ {goalBanner}
+            {/* Card 3: Match Events Timeline */}
+            <div className="fm-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#38bdf8' }}>INCIDENCIAS DEL ENCUENTRO</span>
+                <span style={{ fontSize: '0.68rem', color: '#00ff66', fontWeight: 800 }}>● EN VIVO</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', maxHeight: '68px', overflowY: 'auto' }}>
+                {(match.events || [])
+                  .filter(ev => ['goal', 'yellowCard', 'redCard', 'penalty', 'sub'].includes(ev.type))
+                  .slice(-4)
+                  .reverse()
+                  .map((ev, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.7rem', color: '#e2e8f0' }}>
+                      <span>{ev.type === 'goal' ? '⚽' : ev.type === 'redCard' ? '🟥' : ev.type === 'yellowCard' ? '🟨' : ev.type === 'penalty' ? '🚨' : '🔄'}</span>
+                      <span style={{ fontWeight: 800, color: '#facc15' }}>{ev.minuteLabel || `${Math.floor(ev.iteration / 22)}'`}</span>
+                      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {ev.type === 'goal' ? `Gol de ${ev.playerName} (${ev.teamName})` : `${ev.playerName} (${ev.teamName})`}
+                      </span>
+                    </div>
+                  ))}
+                {(!match.events || match.events.filter(ev => ['goal', 'yellowCard', 'redCard', 'penalty', 'sub'].includes(ev.type)).length === 0) && (
+                  <span style={{ fontSize: '0.7rem', color: '#64748b', fontStyle: 'italic', paddingTop: '6px' }}>
+                    Sin incidencias clave hasta el momento...
+                  </span>
+                )}
+              </div>
             </div>
-          )}
 
-          {foulOverlay && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '48%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.96) 0%, rgba(30, 41, 59, 0.96) 100%)',
-                border: '3px solid #facc15',
-                boxShadow: '0 0 45px rgba(250, 204, 21, 0.55), inset 0 0 20px rgba(0,0,0,0.85)',
-                color: '#ffffff',
-                padding: '1.25rem 2.5rem',
-                borderRadius: '8px',
-                textAlign: 'center',
-                zIndex: 50,
-                pointerEvents: 'none',
-                minWidth: '300px',
-                backdropFilter: 'blur(4px)'
-              }}
-            >
+            {/* Card 4: Team 2 */}
+            <div className="fm-card">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <span className="score-kit-dot" style={{ background: t2.primaryColor, borderColor: t2.secondaryColor, width: 14, height: 14 }} />
+                  <span style={{ fontWeight: 800, fontSize: '0.9rem', color: '#f8fafc' }}>{t2.name}</span>
+                </div>
+                <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 700 }}>
+                  {t2.formation}
+                </span>
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#cbd5e1', display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
+                <span>Mentalidad:</span>
+                <b style={{ color: t2.mentality === 'offensive' ? '#f87171' : t2.mentality === 'defensive' ? '#60a5fa' : '#4ade80' }}>
+                  {t2.mentality === 'offensive' ? 'Ofensiva' : t2.mentality === 'defensive' ? 'Defensiva' : 'Equilibrada'}
+                </b>
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#cbd5e1', display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
+                <span>Estilo:</span>
+                <b style={{ color: '#facc15' }}>{t2.playStyle || 'balanced'}</b>
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'flex', justifyContent: 'space-between' }}>
+                <span>Cambios:</span>
+                <b style={{ color: '#fff' }}>{t2.substitutionsUsed || 0} / 5</b>
+              </div>
+            </div>
+          </div>
+
+          {/* Cancha Horizontal Central */}
+          <div className="fm-pitch-wrapper">
+            {pitchBanner && (
+              <div className={`pitch-event-banner banner-${pitchBanner.type}`}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                  <span style={{ fontSize: '1.35rem' }}>{pitchBanner.icon}</span>
+                  <div>
+                    <div style={{ fontFamily: 'Chakra Petch, sans-serif', fontWeight: 900, fontSize: '0.88rem', lineHeight: 1.1 }}>
+                      {pitchBanner.title}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', opacity: 0.92, fontWeight: 700 }}>
+                      {pitchBanner.subtitle}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <canvas
+              ref={canvasRef}
+              width={1050}
+              height={680}
+              className={pitchOrientation === 'horizontal' ? 'pitch-canvas-horizontal' : 'pitch-canvas-vertical'}
+            />
+
+            {goalBanner && (
               <div
                 style={{
+                  position: 'absolute',
+                  top: '46%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  background: 'linear-gradient(180deg, #fde047 0%, #ca8a04 100%)',
+                  color: '#020617',
+                  padding: '0.85rem 1.6rem',
+                  borderRadius: '4px',
                   fontFamily: 'Chakra Petch, sans-serif',
                   fontWeight: 900,
-                  fontSize: '2.4rem',
-                  letterSpacing: '0.18em',
-                  color: '#facc15',
-                  textShadow: '0 0 16px rgba(250, 204, 21, 0.7), 2px 2px 0px #000',
-                  lineHeight: 1.1,
-                  marginBottom: '0.45rem'
+                  fontSize: '1.45rem',
+                  boxShadow: '0 0 45px rgba(250, 204, 21, 0.95)',
+                  border: '3px solid #fff',
+                  textAlign: 'center',
+                  zIndex: 40
                 }}
               >
-                🚩 FALTA
+                ⚽ {goalBanner}
               </div>
+            )}
+
+            {deadBallOverlay && (
               <div
                 style={{
-                  fontFamily: 'Chakra Petch, sans-serif',
-                  fontWeight: 700,
-                  fontSize: '0.98rem',
-                  color: '#cbd5e1',
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase'
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.96) 0%, rgba(30, 41, 59, 0.96) 100%)',
+                  border: '3px solid #facc15',
+                  boxShadow: '0 0 45px rgba(250, 204, 21, 0.65), inset 0 0 20px rgba(0,0,0,0.85)',
+                  color: '#ffffff',
+                  padding: '1.2rem 2.4rem',
+                  borderRadius: '8px',
+                  textAlign: 'center',
+                  zIndex: 50,
+                  pointerEvents: 'none',
+                  minWidth: '320px',
+                  backdropFilter: 'blur(4px)'
                 }}
               >
-                {foulOverlay.offender ? `${foulOverlay.offender} sobre ${foulOverlay.victim || 'el rival'}` : 'Tiro Libre'}
+                <div style={{ fontSize: '2.2rem', marginBottom: '0.25rem' }}>
+                  {deadBallOverlay.icon}
+                </div>
+                <div
+                  style={{
+                    fontFamily: 'Chakra Petch, sans-serif',
+                    fontWeight: 900,
+                    fontSize: '1.5rem',
+                    letterSpacing: '0.12em',
+                    color: '#facc15',
+                    textShadow: '0 0 16px rgba(250, 204, 21, 0.7), 2px 2px 0px #000',
+                    lineHeight: 1.1,
+                    marginBottom: '0.4rem'
+                  }}
+                >
+                  {deadBallOverlay.title}
+                </div>
+                <div
+                  style={{
+                    fontFamily: 'Chakra Petch, sans-serif',
+                    fontWeight: 700,
+                    fontSize: '0.9rem',
+                    color: '#cbd5e1',
+                    letterSpacing: '0.05em',
+                    textTransform: 'uppercase'
+                  }}
+                >
+                  {deadBallOverlay.subtitle}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Full-Width Commentary Ticker */}
+          <div className="fm-ticker-bar">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', minWidth: '220px' }}>
+              <span style={{ fontSize: '1.25rem' }}>🎙️</span>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <span style={{
+                    background: COMMENTARY_BADGES[commentaryList[0]?.type]?.bg || '#475569',
+                    color: COMMENTARY_BADGES[commentaryList[0]?.type]?.color || '#fff',
+                    fontSize: '0.62rem',
+                    fontWeight: 900,
+                    padding: '1px 5px',
+                    borderRadius: '2px'
+                  }}>
+                    {COMMENTARY_BADGES[commentaryList[0]?.type]?.label || 'RELATO'}
+                  </span>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#1e293b' }}>
+                    {commentaryList[0]?.speaker || 'Marcelo Araujo'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ flex: 1, padding: '0 1rem', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', fontSize: '0.92rem', color: '#0f172a', fontWeight: 600 }}>
+              <span style={{ fontFamily: 'VT323, monospace', fontSize: '1.2rem', color: '#16a34a', fontWeight: 900, marginRight: '0.45rem' }}>
+                [{formatMatchMinute(match.iterationCount, match.half)}]
+              </span>
+              {commentaryList[0]?.text || 'El árbitro da la orden y la pelota sigue rodando en el campo...'}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
+                onClick={() => setShowDetailPanels(prev => !prev)}
+              >
+                {showDetailPanels ? '▲ Ocultar Fichas' : '▼ Ver Cabina & Fichas'}
+              </button>
+            </div>
+          </div>
+
+          {/* Paneles desplegables de Cabina y Físico */}
+          {showDetailPanels && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem', marginTop: '0.5rem' }}>
+              <div className="panel panel-gold">
+                <h3 style={{ color: '#facc15', fontSize: '0.95rem', marginBottom: '0.4rem' }}>
+                  🎙️ CABINA COMPLETA DE TRANSMISIÓN
+                </h3>
+                <div className="commentary-feed" style={{ maxHeight: '240px' }}>
+                  {commentaryList.slice(0, 30).map((item) => (
+                    <div key={item.id} className={`commentary-item type-${item.type}`}>
+                      <div className="commentary-speaker">
+                        <span style={{ color: (item.speaker || '').includes('Araujo') ? '#facc15' : '#38bdf8' }}>
+                          {item.speaker}
+                        </span>
+                        <span className="led-font" style={{ color: '#00ff66', fontSize: '0.95rem' }}>{item.minute}</span>
+                      </div>
+                      <div>{item.text}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="panel">
+                <h3 style={{ color: '#facc15', fontSize: '0.95rem', marginBottom: '0.4rem' }}>
+                  🔋 ESTADO FÍSICO DE LOS 22 JUGADORES
+                </h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', maxHeight: '240px', overflowY: 'auto' }}>
+                  {[t1, t2].map((tm, tIdx) => (
+                    <div key={tm.name}>
+                      <div style={{ fontWeight: 800, fontSize: '0.76rem', color: tIdx === 0 ? '#facc15' : '#38bdf8', marginBottom: '0.25rem' }}>
+                        {tm.name}
+                      </div>
+                      {tm.players.map((p) => (
+                        <div key={p.playerID} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', padding: '1px 0' }}>
+                          <span>#{p.shirtNumber} {p.name.split(' ').slice(-1)[0]}</span>
+                          <span style={{ fontWeight: 800, color: (p.fitness ?? 100) > 65 ? '#4ade80' : ((p.fitness ?? 100) > 40 ? '#facc15' : '#ef4444') }}>
+                            {Math.round(p.fitness ?? 100)}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
         </div>
+      ) : (
+        <div className="match-layout-grid">
+          {/* Cancha 2D Vertical tradicional */}
+          <div className="canvas-wrapper">
+            {pitchBanner && (
+              <div className={`pitch-event-banner banner-${pitchBanner.type}`}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                  <span style={{ fontSize: '1.35rem' }}>{pitchBanner.icon}</span>
+                  <div>
+                    <div style={{ fontFamily: 'Chakra Petch, sans-serif', fontWeight: 900, fontSize: '0.88rem', lineHeight: 1.1 }}>
+                      {pitchBanner.title}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', opacity: 0.92, fontWeight: 700 }}>
+                      {pitchBanner.subtitle}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
-        {/* Columna Derecha: Relatos en Vivo + Estadísticas + Estado Físico de los 22 Jugadores */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {/* Cabina de Transmisión Araujo & Macaya */}
-          <div className="panel panel-gold">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.55rem' }}>
-              <h3 style={{ color: '#facc15', fontSize: '1rem' }}>
-                🎙️ CABINA DE TRANSMISIÓN • ARAUJO & MACAYA MÁRQUEZ
-              </h3>
-              <span style={{ fontSize: '0.72rem', color: '#00ff66', fontWeight: 800 }}>
-                ● EN VIVO
-              </span>
+            <canvas
+              ref={canvasRef}
+              width={PITCH_CONFIG.pitchWidth}
+              height={PITCH_CONFIG.pitchHeight}
+              className={pitchOrientation === 'horizontal' ? 'pitch-canvas-horizontal' : 'pitch-canvas-vertical'}
+            />
+
+            {goalBanner && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '46%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  background: 'linear-gradient(180deg, #fde047 0%, #ca8a04 100%)',
+                  color: '#020617',
+                  padding: '0.85rem 1.5rem',
+                  borderRadius: '2px',
+                  fontFamily: 'Chakra Petch, sans-serif',
+                  fontWeight: 900,
+                  fontSize: '1.35rem',
+                  boxShadow: '0 0 40px rgba(250, 204, 21, 0.95)',
+                  border: '3px solid #fff',
+                  textAlign: 'center',
+                  zIndex: 30
+                }}
+              >
+                ⚽ {goalBanner}
+              </div>
+            )}
+
+            {deadBallOverlay && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '48%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.96) 0%, rgba(30, 41, 59, 0.96) 100%)',
+                  border: '3px solid #facc15',
+                  boxShadow: '0 0 45px rgba(250, 204, 21, 0.55), inset 0 0 20px rgba(0,0,0,0.85)',
+                  color: '#ffffff',
+                  padding: '1.25rem 2.5rem',
+                  borderRadius: '8px',
+                  textAlign: 'center',
+                  zIndex: 50,
+                  pointerEvents: 'none',
+                  minWidth: '300px',
+                  backdropFilter: 'blur(4px)'
+                }}
+              >
+                <div style={{ fontSize: '2rem', marginBottom: '0.2rem' }}>
+                  {deadBallOverlay.icon}
+                </div>
+                <div
+                  style={{
+                    fontFamily: 'Chakra Petch, sans-serif',
+                    fontWeight: 900,
+                    fontSize: '1.6rem',
+                    letterSpacing: '0.14em',
+                    color: '#facc15',
+                    textShadow: '0 0 16px rgba(250, 204, 21, 0.7), 2px 2px 0px #000',
+                    lineHeight: 1.1,
+                    marginBottom: '0.35rem'
+                  }}
+                >
+                  {deadBallOverlay.title}
+                </div>
+                <div
+                  style={{
+                    fontFamily: 'Chakra Petch, sans-serif',
+                    fontWeight: 700,
+                    fontSize: '0.9rem',
+                    color: '#cbd5e1',
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase'
+                  }}
+                >
+                  {deadBallOverlay.subtitle}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Columna Derecha: Relatos en Vivo + Estadísticas + Estado Físico */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div className="panel panel-gold">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.55rem' }}>
+                <h3 style={{ color: '#facc15', fontSize: '1rem' }}>
+                  🎙️ CABINA DE TRANSMISIÓN • ARAUJO & MACAYA MÁRQUEZ
+                </h3>
+                <span style={{ fontSize: '0.72rem', color: '#00ff66', fontWeight: 800 }}>
+                  ● EN VIVO
+                </span>
+              </div>
+
+              <div className="commentary-feed">
+                {commentaryList.map((item) => {
+                  const badge = COMMENTARY_BADGES[item.type] || COMMENTARY_BADGES.play
+                  const isAraujo = (item.speaker || '').toUpperCase().includes('ARAUJO')
+                  return (
+                    <div key={item.id} className={`commentary-item type-${item.type}`}>
+                      <div className="commentary-speaker">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <span
+                            style={{
+                              background: badge.bg,
+                              color: badge.color,
+                              fontSize: '0.64rem',
+                              fontWeight: 900,
+                              padding: '1px 5px',
+                              borderRadius: '2px'
+                            }}
+                          >
+                            {badge.label}
+                          </span>
+                          <span style={{ color: isAraujo ? '#facc15' : '#38bdf8' }}>
+                            {item.speaker}
+                          </span>
+                        </div>
+                        <span className="led-font" style={{ color: '#00ff66', fontSize: '1rem' }}>{item.minute}</span>
+                      </div>
+                      <div>{item.text}</div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
 
-            <div className="commentary-feed">
-              {commentaryList.map((item) => {
-                const badge = COMMENTARY_BADGES[item.type] || COMMENTARY_BADGES.play
-                const isAraujo = (item.speaker || '').toUpperCase().includes('ARAUJO')
-                return (
-                  <div key={item.id} className={`commentary-item type-${item.type}`}>
-                    <div className="commentary-speaker">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <span
+            <div className="panel">
+              <h3 style={{ color: '#facc15', fontSize: '0.96rem', marginBottom: '0.65rem' }}>
+                📊 ESTADÍSTICAS DEL PARTIDO EN VIVO
+              </h3>
+
+              {[
+                { label: 'Posesión de Pelota', v1: `${poss1}%`, v2: `${poss2}%`, p1: poss1 },
+                {
+                  label: 'Tiros Totales (Al Arco)',
+                  v1: `${s1.shots.total} (${s1.shots.on})`,
+                  v2: `${s2.shots.total} (${s2.shots.on})`,
+                  p1: (s1.shots.total + s2.shots.total) > 0 ? (s1.shots.total / (s1.shots.total + s2.shots.total)) * 100 : 50
+                },
+                {
+                  label: 'Pases Completados / Intentados',
+                  v1: `${s1.passesCompleted || 0}/${s1.passesTotal || 0}`,
+                  v2: `${s2.passesCompleted || 0}/${s2.passesTotal || 0}`,
+                  p1: ((s1.passesCompleted || 0) + (s2.passesCompleted || 0)) > 0
+                    ? ((s1.passesCompleted || 0) / ((s1.passesCompleted || 0) + (s2.passesCompleted || 0))) * 100
+                    : 50
+                },
+                {
+                  label: 'Tiros de Esquina (Córners)',
+                  v1: s1.corners,
+                  v2: s2.corners,
+                  p1: (s1.corners + s2.corners) > 0 ? (s1.corners / (s1.corners + s2.corners)) * 100 : 50
+                },
+                {
+                  label: 'Faltas Cometidas / Penales',
+                  v1: `${s1.fouls || 0} (Pen: ${s1.penalties})`,
+                  v2: `${s2.fouls || 0} (Pen: ${s2.penalties})`,
+                  p1: ((s1.fouls || 0) + (s2.fouls || 0)) > 0 ? ((s1.fouls || 0) / ((s1.fouls || 0) + (s2.fouls || 0))) * 100 : 50
+                },
+                {
+                  label: 'Tarjetas (Amarillas / Rojas)',
+                  v1: `🟨 ${cards1.y} | 🟥 ${cards1.r}`,
+                  v2: `🟨 ${cards2.y} | 🟥 ${cards2.r}`,
+                  p1: 50
+                }
+              ].map((row) => (
+                <div key={row.label} className="stat-comparison-row">
+                  <div className="stat-comparison-header">
+                    <span style={{ color: '#facc15' }}>{row.v1}</span>
+                    <span style={{ color: '#cbd5e1' }}>{row.label}</span>
+                    <span style={{ color: '#38bdf8' }}>{row.v2}</span>
+                  </div>
+                  <div className="stat-bar-track">
+                    <div style={{ width: `${row.p1}%`, background: t1.primaryColor || '#facc15', transition: 'width 0.3s' }} />
+                    <div style={{ width: `${100 - row.p1}%`, background: t2.primaryColor || '#38bdf8', transition: 'width 0.3s' }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.85rem' }}>
+              {[
+                { team: t1, accent: '#facc15' },
+                { team: t2, accent: '#38bdf8' }
+              ].map(({ team, accent }) => (
+                <div key={team.name} className="panel" style={{ padding: '0.8rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.45rem' }}>
+                    <h4 style={{ color: accent, fontSize: '0.86rem' }}>
+                      {team.name} ({team.formation} • {team.mentality === 'offensive' ? 'Ofensiva' : team.mentality === 'defensive' ? 'Defensiva' : 'Equil.'})
+                    </h4>
+                    <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                      Cambios: {team.substitutionsUsed || 0}/5
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.26rem', maxHeight: '210px', overflowY: 'auto' }}>
+                    {team.players.map((p) => {
+                      const fit = Math.round(p.fitness ?? 100)
+                      return (
+                        <div
+                          key={p.playerID}
                           style={{
-                            background: badge.bg,
-                            color: badge.color,
-                            fontSize: '0.64rem',
-                            fontWeight: 900,
-                            padding: '1px 5px',
-                            borderRadius: '2px'
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            fontSize: '0.74rem',
+                            opacity: p.sentOff ? 0.4 : 1,
+                            padding: '1px 3px',
+                            background: p.hasBall ? 'rgba(250, 204, 21, 0.14)' : 'transparent'
                           }}
                         >
-                          {badge.label}
-                        </span>
-                        <span style={{ color: isAraujo ? '#facc15' : '#38bdf8' }}>
-                          {item.speaker}
-                        </span>
-                      </div>
-                      <span className="led-font" style={{ color: '#00ff66', fontSize: '1rem' }}>{item.minute}</span>
-                    </div>
-                    <div>{item.text}</div>
+                          <span>
+                            <b style={{ color: accent }}>#{p.shirtNumber}</b> {p.name}{' '}
+                            <span style={{ color: '#64748b', fontSize: '0.66rem' }}>({p.tacticalRole || p.position})</span>{' '}
+                            {p.stats?.goals > 0 && `⚽x${p.stats.goals}`}{' '}
+                            {p.stats?.cards?.yellow > 0 && '🟨'}
+                            {p.sentOff && '🟥'}
+                          </span>
+                          <span style={{ color: fit > 65 ? '#4ade80' : (fit > 40 ? '#facc15' : '#ef4444'), fontWeight: 800 }}>
+                            {fit}%
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
-                )
-              })}
+                </div>
+              ))}
             </div>
           </div>
-
-          {/* Estadísticas del Partido en Tiempo Real */}
-          <div className="panel">
-            <h3 style={{ color: '#facc15', fontSize: '0.96rem', marginBottom: '0.65rem' }}>
-              📊 ESTADÍSTICAS DEL PARTIDO EN VIVO
-            </h3>
-
-            {[
-              { label: 'Posesión de Pelota', v1: `${poss1}%`, v2: `${poss2}%`, p1: poss1 },
-              {
-                label: 'Tiros Totales (Al Arco)',
-                v1: `${s1.shots.total} (${s1.shots.on})`,
-                v2: `${s2.shots.total} (${s2.shots.on})`,
-                p1: (s1.shots.total + s2.shots.total) > 0 ? (s1.shots.total / (s1.shots.total + s2.shots.total)) * 100 : 50
-              },
-              {
-                label: 'Pases Completados / Intentados',
-                v1: `${s1.passesCompleted || 0}/${s1.passesTotal || 0}`,
-                v2: `${s2.passesCompleted || 0}/${s2.passesTotal || 0}`,
-                p1: ((s1.passesCompleted || 0) + (s2.passesCompleted || 0)) > 0
-                  ? ((s1.passesCompleted || 0) / ((s1.passesCompleted || 0) + (s2.passesCompleted || 0))) * 100
-                  : 50
-              },
-              {
-                label: 'Tiros de Esquina (Córners)',
-                v1: s1.corners,
-                v2: s2.corners,
-                p1: (s1.corners + s2.corners) > 0 ? (s1.corners / (s1.corners + s2.corners)) * 100 : 50
-              },
-              {
-                label: 'Faltas Cometidas / Penales',
-                v1: `${s1.fouls || 0} (Pen: ${s1.penalties})`,
-                v2: `${s2.fouls || 0} (Pen: ${s2.penalties})`,
-                p1: ((s1.fouls || 0) + (s2.fouls || 0)) > 0 ? ((s1.fouls || 0) / ((s1.fouls || 0) + (s2.fouls || 0))) * 100 : 50
-              },
-              {
-                label: 'Tarjetas (Amarillas / Rojas)',
-                v1: `🟨 ${cards1.y} | 🟥 ${cards1.r}`,
-                v2: `🟨 ${cards2.y} | 🟥 ${cards2.r}`,
-                p1: 50
-              }
-            ].map((row) => (
-              <div key={row.label} className="stat-comparison-row">
-                <div className="stat-comparison-header">
-                  <span style={{ color: '#facc15' }}>{row.v1}</span>
-                  <span style={{ color: '#cbd5e1' }}>{row.label}</span>
-                  <span style={{ color: '#38bdf8' }}>{row.v2}</span>
-                </div>
-                <div className="stat-bar-track">
-                  <div style={{ width: `${row.p1}%`, background: t1.primaryColor || '#facc15', transition: 'width 0.3s' }} />
-                  <div style={{ width: `${100 - row.p1}%`, background: t2.primaryColor || '#38bdf8', transition: 'width 0.3s' }} />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Estado Físico y Goleadores en Cancha */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.85rem' }}>
-            {[
-              { team: t1, accent: '#facc15' },
-              { team: t2, accent: '#38bdf8' }
-            ].map(({ team, accent }) => (
-              <div key={team.name} className="panel" style={{ padding: '0.8rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.45rem' }}>
-                  <h4 style={{ color: accent, fontSize: '0.86rem' }}>
-                    {team.name} ({team.formation} • {team.mentality === 'offensive' ? 'Ofensiva' : team.mentality === 'defensive' ? 'Defensiva' : 'Equil.'})
-                  </h4>
-                  <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                    Cambios: {team.substitutionsUsed || 0}/5
-                  </span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.26rem', maxHeight: '210px', overflowY: 'auto' }}>
-                  {team.players.map((p) => {
-                    const fit = Math.round(p.fitness ?? 100)
-                    return (
-                      <div
-                        key={p.playerID}
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          fontSize: '0.74rem',
-                          opacity: p.sentOff ? 0.4 : 1,
-                          padding: '1px 3px',
-                          background: p.hasBall ? 'rgba(250, 204, 21, 0.14)' : 'transparent'
-                        }}
-                      >
-                        <span>
-                          <b style={{ color: accent }}>#{p.shirtNumber}</b> {p.name}{' '}
-                          <span style={{ color: '#64748b', fontSize: '0.66rem' }}>({p.tacticalRole || p.position})</span>{' '}
-                          {p.stats?.goals > 0 && `⚽x${p.stats.goals}`}{' '}
-                          {p.stats?.cards?.yellow > 0 && '🟨'}
-                          {p.sentOff && '🟥'}
-                        </span>
-                        <span style={{ color: fit > 65 ? '#4ade80' : (fit > 40 ? '#facc15' : '#ef4444'), fontWeight: 800 }}>
-                          {fit}%
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
-      </div>
+      )}
 
       {/* Modal de Pizarra Táctica y Cambios en Vivo */}
       {showTacticsModal && (

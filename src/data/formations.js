@@ -217,7 +217,7 @@ export const MENTALITIES = {
 export function getFormationCoordinates(formationId, mentalityId = 'balanced', side = 'top') {
   const formation = FORMATIONS[formationId] || FORMATIONS['4-4-2']
   const mentality = MENTALITIES[mentalityId] || MENTALITIES.balanced
-  const { pitchHeight } = PITCH_CONFIG
+  const { pitchHeight, pitchWidth } = PITCH_CONFIG
 
   return formation.slots.map((slot, idx) => {
     const baseX = slot.pos[0]
@@ -227,9 +227,10 @@ export function getFormationCoordinates(formationId, mentalityId = 'balanced', s
       baseY = Math.max(60, Math.min(510, baseY + mentality.yShift))
     }
     const finalY = side === 'bottom' ? pitchHeight - baseY : baseY
+    const finalX = side === 'bottom' ? pitchWidth - baseX : baseX
     return {
       ...slot,
-      coords: [baseX, finalY]
+      coords: [finalX, finalY]
     }
   })
 }

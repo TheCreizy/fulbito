@@ -11,8 +11,41 @@ function getTeamStatisticsObject(matchDetails, team) {
 }
 
 export function moveBall(matchDetails) {
-  const { ball } = matchDetails
+  const { ball, kickOffTeam, secondTeam } = matchDetails
   if (!ball.ballOverIterations || ball.ballOverIterations.length === 0) {
+    // Si la pelota aún tiene inercia de rodamiento sobre el césped tras completarse la trayectoria principal
+    if (ball.velocity && !ball.withPlayer) {
+      const [vx, vy] = ball.velocity
+      const speed = Math.sqrt(vx * vx + vy * vy)
+      if (speed > 0.8) {
+        const grassFriction = 0.90
+        const nVx = vx * grassFriction
+        const nVy = vy * grassFriction
+        const curPos = ball.position
+        const nPos = [
+          common.round(curPos[0] + nVx, 2),
+          common.round(curPos[1] + nVy, 2),
+          0
+        ]
+        ball.velocity = [nVx, nVy]
+        ball.position = nPos
+        // Chequear si un jugador cercano la intercepta o controla
+        const dummyBallPlayer = setBPlayer(nPos)
+        const p1 = setPositions.closestPlayerToPosition(dummyBallPlayer, kickOffTeam, nPos)
+        const p2 = setPositions.closestPlayerToPosition(dummyBallPlayer, secondTeam, nPos)
+        const isT1Closer = p1.proxToBall <= p2.proxToBall
+        const nearestP = isT1Closer ? p1.thePlayer : p2.thePlayer
+        const nearestT = isT1Closer ? kickOffTeam : secondTeam
+        if (nearestP) {
+          thisPlayerIsInProximity(matchDetails, nearestP, curPos, nPos, speed * 10, nearestT)
+        }
+        if (matchDetails.endIteration === true) return matchDetails
+        const lastTeamID = ball.lastTouch.teamID
+        matchDetails = setPositions.keepInBoundaries(matchDetails, lastTeamID, nPos)
+        return matchDetails
+      }
+      ball.velocity = [0, 0]
+    }
     ball.direction = 'wait'
     if (ball.position.length === 2) ball.position = [ball.position[0], ball.position[1], 0]
     return matchDetails
@@ -578,6 +611,7 @@ export function resolveBallMovement(player, matchDetails) {
   const thisTeam = isTeam1Closer ? kickOffTeam : secondTeam
 
   if (thisPlayer) thisPlayerIsInProximity(matchDetails, thisPlayer, ballPos, nextPos, ballPow, thisTeam)
+  matchDetails.ball.velocity = [nextPos[0] - ballPos[0], nextPos[1] - ballPos[1]]
   matchDetails.ball.position = nextPos
   return [common.round(nextPos[0], 2), common.round(nextPos[1], 2), common.round(nextPos[2] || 0, 2)]
 }
@@ -904,7 +938,9 @@ export function ballPassed(matchDetails, team, player) {
   const passDist = common.distance(ballPos, targetPlayer.position)
   const horizontalSpan = Math.abs(targetPlayer.position[0] - ballPos[0])
   const forwardDelta = aTop ? ballPos[1] - targetPlayer.position[1] : targetPlayer.position[1] - ballPos[1]
-  const isSwitchOfPlay = horizontalSpan >= 230 && (targetPlayer.position[0] < 190 || targetPlayer.position[0] > (pitchWidth - 190))
+  const isFromWingToWing = (ballPos[0] < 220 && targetPlayer.position[0] > (pitchWidth - 220)) ||
+                           (ballPos[0] > (pitchWidth - 220) && targetPlayer.position[0] < 220)
+  const isSwitchOfPlay = player.position !== 'GK' && horizontalSpan >= 230 && isFromWingToWing
 
   // Gestión de Pared ("One-Two Wall Pass")
   if (
@@ -984,6 +1020,17 @@ export function ballPassed(matchDetails, team, player) {
       iteration: currentIter,
       half: matchDetails.half
     })
+  } else if (player.position === 'GK' && passDist > 160 && Array.isArray(matchDetails.events)) {
+    matchDetails.events.push({
+      type: 'gkLongPass',
+      teamID: team.teamID,
+      teamName: team.name,
+      playerName: player.name,
+      receiverName: targetPlayer.name,
+      iteration: currentIter,
+      half: matchDetails.half
+    })
+    matchDetails.iterationLog.push(`Goalkeeper long clearance by: ${player.name}`)
   }
 
   const calcHeight = parseInt(player.height, 10) + parseInt((player.skill.jumping || 0), 10)
@@ -994,10 +1041,11 @@ export function ballPassed(matchDetails, team, player) {
   const isLanzadorPass = Array.isArray(player.traits) && player.traits.includes('lanzador_canonero')
   let kickPow = isSwitchOfPlay
     ? Math.max(power, passDist * 1.35)
-    : Math.min(power * 1.15, Math.max(150, passDist * 1.3))
+    : Math.min(power * 1.25, Math.max(160, passDist * 1.35))
   if (isSprintingPass || isLanzadorPass) {
     kickPow *= 1.18 // El pase sale más tenso y rápido
   }
+  player.isKickoffPass = false
   return calcBallMovementOverTime(matchDetails, kickPow, finalTarget, player, kickType)
 }
 
@@ -1005,6 +1053,15 @@ function passScoreOption(p, aTop, ballPos, maxDistance, styleCfg, pitchWidth = 6
   let score = 0
   const d = common.distance(ballPos, p.position)
   const forward = aTop ? ballPos[1] - p.position[1] : p.position[1] - ballPos[1]
+
+  // En el saque del medio (Kickoff), pase atrás limpio y obligatorio a un mediocampista en campo propio
+  if (passer?.isKickoffPass) {
+    if (forward < -15 && forward > -280 && p.role !== 'GK') {
+      return 600 + (p.role === 'CM' ? 100 : 0) - (p.isMarked ? 150 : 0)
+    }
+    return -999
+  }
+
   const horizontalSpan = Math.abs(p.position[0] - ballPos[0])
   const isWideTarget = p.position[0] < 185 || p.position[0] > (pitchWidth - 185)
   const isSwitchCandidate = horizontalSpan >= 230 && isWideTarget && !p.isMarked && forward > -45

@@ -14,6 +14,47 @@ export function selectFreekickTaker(team, allowGoalie = false) {
   return sorted[0]
 }
 
+export function applyFreekickTactics(matchDetails, attack, defence, kickPlayer, isTopAttacking) {
+  const [pitchWidth, pitchHeight] = matchDetails.pitchSize
+  const ballPos = matchDetails.ball.position
+  const targetGoal = isTopAttacking ? [pitchWidth / 2, pitchHeight] : [pitchWidth / 2, 0]
+  const distToGoal = common.distance(ballPos, targetGoal)
+  const lateralOffset = Math.abs(ballPos[0] - pitchWidth / 2)
+  const isFrontal = lateralOffset <= 170
+
+  const fkSkill = Number(kickPlayer.skill.freekick || kickPlayer.skill.shooting || 70)
+  const isSpecialist = fkSkill >= 84 || (Array.isArray(kickPlayer.traits) && kickPlayer.traits.includes('lanzador_canonero'))
+
+  // 1. Asignar acción según distancia y ángulo (Tiro directo vs Centro vs Pase)
+  if ((distToGoal <= 265 && isFrontal) || (isSpecialist && distToGoal <= 315 && lateralOffset <= 200)) {
+    kickPlayer.action = 'freekickShot'
+    matchDetails.iterationLog.push(`Dangerous Direct Freekick for ${attack.name} - Taker: ${kickPlayer.name}`)
+  } else if (distToGoal <= 420) {
+    kickPlayer.action = 'cross'
+    matchDetails.iterationLog.push(`Crossing Freekick for ${attack.name} - Taker: ${kickPlayer.name}`)
+  } else {
+    kickPlayer.action = 'pass'
+  }
+
+  // 2. Subida de centrales (CB) a cabecear en tiros libres ofensivos (< 420px del arco rival)
+  if (distToGoal <= 420) {
+    const cbs = attack.players.filter(p => (
+      common.isOnPitch(p) &&
+      p.playerID !== kickPlayer.playerID &&
+      (p.position === 'CB' || p.tacticalRole === 'CB' || p.tacticalRole === 'DFC' || p.tacticalRole === 'LÍBERO' || p.tacticalRole === 'STOP I' || p.tacticalRole === 'STOP D')
+    ))
+    cbs.sort((a, b) => ((b.skill.jumping || 0) + (Number(b.height) || 180)) - ((a.skill.jumping || 0) + (Number(a.height) || 180)))
+    const headingCBs = cbs.slice(0, 2)
+    for (const cb of headingCBs) {
+      cb.currentPOS = isTopAttacking
+        ? common.getRandomBottomPenaltyPosition(matchDetails)
+        : common.getRandomTopPenaltyPosition(matchDetails)
+      cb.intentPOS = cb.currentPOS.slice()
+      matchDetails.iterationLog.push(`CB Header run by: ${cb.name}`)
+    }
+  }
+}
+
 export function setTopFreekick(matchDetails) {
   common.removeBallFromAllPlayers(matchDetails)
   matchDetails.ball.ballOverIterations = []
@@ -27,12 +68,17 @@ export function setTopFreekick(matchDetails) {
   const upperFinalQtr = common.isBetween(ballY, pitchHeight - (pitchHeight / 4), pitchHeight - (pitchHeight / 6) - 5)
   const lowerFinalQtr = common.isBetween(ballY, pitchHeight - (pitchHeight / 6) - 5, pitchHeight + 1)
 
-  if (ballY <= 100) return setTopOneHundredYPos(matchDetails, attack, defence)
-  if (hundredToHalfway) return setTopOneHundredToHalfwayYPos(matchDetails, attack, defence)
-  if (halfwayToLastQtr) return setTopHalfwayToBottomQtrYPos(matchDetails, attack, defence)
-  if (upperFinalQtr) return setTopBottomQtrCentreYPos(matchDetails, attack, defence)
-  if (lowerFinalQtr) return setTopLowerFinalQtrBylinePos(matchDetails, attack, defence)
-  return setTopHalfwayToBottomQtrYPos(matchDetails, attack, defence)
+  let result
+  if (ballY <= 100) result = setTopOneHundredYPos(matchDetails, attack, defence)
+  else if (hundredToHalfway) result = setTopOneHundredToHalfwayYPos(matchDetails, attack, defence)
+  else if (halfwayToLastQtr) result = setTopHalfwayToBottomQtrYPos(matchDetails, attack, defence)
+  else if (upperFinalQtr) result = setTopBottomQtrCentreYPos(matchDetails, attack, defence)
+  else if (lowerFinalQtr) result = setTopLowerFinalQtrBylinePos(matchDetails, attack, defence)
+  else result = setTopHalfwayToBottomQtrYPos(matchDetails, attack, defence)
+
+  const kickPlayer = attack.players.find(p => p.playerID === matchDetails.ball.Player) || selectFreekickTaker(attack)
+  applyFreekickTactics(matchDetails, attack, defence, kickPlayer, true)
+  return result
 }
 
 export function setBottomFreekick(matchDetails) {
@@ -48,12 +94,17 @@ export function setBottomFreekick(matchDetails) {
   const upperFinalQtr = common.isBetween(ballY, (pitchHeight / 6) - 5, pitchHeight / 4)
   const lowerFinalQtr = common.isBetween(ballY, -1, (pitchHeight / 6) - 5)
 
-  if (ballY >= pitchHeight - 100) return setBottomOneHundredYPos(matchDetails, attack, defence)
-  if (hundredToHalfway) return setBottomOneHundredToHalfwayYPos(matchDetails, attack, defence)
-  if (halfwayToLastQtr) return setBottomHalfwayToTopQtrYPos(matchDetails, attack, defence)
-  if (upperFinalQtr) return setBottomUpperQtrCentreYPos(matchDetails, attack, defence)
-  if (lowerFinalQtr) return setBottomLowerFinalQtrBylinePos(matchDetails, attack, defence)
-  return setBottomHalfwayToTopQtrYPos(matchDetails, attack, defence)
+  let result
+  if (ballY >= pitchHeight - 100) result = setBottomOneHundredYPos(matchDetails, attack, defence)
+  else if (hundredToHalfway) result = setBottomOneHundredToHalfwayYPos(matchDetails, attack, defence)
+  else if (halfwayToLastQtr) result = setBottomHalfwayToTopQtrYPos(matchDetails, attack, defence)
+  else if (upperFinalQtr) result = setBottomUpperQtrCentreYPos(matchDetails, attack, defence)
+  else if (lowerFinalQtr) result = setBottomLowerFinalQtrBylinePos(matchDetails, attack, defence)
+  else result = setBottomHalfwayToTopQtrYPos(matchDetails, attack, defence)
+
+  const kickPlayer = attack.players.find(p => p.playerID === matchDetails.ball.Player) || selectFreekickTaker(attack)
+  applyFreekickTactics(matchDetails, attack, defence, kickPlayer, false)
+  return result
 }
 
 function setTopOneHundredYPos(matchDetails, attack, defence) {

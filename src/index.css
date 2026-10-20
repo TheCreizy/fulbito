@@ -741,11 +741,28 @@ h1, h2, h3, .tv-font {
 }
 
 .pitch-canvas {
+  display: block;
+  border-radius: 4px;
+}
+
+.pitch-canvas-horizontal {
+  aspect-ratio: 1050 / 680;
+  max-width: 840px;
+  max-width: min(840px, calc((100vh - 240px) * 1050 / 680));
+  max-height: calc(100vh - 240px);
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  display: block;
+  object-fit: contain;
+}
+
+.pitch-canvas-vertical {
   width: 100%;
   max-width: 485px;
-  height: auto;
   aspect-ratio: 680 / 1050;
-  border-radius: 2px;
+  height: auto;
+  border-radius: 4px;
   display: block;
 }
 
@@ -997,3 +1014,77 @@ h1, h2, h3, .tv-font {
   outline: none;
   border-color: var(--gold-tv);
 }
+
+/* =========================================================
+   PANTALLA DE PARTIDO HORIZONTAL (STYLE FOOTBALL MANAGER)
+   ========================================================= */
+.main-container-match-horizontal {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.main-container-match-horizontal .tv-scoreboard {
+  margin-bottom: 0.35rem;
+  padding: 0.4rem 0.85rem;
+}
+
+.fm-match-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 0.2rem 0.5rem;
+}
+
+.fm-top-cards {
+  display: grid;
+  grid-template-columns: 240px 1fr 1fr 240px;
+  gap: 0.5rem;
+}
+
+@media (max-width: 1200px) {
+  .fm-top-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.fm-card {
+  background: #09152b;
+  border: 1px solid #1e3a6a;
+  border-radius: 6px;
+  padding: 0.45rem 0.75rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.fm-pitch-wrapper {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+  background: #020610;
+  border-radius: 8px;
+  padding: 0.35rem;
+  border: 1px solid #1e3a6a;
+  overflow: hidden;
+}
+
+.fm-ticker-bar {
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 20px;
+  padding: 0.45rem 1.25rem;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 0.92rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 2px solid #cbd5e1;
+}
+
+

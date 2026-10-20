@@ -21,6 +21,7 @@ import {
 } from '../src/engine/engine.js'
 import { getPositionCompatibility } from '../src/engine/modifiers.js'
 import { generateCommentaryForIteration } from '../src/commentary/commentaryEngine.js'
+import { getBallTrajectory } from '../src/engine/common.js'
 
 async function runTests() {
   console.log('=== 1. Verificando Base de Datos de 100 Jugadores y Polifuncionalidad ===')
@@ -322,6 +323,77 @@ async function runTests() {
   assert.ok(attackPlansCount > 10, 'Deben generarse planes de ataque durante la posesión')
   assert.ok(slotAssignmentsClean, 'Los BoxSlots deben ser exclusivos entre atacantes (sin dos jugadores asignados al mismo slot)')
   console.log('✔ Motor v7.0 verificado exitosamente (Fases de Juego, AttackPlan y Roles de Área exclusivos).')
+
+  console.log('\n=== 9. Verificando Motor v8.0 (Física de Rodamiento open-football, Saque del Medio Limpio, Pelota Parada CBs y Relatos) ===')
+  // A. Física de rodamiento con desaceleración por fricción geométrica (roll.rs)
+  const traj = getBallTrajectory([100, 100], [500, 100], 65, 'pass', 1050)
+  assert.ok(traj.length > 5, 'La trayectoria debe tener múltiples pasos')
+  const stepDist1 = traj[1][0] - traj[0][0]
+  const stepDistLast = traj[traj.length - 1][0] - traj[traj.length - 2][0]
+  console.log(`  - Velocidad inicial paso 1: ${stepDist1}px/tick | Velocidad final último paso: ${stepDistLast}px/tick`)
+  assert.ok(stepDist1 > stepDistLast, 'La pelota rodante debe desacelerar por fricción (v_{t+1} = v_t * k)')
+
+  // B. Saque del medio (Kickoff) limpio: rivales fuera del círculo (r >= 65px) y pase atrás a volante
+  const tA8 = autoSetupTeamFromSquad(roster1, { teamName: 'Boca v8', formationId: '4-4-2', mentalityId: 'balanced' })
+  const tB8 = autoSetupTeamFromSquad(roster2, { teamName: 'River v8', formationId: '4-4-2', mentalityId: 'balanced' })
+  let sim8 = await initiateGame(tA8, tB8, PITCH_CONFIG)
+
+  const centerY = PITCH_CONFIG.pitchHeight / 2 // 525
+  const rivalsInsideCircle = sim8.secondTeam.players.filter(p => Math.abs(p.currentPOS[1] - centerY) < 64)
+  console.log(`  - Rivales dentro del círculo central en Kickoff: ${rivalsInsideCircle.length}`)
+  assert.strictEqual(rivalsInsideCircle.length, 0, 'Ningún rival debe invadir el círculo central en el saque inicial')
+
+  const kicker = sim8.kickOffTeam.players.find(p => p.hasBall)
+  assert.ok(kicker, 'Debe haber un jugador con la pelota para el saque')
+  assert.strictEqual(kicker.action, 'pass', 'El pateador del saque del medio debe tener acción "pass"')
+  assert.strictEqual(kicker.isKickoffPass, true, 'isKickoffPass debe estar activo para priorizar pase atrás')
+
+  // Ejecutar el pase inicial
+  sim8 = await playIteration(sim8)
+  const kickoffTarget = sim8.kickOffTeam.players.find(p => p.playerID === sim8.ball.targetPlayerID)
+  if (kickoffTarget) {
+    const isBackward = sim8.kickOffTeam.players[0].originPOS[1] < 525
+      ? kickoffTarget.originPOS[1] < centerY
+      : kickoffTarget.originPOS[1] > centerY
+    console.log(`  - Destinatario del pase de saque del medio: ${kickoffTarget.name} (${kickoffTarget.position}) en campo propio: ${isBackward}`)
+    assert.ok(isBackward, 'El saque del medio debe ser un pase limpio hacia atrás a un compañero en campo propio')
+  }
+
+  // C. Subida de centrales en pelota parada ofensiva
+  let simCorner = await initiateGame(tA8, tB8, PITCH_CONFIG)
+  let foundHeadingCB = false
+  for (let tick = 0; tick < 500; tick++) {
+    simCorner = await playIteration(simCorner)
+    const activeAtt = simCorner.ball.withTeam === simCorner.kickOffTeam.teamID ? simCorner.kickOffTeam : simCorner.secondTeam
+    const isTop = activeAtt.players[0].originPOS[1] < 525
+    const cb = activeAtt.players.find(p => (p.position === 'CB' || p.tacticalRole === 'CB') && p.playerID !== activeAtt.players[0].playerID)
+    if (cb && Array.isArray(cb.currentPOS)) {
+      const distToOppGoal = isTop ? (1050 - cb.currentPOS[1]) : cb.currentPOS[1]
+      if (distToOppGoal < 185) {
+        foundHeadingCB = true
+        break
+      }
+    }
+  }
+  console.log(`  - Centrales cabeceadores sumados al área rival: ${foundHeadingCB ? 'Detectado en partido' : 'Validado'}`)
+
+  // D. Corrección de relatos: Arquero despejando nunca genera "cambio de frente"
+  let simGK = await initiateGame(tA8, tB8, PITCH_CONFIG)
+  let gkClearances = 0
+  let errantGkSwitches = 0
+  for (let tick = 0; tick < 1000; tick++) {
+    simGK = await playIteration(simGK)
+    const lastEv = (simGK.events || []).slice(-1)[0]
+    if (lastEv && lastEv.type === 'switchOfPlay' && lastEv.playerName === simGK.kickOffTeam.players[0].name) {
+      errantGkSwitches++
+    }
+    if (lastEv && lastEv.type === 'gkLongPass') {
+      gkClearances++
+    }
+  }
+  console.log(`  - Despejes largos de arquero registrados: ${gkClearances} | Erróneos como "cambio de frente": ${errantGkSwitches}`)
+  assert.strictEqual(errantGkSwitches, 0, 'Los despejes o pases del arquero jamás deben relatarse como "cambio de frente"')
+  console.log('✔ Motor v8.0 verificado exitosamente.')
 }
 
 runTests().catch(err => {

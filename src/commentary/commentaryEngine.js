@@ -425,6 +425,24 @@ export function generateCommentaryForIteration(matchDetails, prevScore, minuteFo
       return messages
     }
 
+    if (line.startsWith('Goalkeeper long clearance by: ')) {
+      const gkName = line.replace('Goalkeeper long clearance by: ', '').trim()
+      const alias = getAlias(gkName)
+      messages.push({
+        id: `${Date.now()}-${Math.random()}`,
+        minute: minuteFormatted,
+        speaker: 'Marcelo Araujo',
+        type: 'play',
+        text: pickRandom([
+          `¡${alias} despeja con un zapatazo largo buscando a los delanteros!`,
+          `¡Pelotazo largo del arquero ${alias} para salir del asedio rival!`,
+          `¡La revienta hacia adelante ${alias}! Salida limpia para el contragolpe.`
+        ])
+      })
+      stateTracker.lastCommentTick = matchDetails.iterationCount
+      return messages
+    }
+
     if (line.startsWith('Corner to - ')) {
       const tName = line.replace('Corner to - ', '').trim()
       messages.push({

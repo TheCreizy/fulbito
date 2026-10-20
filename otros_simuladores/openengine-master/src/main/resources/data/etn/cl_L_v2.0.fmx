@@ -1,0 +1,333 @@
+team L
+
+Attack {
+    Aw {
+        ThrowIn, true, 32, 0, 0; position = A
+        Corner, true, 40, 0, 0
+        GoalAttempt, true, 10, 0, 0; position = A, minute = 42
+    }
+    Ad {
+        ThrowIn, false, 57, 57, 0; position = AM
+    }
+    A {
+        GoalAttempt, true, 0, 0, 0; position = A, minute = 21
+        GoalAttempt, true, 12, 0, 0; position = Ad, minute = 83
+        Corner, true, 34, 0, 0
+        GoalkeeperPossession, false, 18, 8, 0
+    }
+    Awp {
+        GoalAttempt, true, 2, 0, 0; position = Apw, minute = 22
+        GoalAttempt, true, 7, 0, 0; position = A, minute = 53
+        GoalKick, false, 17, 0, 0
+    }
+    Apw {
+        FreeKick, true, 18, 0, 0; position = Md
+    }
+    Apd {
+        Penalty, true, 87, 0, 0
+        GoalAttempt, true, 1, 0, 0; position = Apd, minute = 87
+    }
+}
+AttackingPossession {
+    AM {
+        Attack, true, 4, 0, 0; position = Ad
+        }
+    Aw {
+        ThrowIn, true, 26, 0, 0; position = A
+        }
+}
+AttackingTransition {
+    MDd {
+        Transition, false, 8, 0, 0; position = DMd
+    }
+    Mw {
+        Clearance, false, 5, 0, 0; position = Dpw
+    }
+    AMw {
+        Attack, true, 3, 0, 0; position = Aw
+        Transition, false, 2, 0, 0; position = MDd
+    }
+    AMd {
+        GoalAttempt, true, 2, 0, 0; position = Ad, minute = 17
+    }
+    A {
+        GoalAttempt, true, 2, 0, 0; position = Ap, minute = 21
+        GoalAttempt, true, 2, 0, 0; position = Ap, minute = 69
+    }
+    Awp {
+        DefensiveTransition, false, 6, 0, 0; position = Dw
+        GoalKick, false, 29, 0, 0
+        ThrowIn, false, 33, 0, 0; position = D
+        AttackingPossession, true, 7, 0, 0; position = Aw
+        Attack, true, 6, 0, 0; position = Awp
+        ThrowIn, true, 20, 0, 0; position = AM
+    }
+    Apd {
+        GoalAttempt, true, 2, 0, 0; position = Ap, minute = 54
+    }
+}
+Buildup {
+    Gkr {
+        Corner, true, 46, 0, 0
+        AttackingTransition, false, 11, 0, 0; position = AMd
+    }
+    Dpw {
+        Pressure, true, 3, 0, 0; position = Gkr
+    }
+    Dwp {
+        Pressure, true, 4, 0, 0; position = Gkr
+    }
+    Dw {
+        Corner, true, 77, 0, 31
+    }
+    Dd {
+        LongBall, true, 3, 0, 0; position = Dd
+        Possession, true, 14, 0, 0; position = MDw
+        Pressure, true, 24, 0, 0; position = Gkr
+    }
+    DMw {
+        ThrowIn, true, 43, 0, 0; position = AMw
+    }
+}
+Clearance {
+    Gkr {
+        ThrowIn, false, 10, 0, 0; position = AM
+    }
+}
+ContestedBall {
+    Dwp {
+        AttackingTransition, false, 3, 0, 0; position = Aw
+    }
+    DM {
+        ThrowIn, false, 9, 0, 0; position = AM
+        Possession, true, 5, 0, 0; position = DMw
+    }
+    MDd {
+        Possession, false, 1, 0, 0; position = MDd
+        AttackingTransition, false, 8, 0, 0; position = AMd
+        FreeKick, true, 18, 0, 0; position = MDd
+    }
+    AMd {
+        Offside, false, 16, 16, 0; position = DMd
+    }
+}
+Corner {
+    Attack, true, 4, 0, 0; position = A
+    Attack, true, 6, 0, 0; position = Apd
+    FreeKick, false, 60, 0, 0; position = DMw
+    GoalAttempt, true, 4, 0, 0; position = A, minute = 39
+    GoalAttempt, true, 4, 0, 0; position = A, minute = 42
+    GoalkeeperPossession, true, 11, 0, 0
+    ThrowIn, true, 36, 0, 0; position = A
+    ThrowIn, true, 20, 0, 0; position = AM
+    ThrowIn, true, 16, 0, 0; position = Ap
+}
+CounterAttack {
+    DM {
+        Attack, true, 11, 0, 0; position = Ad
+    }
+    Mw {
+        GoalAttempt, true, 4, 0, 0; position = Ad, minute = 38
+        GoalKick, false, 19, 19, 0
+    }
+    Md {
+        Corner, true, 19, 0, 0
+        Clearance, false, 10, 0, 0; position = D
+    }
+    M {
+        Possession, false, 7, 0, 0; position = Dw
+    }
+}
+DefensiveTransition {
+    Gkr {
+        ContestedBall, false, 8, 0, 0; position = AMd
+    }
+    Dwp {
+        ThrowIn, true, 29, 0, 0; position = DM
+    }
+    D {
+        ThrowIn, false, 12, 0, 0; position = AM
+        DefensiveTransition, false, 8, 0, 0; position = Gkr
+    }
+}
+FastBreak {
+    DMw {
+        Transition, false, 9, 0, 0; position = DMw
+    }
+    DMd {
+        ThrowIn, true, 30, 0, 0; position = M
+    }
+    Mw {
+        Corner, true, 8, 0, 0
+    }
+}
+FreeKick {
+    MDd {
+        ThrowIn, false, 47, 0, 35; position = DM
+    }
+    Md {
+        Possession, true, 2, 0, 0; position = DM
+    }
+    AM {
+        GoalKick, false, 19, 0, 0
+    }
+}
+GoalAttempt {
+    Ad {
+        GoalKick, false, 26, 26, 0; minute = 17, xG = 0.02
+        Corner, true, 41, 0, 0; minute = 38, xG = 0.03
+        GoalKick, false, 9, 9, 0; minute = 83, xG = 0.03
+    }
+    A {
+        Corner, true, 42, 0, 0; minute = 21, xG = 0.03
+        GoalKick, false, 40, 0, 32; minute = 39, xG = 0.03
+        Attack, true, 1, 0, 0; position = A, minute = 42, xG = 0.03
+        Corner, true, 31, 0, 0; minute = 42, xG = 0.02
+        GoalkeeperPossession, false, 2, 0, 0; minute = 53, xG = 0.03
+    }
+    Apw {
+        ThrowIn, false, 25, 0, 0; position = D, minute = 22, xG = 0.04
+    }
+    Apd {
+        Goal, false, 84, 84, 0; minute = 87, xG = 0.04
+    }
+    Ap {
+        Attack, true, 5, 0, 0; position = A, minute = 54, xG = 0.11
+        GoalKick, false, 31, 31, 0; minute = 69, xG = 0.05
+    }
+}
+GoalkeeperPossession {
+    LongBall, true, 14, 0, 0; position = Gkr
+    LongBall, true, 15, 0, 0; position = Gkr
+    LongBall, true, 15, 0, 0; position = Gkr
+    LongBall, true, 20, 0, 0; position = Gkr
+    Buildup, true, 6, 0, 0; position = Dw
+    Buildup, true, 14, 0, 0; position = Dd
+    Buildup, true, 6, 0, 0; position = Dd
+    Buildup, true, 8, 0, 0; position = Dd
+    FastBreak, true, 13, 13, 0; position = DMw
+    FastBreak, true, 3, 0, 0; position = DMd
+    FastBreak, true, 13, 0, 0; position = Mw
+    AttackingTransition, true, 12, 0, 0; position = Awp
+}
+GoalKick {
+    LongBall, true, 0, 0, 0; position = GK
+    Buildup, true, 1, 0, 0; position = Dwp
+    Buildup, true, 1, 0, 0; position = Dpw
+    ThrowIn, true, 28, 0, 0; position = M
+}
+KickOff {
+    Possession, true, 2, 0, 0; position = DM
+}
+LongBall {
+    GK {
+        Transition, false, 11, 0, 0; position = DMw
+    }
+    Gkr {
+        ThrowIn, false, 11, 0, 0; position = DM
+        AttackingTransition, false, 10, 0, 0; position = AMw
+        Possession, false, 5, 0, 0; position = DMw
+        GoalkeeperPossession, false, 5, 0, 0
+    }
+    Dd {
+        ThrowIn, false, 26, 0, 0; position = DM
+    }
+}
+Penalty {
+    Goal, false, 91, 91, 0
+}
+Possession {
+    DMw {
+        GoalkeeperPossession, false, 7, 0, 0
+    }
+    DM {
+        Attack, true, 18, 0, 0; position = Apd
+        Contest, false, 18, 0, 0; position = DM
+        GoalKick, false, 39, 39, 0
+    }
+    MDw {
+        Attack, true, 24, 0, 0; position = A
+    }
+    MDd {
+        AttackingPossession, true, 5, 0, 0; position = AM
+    }
+    MD {
+         GoalKick, false, 26, 0, 0
+    }
+}
+Pressure {
+    Gkr {
+        BuildUp, true, 9, 0, 0; position = Gkr
+        BuildUp, true, 9, 0, 0; position = DMw
+        CounterAttack, true, 8, 0, 0; position = Mw
+        CounterAttack, true, 10, 0, 0; position = Md
+        CounterAttack, true, 11, 0, 0; position = Mw
+        GoalkeeperPossession, false, 10, 0, 0
+        ThrowIn, false, 14, 14, 0; position = MD
+    }
+    Dw {
+        AttackingPossession, false, 3, 0, 0; position = M
+    }
+}
+ThrowIn {
+    D {
+        Contest, false, 3, 0, 0; position = AMd
+        AttackingTransition, false, 6, 0, 0; position = Aw
+        AttackingTransition, true, 16, 0, 0; position = A
+        Transition, false, 12, 0, 0; position = DM
+        ThrowIn, true, 10, 0, 0; position = MD
+    }
+    DM {
+        Contest, false, 18, 0, 0; position=Md
+        AttackingTransition, false, 6, 0, 0; position = AM
+        AttackingTransition, true, 16, 0, 0; position = Awp
+    }
+    MD {
+        Transition, false, 10, 0, 0; position = MDd
+        AttackingTransition, false, 11, 0, 0; position = Mw
+        Pressure, false, 7, 0, 0; position = Gkr
+    }
+    M {
+        ThrowIn, true, 12, 0, 0; position = AM
+        DefensiveTransition, false, 4, 0, 0; position = Dw
+    }
+    AM {
+        Contest, false, 3, 0, 0; position = DMd
+        Possession, true, 4, 0, 0; position = MD
+        ThrowIn, true, 21, 0, 0; position= MD
+        ThrowIn, true, 39, 0, 23; position = A
+        ThrowIn, false, 14, 0, 0; position = D
+    }
+    A {
+        Attack, true, 3, 0, 0; position = Awp
+        Attack, true, 7, 0, 0; position = Aw
+        Attack, true, 1, 0, 0; position = Aw
+        Attack, true, 2, 0, 0; position = Awp
+    }
+    Ap {
+        ThrowIn, true, 9, 0, 0; position = Ap
+        Attack, true, 1, 0, 0; position = Awp
+    }
+}
+Transition {
+    DMw {
+        GoalkeeperPossession, false, 5, 0, 0
+    }
+    DMd {
+        GoalkeeperPossession, false, 5, 0, 0
+        Pressure, false, 19, 19, 0; position = Dp
+    }
+    DM {
+        Possession, true, 5, 0, 0; position = MD
+        Pressure, true, 1, 0, 0; position = Dw
+    }
+    MDw {
+        DefensiveTransition, false, 6, 0, 0; position = Dwp
+    }
+    MDd {
+        GoalKick, false, 21, 21, 0
+        AttackingTransition, true, 8, 0, 0; position = Awp
+        AttackingTransition, true, 5, 0, 0; position = Apd
+        DefensiveTransition, false, 6, 0, 0; position = D
+    }
+}

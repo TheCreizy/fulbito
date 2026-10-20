@@ -1,0 +1,122 @@
+import type { MatchDetails } from 'footballsim';
+import type { Scene } from 'phaser';
+
+import { useSimulationStore } from '../../bridge/useSimulationStore';
+import { toCanvasCoordinates } from '../../core/physics';
+import { Ball } from '../entities/Ball';
+import { Player } from '../entities/Player';
+
+import type { TeamProvider } from './TeamProvider';
+
+export class FieldEntityManager {
+  private scene: Scene;
+  private teamProvider: TeamProvider;
+  private players: Map<number, Player> = new Map();
+  private ball: Ball;
+  private rerollFlag: { home: boolean; away: boolean } = { home: false, away: false };
+
+  constructor(scene: Scene, teamProvider: TeamProvider) {
+    this.scene = scene;
+    this.teamProvider = teamProvider;
+    this.ball = new Ball(scene);
+    window.addEventListener('reroll-home', (): void => {
+      this.rerollFlag.home = true;
+    });
+    window.addEventListener('reroll-away', (): void => {
+      this.rerollFlag.away = true;
+    });
+  }
+
+  public sync(state: MatchDetails, stepMs: number): void {
+    // 1. Initialize players and Store Kits if they don't exist
+    if (this.players.size === 0) {
+      this.initPlayers(state);
+    }
+
+    // 2. Sync Ball
+    if (state.ball?.position) {
+      const [engX, engY, engZ] = state.ball.position;
+
+      this.ball.updatePosition(engX, engY, engZ ?? 0, stepMs);
+    }
+
+    const store = useSimulationStore.getState();
+
+    const isSnow = store.pitchTexture.toLowerCase().includes('snow');
+
+    this.ball.setSnowMode(isSnow);
+
+    // 3. Sync Players & Their Appearance
+    const { kitStyles } = store;
+
+    [state.kickOffTeam, state.secondTeam].forEach((team): void => {
+      // Determine which style to use from the store
+      const style = team.teamID === state.kickOffTeam.teamID ? kitStyles.home : kitStyles.away;
+
+      team.players.forEach((p): void => {
+        const sprite = this.players.get(p.playerID);
+
+        if (sprite) {
+          sprite.setDisplayName(store.showPlayerNames);
+          // Update appearance (reactive to store changes)
+          if (style) {
+            sprite.updateStyle(style, p.position === 'GK');
+          }
+
+          // Update position
+          if (p.currentPOS[0] !== 'NP') {
+            const { x, y } = toCanvasCoordinates(p.currentPOS[0], p.currentPOS[1]);
+
+            sprite.updatePosition(x, y, stepMs);
+          }
+
+          if (p.intentPOS) {
+            const { x: intentX, y: intentY } = toCanvasCoordinates(p.intentPOS[0], p.intentPOS[1]);
+
+            sprite.updateIntent(
+              intentX,
+              intentY,
+              style?.body ?? 0xffffff, // Fallback to white if no style
+              store.showIntentLine,
+            );
+          }
+        }
+      });
+    });
+    if (this.rerollFlag.home || this.rerollFlag.away) {
+      const currentStyles = useSimulationStore.getState().kitStyles;
+
+      const newKits = this.teamProvider.generateKitPair(state);
+
+      useSimulationStore
+        .getState()
+        .setKitStyles(
+          this.rerollFlag.home ? newKits.home : currentStyles.home!,
+          this.rerollFlag.away ? newKits.away : currentStyles.away!,
+        );
+      this.rerollFlag = { home: false, away: false };
+    }
+  }
+
+  private initPlayers(state: MatchDetails): void {
+    // Generate initial randomized kits and save to store
+    const kits = this.teamProvider.generateKitPair(state);
+
+    useSimulationStore.getState().setKitStyles(kits.home, kits.away);
+
+    [state.kickOffTeam, state.secondTeam].forEach((team): void => {
+      const style = team.teamID === state.kickOffTeam.teamID ? kits.home : kits.away;
+
+      team.players.forEach((p): void => {
+        const player = new Player(this.scene, -100, -100, {
+          shirtNumber: p.shirtNumber.toString(),
+          playerName: p.name,
+          style,
+          isGK: p.position === 'GK',
+        });
+
+        this.players.set(p.playerID, player);
+      });
+    });
+  }
+}

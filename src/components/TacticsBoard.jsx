@@ -28,7 +28,7 @@ export default function TacticsBoard({
     newMentality = updatedTeam.mentality,
     newPlayStyle = updatedTeam.playStyle
   ) => {
-    const currentSide = (updatedTeam.players[0]?.originPOS?.[1] > 525) ? 'bottom' : 'top'
+    const currentSide = isLiveMatch && (updatedTeam.players[0]?.originPOS?.[1] > 525) ? 'bottom' : 'top'
     const coords = getFormationCoordinates(newFormation, newMentality, currentSide)
     const clonedPlayers = updatedTeam.players.map((p, idx) => {
       const slot = coords[idx] || coords[coords.length - 1]
@@ -81,7 +81,7 @@ export default function TacticsBoard({
 
   const handleAutoOptimize = () => {
     if (isLiveMatch) return
-    const currentSide = (team.players[0]?.originPOS?.[1] > 525) ? 'bottom' : 'top'
+    const currentSide = 'top'
     const all16 = [...team.players, ...(team.bench || [])]
     const optimized = autoSetupTeamFromSquad(all16, {
       teamName: team.name,

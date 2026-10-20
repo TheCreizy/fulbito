@@ -88,12 +88,21 @@ export function getBallTrajectory(thisPOS, newPOS, power, type, pitchHeight) {
   const maxLoftHeight = pitchHeight * maxLoftPercent
   const distRatio = Math.min(1, dist / (pitchHeight * 0.35))
   const maxHeight = maxLoftHeight * Math.max(0.25, distRatio)
+
+  // Inercia y fricción de rodamiento según open-football (roll.rs)
+  // En el césped la velocidad decrece geométricamente: v_{t+1} = v_t * decay
+  // d(i) = (1 - k^i) / (1 - k^steps)
+  const isRolling = (type === 'pass' || type === 'through' || maxHeight < 8)
+  const decayFactor = isRolling ? 0.915 : 0.965
+  const denom = 1 - Math.pow(decayFactor, steps)
+
   const trajectory = []
   for (let i = 0; i <= steps; i++) {
-    const t = i / steps
+    const linearT = i / steps
+    const t = denom !== 0 ? (1 - Math.pow(decayFactor, i)) / denom : linearT
     const x = thisPOS[0] + dx * t
     const y = thisPOS[1] + dy * t
-    const z = 4 * maxHeight * t * (1 - t)
+    const z = 4 * maxHeight * linearT * (1 - linearT)
     trajectory.push([round(x, 0), round(y, 0), round(z, 0)])
   }
   return trajectory

@@ -1,0 +1,220 @@
+{
+  "competition" : "CL",
+  "date" : "2019-06-01",
+  "phase": "F",
+  "profiles": [
+  {
+    "team" :  "Liverpool",
+    "formation" : "4-3-3",
+    "players" : [
+      {
+        "position" : "D R",
+        "profile": [
+          {
+            "xG" : 0.02,
+            "outcome": "OffTarget"
+          }
+        ]
+      },
+      {
+        "position" : "D L",
+        "profile": [
+          {
+            "xG" : 0.03,
+            "xGoT" : 0.06,
+            "outcome" : "Save => Corner"
+          }
+        ]
+      },
+      {
+        "position" : "D CL",
+        "profile": [
+          {
+            "xG" : 0.05,
+            "outcome" : "Block => Rebound:F C @ A"
+          }
+        ]
+      },
+      {
+        "position" : "M RC",
+        "profile" : [
+          {
+            "xG" : 0.03,
+            "outcome" : "Block => Rebound:F C @ A"
+          },
+          {
+            "xG" : 0.03,
+            "outcome" : "OffTarget"
+          }
+        ]
+      },
+      {
+        "position" : "M C",
+        "profile" : [
+          {
+            "xG" : 0.03,
+            "outcome" : "Block => !Goalkeeper"
+          }
+        ]
+      },
+      {
+        "position" : "M LC",
+        "profile" : [
+          {
+            "xG" : 0.05,
+            "outcome" : "OffTarget"
+          }
+        ]
+      },
+      {
+        "position" :  "F RC",
+        "profile": [
+          {
+            "xG" : 0.03,
+            "outcome": "Block => Corner"
+          },
+          {
+            "xG" : 0.04,
+            "outcome": "OffTarget"
+          },
+          {
+            "xG" : 0.03,
+            "outcome": "OffTarget"
+          },
+          {
+            "xG" : 0.02,
+            "outcome": "Block => Corner"
+          },
+          {
+            "xG" : 0.11,
+            "outcome": "Block => Rebound:M CL @ A"
+          }
+        ]
+      },
+      {
+        "position" :  "F C",
+        "profile": [
+          {
+            "xG" : 0.04,
+            "xGoT": 0.58,
+            "outcome": "Save => Corner"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "team" :  "Tottenham",
+    "formation": "4-2-3-1",
+    "players" : [
+      {
+        "position" :  "D CL",
+        "profile": [
+          {
+            "xG": 0.03,
+            "outcome": "OffTarget"
+          }
+        ]
+      },
+      {
+        "position" :  "D L",
+        "profile": [
+          {
+            "xG": 0.03,
+            "outcome": "Block => Corner"
+          },
+          {
+            "xG" : 0.04,
+            "xGoT" : 0.20,
+            "outcome" : "Save => !Goalkeeper"
+          }
+        ]
+      },
+      {
+        "position" :  "M CR",
+        "profile": [
+          {
+            "xG": 0.03,
+            "outcome": "OffTarget"
+          }
+        ]
+      },
+      {
+        "position" : "AM R",
+        "profile": [
+          {
+            "xG": 0.04,
+            "outcome": "OffTarget"
+          },
+          {
+            "xG": 0.03,
+            "outcome": "Block => Rebound:D R @ Aw"
+          },
+          {
+            "xG": 0.05,
+            "xGoT": 0.63,
+            "outcome": "Save => Corner"
+          }
+        ]
+      },
+      {
+        "position" : "AM C",
+        "profile": [
+          {
+            "xG": 0.12,
+            "outcome": "Block => Rebound:D CL @ DMw"
+          },
+          {
+            "xG": 0.05,
+            "xGoT": 0.15,
+            "outcome": "Save => !Goalkeeper"
+          },
+          {
+            "xG": 0.08,
+            "outcome": "OffTarget"
+          },
+          {
+            "xG": 0.08,
+            "xGoT": 0.19,
+            "outcome": "Save => !Goalkeeper"
+          },
+          {
+            "xG": 0.10,
+            "outcome": "OffTarget"
+          }
+        ]
+      },
+      {
+        "position" : "AM L",
+        "profile": [
+          {
+            "xG": 0.03,
+            "xGoT": 0.05,
+            "outcome": "Save => Rebound:D L @ Ah"
+          },
+          {
+            "xG": 0.05,
+            "xGoT": 0.03,
+            "outcome": "Save => !Goalkeeper"
+          },
+          {
+            "xG": 0.04,
+            "xGoT": 0.30,
+            "outcome": "Save => Corner"
+          }
+        ]
+      },
+      {
+        "position" : "F C",
+        "profile": [
+          {
+            "xG": 0.03,
+            "xGoT": 0.03,
+            "outcome": "Save => !Goalkeeper"
+          }
+        ]
+      }
+    ]
+  }
+]
+}

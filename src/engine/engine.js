@@ -20,6 +20,13 @@ export async function initiateGame(team1, team2, pitchDetails) {
   matchDetails.iterationLog.push(`Team to kick off - ${kickOffTeam.name}`)
   matchDetails.iterationLog.push(`Second team - ${secondTeam.name}`)
   setPositions.switchSide(matchDetails, secondTeam)
+  const centerY = pitchDetails.pitchHeight / 2
+  for (const p of secondTeam.players) {
+    if (common.isOnPitch(p)) {
+      if (p.currentPOS[1] < centerY + 65) p.currentPOS[1] = centerY + 65
+      if (p.intentPOS[1] < centerY + 65) p.intentPOS[1] = centerY + 65
+    }
+  }
   matchDetails.kickOffTeam = kickOffTeam
   matchDetails.secondTeam = secondTeam
   return matchDetails

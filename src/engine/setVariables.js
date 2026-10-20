@@ -88,6 +88,8 @@ export function koDecider(team1, matchDetails) {
   team1.players[kickOffIdx].currentPOS = [matchDetails.ball.position[0], matchDetails.ball.position[1]]
   team1.players[kickOffIdx].intentPOS = [matchDetails.ball.position[0], matchDetails.ball.position[1]]
   team1.players[kickOffIdx].hasBall = true
+  team1.players[kickOffIdx].action = 'pass'
+  team1.players[kickOffIdx].isKickoffPass = true
   matchDetails.ball.lastTouch.playerName = team1.players[kickOffIdx].name
   matchDetails.ball.lastTouch.playerID = team1.players[kickOffIdx].playerID
   matchDetails.ball.lastTouch.teamID = team1.teamID
@@ -96,8 +98,8 @@ export function koDecider(team1, matchDetails) {
   matchDetails.ball.ballOverIterations = []
 
   if (team1.players[waitingIdx] && common.isOnPitch(team1.players[waitingIdx])) {
-    team1.players[waitingIdx].currentPOS = [matchDetails.ball.position[0] + 20, matchDetails.ball.position[1]]
-    team1.players[waitingIdx].intentPOS = [matchDetails.ball.position[0] + 20, matchDetails.ball.position[1]]
+    team1.players[waitingIdx].currentPOS = [matchDetails.ball.position[0] + 18, matchDetails.ball.position[1]]
+    team1.players[waitingIdx].intentPOS = [matchDetails.ball.position[0] + 18, matchDetails.ball.position[1]]
   }
   return team1
 }

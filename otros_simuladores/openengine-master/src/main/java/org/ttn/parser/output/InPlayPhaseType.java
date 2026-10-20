@@ -1,0 +1,13 @@
+package org.ttn.parser.output;
+
+public enum InPlayPhaseType {
+    POSSESSION,
+    ATTACK,
+    PRESSURE,
+    BALL_RECOVERY,
+    ATTACKING_POSSESSION,
+    TRANSITION,
+    DEFENSIVE_TRANSITION,
+    COUNTER_ATTACK,
+    ATTACKING_TRANSITION
+}
