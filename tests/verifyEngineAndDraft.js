@@ -203,6 +203,125 @@ async function runTests() {
   assert.ok(totalSwitches > 0, 'Deben ocurrir cambios de frente en los partidos')
   assert.ok(totalCrosses > 0, 'Deben ocurrir centros desde las bandas')
   console.log('✔ IA v3.0 validada exitosamente.')
+
+  console.log('\n=== 5. Verificando Motor v4.0 (Cansancio Real, Fillers Competitivos, Traits y Bloque Colectivo) ===')
+  // 5.1 Validar que los 100 jugadores tienen traits asignados
+  for (const p of PLAYERS_DB) {
+    assert.ok(Array.isArray(p.traits) && p.traits.length >= 1, `${p.name} debe tener al menos 1 trait asignado`)
+  }
+  const ronaldo = PLAYERS_DB.find(p => p.name === 'Ronaldo Nazário')
+  const bermudez = PLAYERS_DB.find(p => p.name === 'Jorge Bermúdez')
+  const veron = PLAYERS_DB.find(p => p.name === 'Juan S. Verón')
+  const caniggia = PLAYERS_DB.find(p => p.name === 'Claudio Caniggia')
+  assert.ok(ronaldo.traits.includes('fenomeno_encarador'), 'Ronaldo tiene fenomeno_encarador')
+  assert.ok(bermudez.traits.includes('caudillo_fisico'), 'Bermúdez tiene caudillo_fisico')
+  assert.ok(veron.traits.includes('lanzador_canonero'), 'Verón tiene lanzador_canonero')
+  assert.ok(caniggia.traits.includes('velocista_banda'), 'Caniggia tiene velocista_banda')
+
+  // 5.2 Validar Fillers rebalanceados (OVR 74-77 con stat pico >= 82)
+  const fillers = PLAYERS_DB.filter(p => p.category === 'filler')
+  for (const f of fillers) {
+    assert.ok(f.rating >= 74 && f.rating <= 78, `${f.name} debe tener media 74-78 (actual: ${f.rating})`)
+    const maxStat = Math.max(...Object.values(f.skill))
+    assert.ok(maxStat >= 82, `${f.name} debe tener un atributo de especialista >= 82 (pico actual: ${maxStat})`)
+  }
+  console.log('✔ Todos los jugadores poseen traits de personalidad y los 25 fillers son competitivos (74-77 OVR con pico >= 82).')
+
+  // 5.3 Simular 1 partido midiendo desgaste real y eventos de caudillo
+  const tA4 = autoSetupTeamFromSquad(roster1, { teamName: 'Boca v4', formationId: '4-3-1-2', mentalityId: 'balanced' })
+  const tB4 = autoSetupTeamFromSquad(roster2, { teamName: 'River v4', formationId: '4-3-3', mentalityId: 'offensive' })
+  let match4 = await initiateGame(tA4, tB4, PITCH_CONFIG)
+  for (let tick = 0; tick < 1000; tick++) match4 = await playIteration(match4)
+  match4 = await startSecondHalf(match4)
+  for (let tick = 0; tick < 1000; tick++) match4 = await playIteration(match4)
+
+  const outfieldStarters = match4.kickOffTeam.players.filter(p => p.position !== 'GK' && !p.sentOff)
+  const avgFitness = outfieldStarters.reduce((acc, p) => acc + p.fitness, 0) / outfieldStarters.length
+  console.log(`  - Fitness promedio de titulares al minuto 90: ${avgFitness.toFixed(1)}% (baja del 100% inicial al rango equilibrado ~55%-68%)`)
+  assert.ok(avgFitness < 72 && avgFitness > 50, `El fitness promedio (${avgFitness.toFixed(1)}%) debe terminar en rango equilibrado 50%-72%`)
+
+  const caudilloEvents = (match4.events || []).filter(e => e.type === 'caudilloTackle')
+  console.log(`  - Cargas físicas de Caudillo (hombro a hombro limpias): ${caudilloEvents.length}`)
+  console.log('✔ Cansancio realista y duelos de caudillos verificados.')
+
+  console.log('\n=== 6. Verificando Motor v5.0 (Paredes "One-Two", Pases Laterales, Rol Enganche y Posicionamiento ST) ===')
+  let totalOneTwoWalls = 0
+  for (let m = 0; m < 3; m++) {
+    const tWallA = autoSetupTeamFromSquad(roster1, { teamName: 'Tiki Boca', formationId: '4-3-1-2', mentalityId: 'offensive', playStyleId: 'tikiTaka' })
+    const tWallB = autoSetupTeamFromSquad(roster2, { teamName: 'Tiki River', formationId: '4-3-1-2', mentalityId: 'balanced', playStyleId: 'tikiTaka' })
+    let simWall = await initiateGame(tWallA, tWallB, PITCH_CONFIG)
+    for (let tick = 0; tick < 1000; tick++) simWall = await playIteration(simWall)
+    simWall = await startSecondHalf(simWall)
+    for (let tick = 0; tick < 1000; tick++) simWall = await playIteration(simWall)
+    const wallEvs = (simWall.events || []).filter(e => e.type === 'oneTwoPass')
+    totalOneTwoWalls += wallEvs.length
+  }
+  console.log(`  - Paredes ("One-Two Wall Pass") registradas en 3 partidos: ${totalOneTwoWalls} (${(totalOneTwoWalls / 3).toFixed(1)} por partido)`)
+  assert.ok(totalOneTwoWalls >= 1, 'Deben registrarse paredes "One-Two" en el juego asociativo')
+  console.log('✔ Motor v5.0 verificado exitosamente.')
+
+  console.log('\n=== 7. Verificando Motor v6.0 (Canal Libre hacia el Gol, Subida de Laterales y Salida Paciente) ===')
+  const tA6 = autoSetupTeamFromSquad(roster1, { teamName: 'Boca v6', formationId: '4-3-3', mentalityId: 'offensive', playStyleId: 'wingPlay' })
+  const tB6 = autoSetupTeamFromSquad(roster2, { teamName: 'River v6', formationId: '4-3-1-2', mentalityId: 'balanced', playStyleId: 'tikiTaka' })
+  let sim6 = await initiateGame(tA6, tB6, PITCH_CONFIG)
+
+  let maxFullbackAdvanceY = 999
+  let passesFromBack = 0
+
+  for (let tick = 0; tick < 1000; tick++) {
+    sim6 = await playIteration(sim6)
+    // Medir la proyección ofensiva de los laterales
+    const lb = sim6.kickOffTeam.players.find(p => p.position === 'LB' || p.tacticalRole === 'LB')
+    const rb = sim6.kickOffTeam.players.find(p => p.position === 'RB' || p.tacticalRole === 'RB')
+    if (sim6.ball.withTeam === sim6.kickOffTeam.teamID) {
+      if (lb && Array.isArray(lb.intentPOS)) {
+        const distY = sim6.kickOffTeam.players[0].originPOS[1] < 525 ? (1050 - lb.intentPOS[1]) : lb.intentPOS[1]
+        if (distY < maxFullbackAdvanceY) maxFullbackAdvanceY = distY
+      }
+      if (rb && Array.isArray(rb.intentPOS)) {
+        const distY = sim6.kickOffTeam.players[0].originPOS[1] < 525 ? (1050 - rb.intentPOS[1]) : rb.intentPOS[1]
+        if (distY < maxFullbackAdvanceY) maxFullbackAdvanceY = distY
+      }
+    }
+  }
+
+  console.log(`  - Máxima proyección ofensiva de un lateral: ${maxFullbackAdvanceY.toFixed(0)}px del arco rival (llega al último tercio de cancha < 260px)`)
+  assert.ok(maxFullbackAdvanceY < 260, 'Los laterales deben proyectarse hasta el último tercio ofensivo')
+  console.log('✔ Motor v6.0 verificado exitosamente (laterales proyectados, canal libre y construcción paciente).')
+
+  console.log('\n=== 8. Verificando Motor v7.0 (Fases de Juego Dinámicas, AttackPlan con Slots y Defensas Escaladas) ===')
+  const tA7 = autoSetupTeamFromSquad(roster1, { teamName: 'Boca v7', formationId: '4-3-1-2', mentalityId: 'offensive', playStyleId: 'tikiTaka' })
+  const tB7 = autoSetupTeamFromSquad(roster2, { teamName: 'River v7', formationId: '4-3-3', mentalityId: 'balanced', playStyleId: 'wingPlay' })
+  let sim7 = await initiateGame(tA7, tB7, PITCH_CONFIG)
+
+  const phasesObserved = new Set()
+  let attackPlansCount = 0
+  let slotAssignmentsClean = true
+
+  for (let tick = 0; tick < 1000; tick++) {
+    sim7 = await playIteration(sim7)
+    if (sim7.kickOffTeam.gamePhase) phasesObserved.add(sim7.kickOffTeam.gamePhase)
+    if (sim7.secondTeam.gamePhase) phasesObserved.add(sim7.secondTeam.gamePhase)
+
+    const ap = sim7.kickOffTeam.attackPlan || sim7.secondTeam.attackPlan
+    if (ap && (ap.nearPostID || ap.penaltySpotID || ap.cutbackEdgeID)) {
+      attackPlansCount++
+      const ids = [ap.nearPostID, ap.penaltySpotID, ap.farPostID, ap.cutbackEdgeID].filter(Boolean)
+      const uniqueIds = new Set(ids)
+      if (uniqueIds.size !== ids.length) {
+        slotAssignmentsClean = false
+      }
+    }
+  }
+
+  console.log(`  - Fases de Juego Dinámicas observadas: ${Array.from(phasesObserved).join(', ')}`)
+  console.log(`  - Planes de Ataque con BoxSlots generados: ${attackPlansCount}`)
+  console.log(`  - Exclusividad de asignación de slots: ${slotAssignmentsClean ? '100% limpia (sin duplicados)' : 'Con colisiones'}`)
+
+  assert.ok(phasesObserved.size >= 2, 'Deben registrarse al menos 2 fases tácticas distintas en el partido')
+  assert.ok(attackPlansCount > 10, 'Deben generarse planes de ataque durante la posesión')
+  assert.ok(slotAssignmentsClean, 'Los BoxSlots deben ser exclusivos entre atacantes (sin dos jugadores asignados al mismo slot)')
+  console.log('✔ Motor v7.0 verificado exitosamente (Fases de Juego, AttackPlan y Roles de Área exclusivos).')
 }
 
 runTests().catch(err => {

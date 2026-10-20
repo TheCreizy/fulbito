@@ -47,6 +47,7 @@ export function scanCarrierEnvironment(matchDetails, player, team, opposition) {
 
   let nearestOppDist = 999
   let nearestOppAheadDist = 999
+  let nearestOutfieldOppAheadDist = 999
   let nearbyOppsCount = 0
   let shotBlocked = false
 
@@ -61,6 +62,9 @@ export function scanCarrierEnvironment(matchDetails, player, team, opposition) {
     const lateralDelta = Math.abs(opp.currentPOS[0] - curX)
     if (forwardDelta > -5 && lateralDelta <= Math.max(26, forwardDelta * 0.92)) {
       if (d < nearestOppAheadDist) nearestOppAheadDist = d
+      if (opp.position !== 'GK' && d < nearestOutfieldOppAheadDist) {
+        nearestOutfieldOppAheadDist = d
+      }
     }
 
     if (opp.position !== 'GK' && d < 65) {
@@ -76,6 +80,7 @@ export function scanCarrierEnvironment(matchDetails, player, team, opposition) {
   let hasSwitchOption = false
   let hasBetterPositionedMate = false
   let hasBoxTarget = false
+  let hasCutbackOption = false
 
   const teamPlayers = team?.players || []
   for (const mate of teamPlayers) {
@@ -110,7 +115,21 @@ export function scanCarrierEnvironment(matchDetails, player, team, opposition) {
     if (mateDistToGoalY < 165 && mX >= 195 && mX <= (pitchWidth - 195)) {
       hasBoxTarget = true
     }
+
+    // Detección de Cutback (open-football model: pase de la muerte atrás a 45° a la medialuna o punto penal)
+    const isCarrierWideInAttackingThird = distToGoalY < 185 && (curX < 185 || curX > pitchWidth - 185)
+    if (isCarrierWideInAttackingThird) {
+      const isCutbackZone = mateDistToGoalY >= 80 && mateDistToGoalY <= 195 && mX >= 210 && mX <= (pitchWidth - 210)
+      if (!laneBlocked && isCutbackZone && forwardGain <= 20 && forwardGain >= -110) {
+        hasCutbackOption = true
+      }
+    }
   }
+
+  const inCentralLane = Math.abs(curX - pitchWidth / 2) <= 150
+  const hasOpenRunway = inCentralLane && distToGoalY < 380 &&
+    (nearestOutfieldOppAheadDist > 60 || nearestOutfieldOppAheadDist === 999) &&
+    nearestOppDist > 22
 
   return {
     isTopTeam,
@@ -118,12 +137,15 @@ export function scanCarrierEnvironment(matchDetails, player, team, opposition) {
     distToGoalY,
     nearestOppDist,
     nearestOppAheadDist,
+    nearestOutfieldOppAheadDist,
+    hasOpenRunway,
     nearbyOppsCount,
     shotBlocked,
     hasRunnerInBehind,
     hasSwitchOption,
     hasBetterPositionedMate,
-    hasBoxTarget
+    hasBoxTarget,
+    hasCutbackOption
   }
 }
 
@@ -134,6 +156,16 @@ export function evaluateCarrierDecision(matchDetails, player, team, opposition) 
   const styleCfg = getPlayStyleConfig(team?.playStyle, team?.formation)
   const env = scanCarrierEnvironment(matchDetails, player, team, opposition)
   const carrierTicks = (matchDetails.ball.lastCarrierID === player.playerID) ? (matchDetails.ball.carrierTicks || 1) : 1
+
+  const hasTrait = (t) => Array.isArray(player.traits) && player.traits.includes(t)
+  const isEncarador = hasTrait('fenomeno_encarador') || hasTrait('playmaker_gambeteador')
+  const isVelocista = hasTrait('velocista_banda')
+  const isOrganizador = hasTrait('organizador_mediocampo')
+  const isLanzador = hasTrait('lanzador_canonero') || hasTrait('canonero_media_distancia')
+  const isArtillero = hasTrait('artillero_area')
+  const isStriker = role === 'ST' || player.position === 'ST'
+  const isOffensive = team?.mentality === 'offensive'
+  const isDefensive = team?.mentality === 'defensive'
 
   // 1. Arquero con pelota
   if (position === 'GK') {
@@ -146,94 +178,196 @@ export function evaluateCarrierDecision(matchDetails, player, team, opposition) 
     return [0, 0, 22, 78, 0, 0, 0, 0, 0, 0, 0]
   }
 
+  // 2.5 Devolución de Pared ("One-Two Wall Pass"): el socio de la pared devuelve de primera
+  if (
+    matchDetails.wallPass &&
+    matchDetails.wallPass.wallPartnerID === player.playerID &&
+    (matchDetails.iterationCount || 0) <= matchDetails.wallPass.expireIter
+  ) {
+    return [0, 85, 15, 0, 0, 0, 0, 0, 0, 0, 0]
+  }
+
   const inWideChannel = currentPOS[0] < 168 || currentPOS[0] > (pitchWidth - 168)
   const inCentralCorridor = currentPOS[0] >= 185 && currentPOS[0] <= (pitchWidth - 185)
   const dribbleSkill = ((Number(skill.agility) || 70) + (Number(skill.control) || 70)) / 2
 
-  // 3. Desborde por las Bandas y Centros al Área
-  if (inWideChannel && env.distToGoalY < 245) {
-    if (env.distToGoalY > 95 && env.nearestOppAheadDist > 28) {
-      const earlyCross = (env.hasBoxTarget && env.distToGoalY < 165) ? Math.round(16 * styleCfg.crossBoost) : 4
-      const throughCut = env.hasRunnerInBehind ? 10 : 4
-      return [0, throughCut, 6, earlyCross, 0, 0, 0, 14, 76, 0, 0]
+  // 2.6 CANAL LIBRE / SUPERÓ A LOS RIVALES (MANO A MANO HACIA EL GOL)
+  // Si el portador tiene el espacio libre adelante o superó a la línea defensiva,
+  // NO tocar atrás ni al costado: sprint decidido directo al área/arco rival y tiro
+  if (env.hasOpenRunway && position !== 'GK') {
+    if (env.distToGoalY <= 170 && inCentralCorridor) {
+      return [92, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0]
     }
-    const crossPts = Math.round((env.hasBoxTarget ? 64 : 46) * styleCfg.crossBoost)
-    const gambetaOrCut = dribbleSkill >= 82 ? Math.round(20 * styleCfg.gambetaBoost) : 10
-    const backPassPts = env.nearestOppDist < 18 ? 22 : 14
-    return [0, 6, backPassPts, crossPts, 0, 0, 0, 4, gambetaOrCut, 0, 0]
+    return [0, 0, 0, 0, 0, 0, 0, 8, 92, 0, 0]
+  }
+
+  // 3. Desborde por las Bandas, Circulación y Centros al Área
+  if (inWideChannel && env.distToGoalY < 260) {
+    // Si todavía está en tres cuartos de banda (175px a 260px):
+    if (env.distToGoalY > 175) {
+      const earlyCross = env.hasBoxTarget && env.distToGoalY < 220 ? Math.round(34 * styleCfg.crossBoost) : 8
+      if (env.nearestOppAheadDist > 22) {
+        // Espacio libre adelante por la banda: avanzar hacia la zona de centro o asociarse
+        const wingAdvance = (isVelocista || styleCfg.id === 'wingPlay') ? 52 : 44
+        const passInside = 32
+        const throughCut = env.hasRunnerInBehind ? 16 : 6
+        return [0, throughCut, passInside, earlyCross, 0, 0, 0, 14, wingAdvance, 0, 0]
+      }
+      // Marcador encima en banda: tocar adentro al medio/lateral, meter gambeta o cambio
+      const passInside = (env.hasBetterPositionedMate || env.hasSwitchOption) ? 52 : 42
+      const gambetaPts = (dribbleSkill >= 78 || isVelocista) ? Math.round(32 * styleCfg.gambetaBoost) : 16
+      const throughCut = env.hasRunnerInBehind ? 18 : 6
+      return [0, throughCut, passInside, earlyCross, 0, 0, 0, 10, gambetaPts, 0, 0]
+    }
+
+    // Ya en el último tercio de la banda (distToGoalY <= 175px):
+    if (env.distToGoalY > 120 && env.nearestOppAheadDist > 20) {
+      const crossWeight = Math.round((env.hasBoxTarget ? 68 : 48) * styleCfg.crossBoost)
+      const passCutback = 22
+      const wingDrive = 26
+      const gambetaPts = (dribbleSkill >= 80 || isVelocista) ? Math.round(18 * styleCfg.gambetaBoost) : 8
+      return [0, 4, passCutback, crossWeight, 0, 0, 0, 6, wingDrive, 0, 0]
+    }
+
+    // Zona de fondo (distToGoalY <= 120px) o marcador cerrando el paso:
+    // CENTRO AL ÁREA o pase de la muerte (CUTBACK) hacia la medialuna; NUNCA sprint hacia la raya
+    const crossWeight = Math.round((env.hasBoxTarget ? 88 : 74) * styleCfg.crossBoost)
+    const cutbackPts = env.hasCutbackOption ? 88 : 24
+    if (env.hasCutbackOption) {
+      return [0, 4, cutbackPts, 40, 0, 0, 0, 4, 0, 0, 0]
+    }
+    return [0, 2, cutbackPts, crossWeight, 0, 0, 0, 4, 0, 0, 0]
   }
 
   // 4. Dentro del Área Rival y Borde Interno (Definición Realista)
   if (env.distToGoalY <= 178 && inCentralCorridor) {
     if (env.distToGoalY <= 105) {
-      return [92, 0, 4, 0, 0, 0, 0, 0, 4, 0, 0]
+      return [94, 0, 3, 0, 0, 0, 0, 0, 3, 0, 0]
     }
     if (!env.shotBlocked) {
-      const shootPts = skill.shooting >= 80 ? 84 : 70
-      return [shootPts, 4, 6, 0, 0, 0, 0, 2, 14, 0, 0]
+      const shootPts = (skill.shooting >= 80 || isArtillero) ? 88 : 74
+      return [shootPts, 3, 5, 0, 0, 0, 0, 2, 10, 0, 0]
     }
     const passToOpenMate = env.hasBetterPositionedMate || env.hasRunnerInBehind ? 30 : 18
-    const dribbleInBox = Math.round(32 * styleCfg.gambetaBoost)
-    return [46, 6, passToOpenMate, 0, 0, 0, 0, 4, dribbleInBox, 0, 0]
+    const dribbleInBox = (isEncarador || dribbleSkill >= 85) ? 44 : Math.round(28 * styleCfg.gambetaBoost)
+    return [48, 6, passToOpenMate, 0, 0, 0, 0, 2, dribbleInBox, 0, 0]
   }
 
   // 5. Puerta del Área / Medialuna (distToGoalY entre 179px y 240px)
   if (env.distToGoalY > 178 && env.distToGoalY <= 240) {
     let edgeShootPts = 0
-    if (inCentralCorridor && !env.shotBlocked && skill.shooting >= 78) {
-      edgeShootPts = skill.shooting >= 87 ? 38 : 24
-      if (styleCfg.id === 'tikiTaka') edgeShootPts = Math.round(edgeShootPts * 0.72)
+    if (inCentralCorridor && !env.shotBlocked && (skill.shooting >= 78 || isLanzador)) {
+      edgeShootPts = (skill.shooting >= 87 || isLanzador) ? 44 : 26
+      if (styleCfg.id === 'tikiTaka' && !isLanzador) edgeShootPts = Math.round(edgeShootPts * 0.72)
+    }
+
+    // Encaradores y 9s (Ronaldo Nazário, Agüero, Messi): prioridad absoluta a romper líneas hacia el área
+    if ((isEncarador || isStriker) && env.nearbyOppsCount <= 1) {
+      return [edgeShootPts, env.hasRunnerInBehind ? 16 : 6, 8, 0, 0, 0, 0, 8, 74, 0, 0]
     }
 
     if (env.nearestOppAheadDist > 32 && env.nearestOppDist > 20) {
       const throughPts = env.hasRunnerInBehind ? Math.round(22 * styleCfg.throughBoost) : 8
-      const switchPts = env.hasSwitchOption ? Math.round(12 * styleCfg.switchBoost) : 6
-      return [edgeShootPts, throughPts, switchPts, 0, 0, 0, 0, 12, 58, 0, 0]
+      const switchPts = env.hasSwitchOption ? Math.round(14 * styleCfg.switchBoost) : 6
+      return [edgeShootPts, throughPts, switchPts, 0, 0, 0, 0, 10, 60, 0, 0]
     }
 
-    const gambetaPts = (env.nearbyOppsCount <= 1 && dribbleSkill >= 78) ? Math.round(36 * styleCfg.gambetaBoost) : 14
+    const gambetaPts = (env.nearbyOppsCount <= 1 && (dribbleSkill >= 78 || isEncarador)) ? Math.round(42 * styleCfg.gambetaBoost) : 16
     const throughPts = env.hasRunnerInBehind ? Math.round(28 * styleCfg.throughBoost) : 12
-    const passPts = (env.hasSwitchOption || env.hasBetterPositionedMate) ? 28 : 20
-    return [edgeShootPts, throughPts, passPts, inWideChannel ? 24 : 4, 0, 0, 0, 8, gambetaPts, 0, 0]
+    const passPts = (env.hasSwitchOption || env.hasBetterPositionedMate) ? 26 : 18
+    return [edgeShootPts, throughPts, passPts, inWideChannel ? 24 : 4, 0, 0, 0, 6, gambetaPts, 0, 0]
   }
 
-  // 6. Resto del Campo (Prohibido patear desde lejos > 235px, salvo cañonazo rarísimo de especialista libre en 236..265px)
+  // 6. Resto del Campo
   let rareLongShot = 0
-  if (env.distToGoalY <= 265 && inCentralCorridor && !env.shotBlocked && env.nearestOppDist > 36 && skill.shooting >= 91) {
-    rareLongShot = 6
+  // Cañonazo de especialistas (Verón, Roberto Carlos, Cata Díaz, Franco Sosa, Riquelme)
+  if (env.distToGoalY <= 268 && inCentralCorridor && !env.shotBlocked && env.nearestOppDist > 26) {
+    if (isLanzador && skill.shooting >= 78) rareLongShot = 22
+    else if (skill.shooting >= 91) rareLongShot = 8
+  }
+
+  // Zona de tres cuartos (241px a 345px): Solo encaradores natos o delanteros de desequilibrio (Ronaldo Nazário, Agüero, Messi)
+  const canSoloEncarar = isEncarador || (isStriker && dribbleSkill >= 84 && !isArtillero)
+  if (env.distToGoalY > 240 && env.distToGoalY <= 345 && canSoloEncarar && !isDefensive) {
+    if (env.nearbyOppsCount <= 1 && env.nearestOppAheadDist > 26) {
+      const throughCut = env.hasRunnerInBehind ? 14 : 4
+      const encararSprint = 72
+      return [rareLongShot, throughCut, 8, 0, 0, 0, 0, 8, encararSprint, 0, 0]
+    }
+  }
+
+  // 9 de Área o delantero clásico en mitad de cancha (distToGoalY > 240):
+  // Si está marcado o tiene defensores adelante, PISAR LA PELOTA, aguantar y descargar corto a los costados o atrás
+  if (isStriker && env.distToGoalY > 240) {
+    if (env.nearestOppAheadDist < 42 || env.nearbyOppsCount >= 1) {
+      const layoffPass = env.hasBetterPositionedMate || env.hasSwitchOption ? 68 : 58
+      const throughWeight = env.hasRunnerInBehind ? 22 : 12
+      return [0, throughWeight, layoffPass, 0, 0, 0, 0, 14, 6, 0, 0]
+    }
+  }
+
+  // Transición ofensiva rápida (open-football AttackingTransition model o MENTALIDAD DEFENSIVA):
+  // Robar y lanzar verticalmente o cambiar de frente al compañero con ventaja
+  if ((team?.gamePhase === 'AttackingTransition' || isDefensive) && env.distToGoalY > 260) {
+    if (env.hasRunnerInBehind) {
+      return [0, 58, 26, 0, 0, 0, 0, 6, 10, 0, 0]
+    }
+    if (env.hasSwitchOption) {
+      return [0, 18, 66, 0, 0, 0, 0, 6, 10, 0, 0]
+    }
+  }
+
+  // Enganche / Mediapunta (CAM) u Organizador del mediocampo (Riquelme, Gago, Xavi, Redondo):
+  // Gran visión de juego: toque asociativo, cambios de frente, pases filtrados y paredes
+  if (role === 'CAM' || isOrganizador) {
+    const throughWeight = env.hasRunnerInBehind ? Math.round(38 * styleCfg.throughBoost) : 18
+    const passWeight = (env.hasSwitchOption || env.hasBetterPositionedMate)
+      ? Math.round(52 * styleCfg.switchBoost)
+      : 48
+    const gambetaWeight = dribbleSkill >= 82 ? 18 : 8
+    return [rareLongShot, throughWeight, passWeight, 0, 0, 0, 0, 12, gambetaWeight, 0, 0]
+  }
+
+  // Salida y Gestación Paciente desde Abajo (open-football BuildUp phase o distToGoalY > 360):
+  // Si enfrente está cerrado (nearestOppAheadDist < 40) y no hay desmarque al espacio,
+  // tocar en equipo con centrales, laterales o arquero para encontrar el hueco sin apuro
+  if ((team?.gamePhase === 'BuildUp' || env.distToGoalY > 360) && env.nearestOppAheadDist < 40 && !env.hasRunnerInBehind) {
+    const circulatePass = env.hasSwitchOption ? 58 : 72
+    const switchOrThrough = env.hasSwitchOption ? 22 : 8
+    return [0, switchOrThrough, circulatePass, 0, 0, 0, 0, 14, 6, 0, 0]
   }
 
   // Si acaba de recibir la pelota (carrierTicks <= 2) y no tiene un rival encima, controla y conduce
   if (carrierTicks <= 2 && env.nearestOppDist > 18) {
-    const instantBreakawayPass = (env.hasRunnerInBehind && styleCfg.id === 'directCounter') ? 14 : 4
-    return [0, instantBreakawayPass, 4, 0, 0, 0, 0, 26, 66, 0, 0]
+    const instantBreakawayPass = (env.hasRunnerInBehind && (styleCfg.id === 'directCounter' || isDefensive)) ? 22 : 4
+    return [0, instantBreakawayPass, 4, 0, 0, 0, 0, 24, 68, 0, 0]
   }
 
-  // Si tiene espacio libre adelante (nearestOppAheadDist > 38 y nearestOppDist > 22), avanza con la pelota
-  if (env.nearestOppAheadDist > 38 && env.nearestOppDist > 22) {
+  // Si tiene espacio libre adelante (nearestOppAheadDist > 34 y nearestOppDist > 20), avanza con la pelota
+  if (env.nearestOppAheadDist > 34 && env.nearestOppDist > 20) {
     let throughInStride = 0
     let passInStride = 6
     if (env.hasRunnerInBehind && carrierTicks >= 3) {
       throughInStride = Math.round(24 * styleCfg.throughBoost)
     }
     if (env.hasSwitchOption && carrierTicks >= 4) {
-      passInStride = Math.round(18 * styleCfg.switchBoost)
+      passInStride = Math.round((isLanzador ? 32 : 18) * styleCfg.switchBoost)
     } else if (env.hasBetterPositionedMate && carrierTicks >= 5) {
       passInStride = 16
     }
     const carrySprint = Math.max(48, 86 - throughInStride - passInStride)
-    return [rareLongShot, throughInStride, passInStride, 0, 0, 0, 0, 14, carrySprint, 0, 0]
+    return [rareLongShot, throughInStride, passInStride, 0, 0, 0, 0, 12, carrySprint, 0, 0]
   }
 
-  // Duelo 1v1 o presión cercana: Gambeta 1v1, Cambio de Frente, Pase Filtrado o Pausa
-  const isDribblerRole = ['CAM', 'LM', 'RM', 'ST'].includes(role) || dribbleSkill >= 80
+  // Duelo 1v1 o presión cercana: Gambeta 1v1, Cambio de Frente, Pase Filtrado o Conducción
+  const isDribblerRole = ['CAM', 'LM', 'RM', 'ST'].includes(role) || dribbleSkill >= 80 || isEncarador
   if (env.nearbyOppsCount <= 1 && isDribblerRole && env.nearestOppDist >= 13) {
-    const gambetaWeight = Math.round((dribbleSkill >= 85 ? 48 : 36) * styleCfg.gambetaBoost)
-    const throughWeight = env.hasRunnerInBehind ? Math.round(26 * styleCfg.throughBoost) : 10
+    const gambetaWeight = Math.round((dribbleSkill >= 85 || isEncarador ? 52 : 38) * styleCfg.gambetaBoost)
+    const throughWeight = env.hasRunnerInBehind ? Math.round(24 * styleCfg.throughBoost) : 10
     const passWeight = env.hasSwitchOption
-      ? Math.round(28 * styleCfg.switchBoost)
-      : (env.hasBetterPositionedMate ? 26 : 18)
-    return [rareLongShot, throughWeight, passWeight, 0, 0, 0, 0, 10, gambetaWeight, 0, 0]
+      ? Math.round(26 * styleCfg.switchBoost)
+      : (env.hasBetterPositionedMate ? 24 : 16)
+    return [rareLongShot, throughWeight, passWeight, 0, 0, 0, 0, 8, gambetaWeight, 0, 0]
   }
 
   const inOwnThird = env.distToGoalY > (pitchHeight * 0.72)
@@ -429,9 +563,10 @@ function calculateFoulProbability(tackler, carrier, isSlide = false) {
   const tacklerPer = Number(tackler.skill?.perception || 60)
   const carrierAgi = Number(carrier.skill?.agility || 65)
   const fatiguePenalty = (Number(tackler.fitness ?? 100) < 50) ? 5 : 0
+  const isCaudillo = Array.isArray(tackler.traits) && tackler.traits.includes('caudillo_fisico')
   const baseChance = isSlide ? 28 : 16
-  const skillDiff = (carrierAgi - (tacklerSkill * 0.75 + tacklerPer * 0.25)) * (isSlide ? 0.18 : 0.14)
-  const minChance = isSlide ? 14 : 8
+  const skillDiff = (carrierAgi - (tacklerSkill * 0.75 + tacklerPer * 0.25) - (isCaudillo ? 8 : 0)) * (isSlide ? 0.18 : 0.14)
+  const minChance = isSlide ? 12 : 6
   const maxChance = isSlide ? 42 : 26
   return Math.max(minChance, Math.min(maxChance, Math.round(baseChance + skillDiff + fatiguePenalty)))
 }
@@ -452,7 +587,7 @@ export function resolveTackle(player, team, opposition, matchDetails) {
     setFoul(matchDetails, team, player, thatPlayer)
     return true
   }
-  if (calcTackleScore(player.skill, 5) > calcRetentionScore(thatPlayer.skill, 5)) {
+  if (calcTackleScore(player.skill, 5, player) > calcRetentionScore(thatPlayer.skill, 5)) {
     setSuccessTackle(matchDetails, team, opposition, player, thatPlayer, tackleDetails)
     return false
   }
@@ -476,7 +611,7 @@ export function resolveSlide(player, team, opposition, matchDetails) {
     setFoul(matchDetails, team, player, thatPlayer)
     return true
   }
-  if (calcTackleScore(player.skill, 5) > calcRetentionScore(thatPlayer.skill, 5)) {
+  if (calcTackleScore(player.skill, 5, player) > calcRetentionScore(thatPlayer.skill, 5)) {
     setSuccessTackle(matchDetails, team, opposition, player, thatPlayer, tackleDetails)
     return false
   }
@@ -493,14 +628,33 @@ function setFailedTackle(matchDetails, player, thatPlayer, tackleDetails) {
 
 function setSuccessTackle(matchDetails, team, opposition, player, thatPlayer, tackleDetails) {
   setPostTackleBall(matchDetails, team, opposition, player)
-  matchDetails.iterationLog.push(`Successful tackle by: ${player.name}`)
+  const isCaudillo = Array.isArray(player.traits) && player.traits.includes('caudillo_fisico')
+  if (isCaudillo) {
+    player.lastCaudilloIter = matchDetails.iterationCount || 0
+    matchDetails.iterationLog.push(`Caudillo tackle by: ${player.name} on ${thatPlayer.name}`)
+    if (Array.isArray(matchDetails.events)) {
+      matchDetails.events.push({
+        type: 'caudilloTackle',
+        teamID: team.teamID,
+        teamName: team.name,
+        playerName: player.name,
+        victimName: thatPlayer.name,
+        iteration: matchDetails.iterationCount || 0,
+        half: matchDetails.half
+      })
+    }
+  } else {
+    matchDetails.iterationLog.push(`Successful tackle by: ${player.name}`)
+  }
   player.stats.tackles.on++
   setInjury(matchDetails, thatPlayer, player, tackleDetails.injuryLow, tackleDetails.injuryHigh)
   setPostTacklePosition(matchDetails, player, thatPlayer, tackleDetails.increment)
 }
 
-export function calcTackleScore(skill, diff) {
-  return ((parseInt(skill.tackling, 10) + parseInt(skill.strength, 10)) / 2) + common.getRandomNumber(-diff, diff)
+export function calcTackleScore(skill, diff, player = null) {
+  const isCaudillo = Array.isArray(player?.traits) && player.traits.includes('caudillo_fisico')
+  const bonus = isCaudillo ? 7 : 0
+  return ((parseInt(skill.tackling, 10) + parseInt(skill.strength, 10)) / 2) + bonus + common.getRandomNumber(-diff, diff)
 }
 
 export function calcRetentionScore(skill, diff) {

@@ -54,13 +54,20 @@ export async function playIteration(matchDetails) {
   common.matchInjury(matchDetails, kickOffTeam)
   common.matchInjury(matchDetails, secondTeam)
 
-  // Contabilizar posesión en tiempo real
+  // Contabilizar posesión en tiempo real y transiciones de posesión (open-football model)
   const currentTeamWithBall = matchDetails.ball.withTeam || matchDetails.ball.lastTouch?.teamID
   if (currentTeamWithBall === kickOffTeam.teamID) {
     matchDetails.kickOffTeamStatistics.possessionTicks = (matchDetails.kickOffTeamStatistics.possessionTicks || 1) + 1
   } else if (currentTeamWithBall === secondTeam.teamID) {
     matchDetails.secondTeamStatistics.possessionTicks = (matchDetails.secondTeamStatistics.possessionTicks || 1) + 1
   }
+  if (currentTeamWithBall) {
+    if (matchDetails.lastWithTeam && matchDetails.lastWithTeam !== currentTeamWithBall) {
+      matchDetails.turnoverTick = matchDetails.iterationCount
+    }
+    matchDetails.lastWithTeam = currentTeamWithBall
+  }
+  matchDetails.turnoverTick = matchDetails.turnoverTick || 0
 
   matchDetails = ballMovement.moveBall(matchDetails)
   if (matchDetails.endIteration === true) {

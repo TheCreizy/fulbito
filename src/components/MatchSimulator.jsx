@@ -154,6 +154,14 @@ function buildPitchBannerFromEvent(ev, minuteLabel) {
         subtitle: `Dejó pagando a ${ev.victimName || 'su marcador'} y encara (${minuteLabel})`,
         duration: 1550
       }
+    case 'caudilloTackle':
+      return {
+        type: 'play',
+        icon: '🛡️',
+        title: `¡CARGA CON EL CUERPO DE ${(ev.playerName || '').toUpperCase()}!`,
+        subtitle: `Lo desparramó a ${ev.victimName || 'su rival'} hombro a hombro limpiamente (${minuteLabel})`,
+        duration: 1750
+      }
     case 'switchOfPlay':
       return {
         type: 'play',
@@ -161,6 +169,14 @@ function buildPitchBannerFromEvent(ev, minuteLabel) {
         title: `CAMBIO DE FRENTE • ${(ev.playerName || '').toUpperCase()}`,
         subtitle: `Pelotazo cruzado para abrir la cancha con ${ev.receiverName || 'la banda'} (${minuteLabel})`,
         duration: 1550
+      }
+    case 'oneTwoPass':
+      return {
+        type: 'play',
+        icon: '⚡',
+        title: `¡HERMOSA PARED! • ${(ev.teamName || '').toUpperCase()}`,
+        subtitle: `${ev.playerName} y ${ev.receiverName || 'su compañero'} combinaron en una pared perfecta (${minuteLabel})`,
+        duration: 1850
       }
     default:
       return null
@@ -199,6 +215,7 @@ export default function MatchSimulator({
   const [activeTacticsTeamKey, setActiveTacticsTeamKey] = useState('kickOffTeam')
   const [pitchBanner, setPitchBanner] = useState(null)
   const [goalBanner, setGoalBanner] = useState(null)
+  const [foulOverlay, setFoulOverlay] = useState(null)
   const [penaltyWinner, setPenaltyWinner] = useState(null)
   const [soundMuted, setSoundMuted] = useState(false)
   const [commentaryList, setCommentaryList] = useState([
@@ -223,6 +240,7 @@ export default function MatchSimulator({
   const commTrackerRef = useRef({ lastCommentTick: 0 })
   const commentaryQueueRef = useRef([])
   const bannerTimeoutRef = useRef(null)
+  const isFoulPausedRef = useRef(false)
   const animStateRef = useRef({
     startTime: performance.now(),
     durationMs: 145,
@@ -251,7 +269,7 @@ export default function MatchSimulator({
 
   // Cola dosificadora de relatos para que nunca salgan 3 mensajes al mismo tiempo
   useEffect(() => {
-    const drainInterval = speed === 'x4' ? 680 : 1850
+    const drainInterval = speed === 'x4' ? 550 : 1350
     const timer = setInterval(() => {
       if (commentaryQueueRef.current.length > 0) {
         const nextMsg = commentaryQueueRef.current.shift()
@@ -399,44 +417,56 @@ export default function MatchSimulator({
         // Halo dorado si tiene la pelota
         if (p.hasBall) {
           ctx.beginPath()
-          ctx.arc(x, y, 18, 0, Math.PI * 2)
-          ctx.fillStyle = 'rgba(250, 204, 21, 0.35)'
+          ctx.arc(x, y, 22, 0, Math.PI * 2)
+          ctx.fillStyle = 'rgba(250, 204, 21, 0.38)'
           ctx.fill()
           ctx.strokeStyle = '#facc15'
-          ctx.lineWidth = 2.5
+          ctx.lineWidth = 3
           ctx.stroke()
         }
 
         // Badge fugaz cuando acaba de meter una Gambeta 1v1
         if (currentIter - (p.lastGambetaIter || -99) <= 6) {
           ctx.save()
-          ctx.font = '900 9.5px "Chakra Petch", sans-serif'
+          ctx.font = '900 10.5px "Chakra Petch", sans-serif'
           ctx.fillStyle = '#facc15'
           ctx.strokeStyle = '#000'
-          ctx.lineWidth = 2.5
-          ctx.strokeText('★ GAMBETA', x, y - 19)
-          ctx.fillText('★ GAMBETA', x, y - 19)
+          ctx.lineWidth = 3
+          ctx.strokeText('★ GAMBETA', x, y - 22)
+          ctx.fillText('★ GAMBETA', x, y - 22)
+          ctx.restore()
+        }
+
+        // Badge fugaz cuando un Caudillo acaba de meter una carga con el cuerpo
+        if (currentIter - (p.lastCaudilloIter || -99) <= 7) {
+          ctx.save()
+          ctx.font = '900 10.5px "Chakra Petch", sans-serif'
+          ctx.fillStyle = '#f87171'
+          ctx.strokeStyle = '#000'
+          ctx.lineWidth = 3
+          ctx.strokeText('🛡️ PATRÓN', x, y - 22)
+          ctx.fillText('🛡️ PATRÓN', x, y - 22)
           ctx.restore()
         }
 
         // Sombra del jugador
         ctx.beginPath()
-        ctx.arc(x, y + 3, 12, 0, Math.PI * 2)
+        ctx.arc(x, y + 4, 15.5, 0, Math.PI * 2)
         ctx.fillStyle = 'rgba(0, 0, 0, 0.48)'
         ctx.fill()
 
-        // Círculo de camiseta
+        // Círculo de camiseta (más grande y nítido)
         ctx.beginPath()
-        ctx.arc(x, y, 12, 0, Math.PI * 2)
+        ctx.arc(x, y, 15.5, 0, Math.PI * 2)
         ctx.fillStyle = p.position === 'GK' ? '#10b981' : primary
         ctx.fill()
-        ctx.lineWidth = 2.5
+        ctx.lineWidth = 3
         ctx.strokeStyle = secondary
         ctx.stroke()
 
-        // Dorsal
+        // Dorsal (más grande)
         ctx.fillStyle = p.position === 'GK' ? '#052e16' : secondary
-        ctx.font = 'bold 11px "Chakra Petch", sans-serif'
+        ctx.font = 'bold 12.5px "Chakra Petch", sans-serif'
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
         ctx.fillText(String(p.shirtNumber || ''), x, y)
@@ -444,34 +474,34 @@ export default function MatchSimulator({
         // Cinta de capitán "C"
         if (Number(p.id || p.playerID) === captainId) {
           ctx.fillStyle = '#facc15'
-          ctx.fillRect(x + 7, y - 13, 10, 9)
+          ctx.fillRect(x + 9, y - 16, 11, 10)
           ctx.fillStyle = '#000'
-          ctx.font = 'bold 8px sans-serif'
-          ctx.fillText('C', x + 12, y - 8.5)
+          ctx.font = 'bold 9px sans-serif'
+          ctx.fillText('C', x + 14.5, y - 11)
         }
 
         // Indicador de tarjeta amarilla
         if (p.stats?.cards?.yellow > 0) {
           ctx.fillStyle = '#facc15'
-          ctx.fillRect(x - 15, y - 13, 6, 9)
+          ctx.fillRect(x - 18, y - 16, 7, 10)
         }
 
         // Barra de energía física debajo del círculo
         const fit = Math.max(0, Math.min(100, Number(p.fitness ?? 100)))
-        const barW = 22
+        const barW = 28
         ctx.fillStyle = 'rgba(0,0,0,0.68)'
-        ctx.fillRect(x - barW / 2, y + 14, barW, 3.5)
+        ctx.fillRect(x - barW / 2, y + 18, barW, 4)
         ctx.fillStyle = fit > 65 ? '#4ade80' : (fit > 40 ? '#facc15' : '#ef4444')
-        ctx.fillRect(x - barW / 2, y + 14, (barW * fit) / 100, 3.5)
+        ctx.fillRect(x - barW / 2, y + 18, (barW * fit) / 100, 4)
 
-        // Apellido del jugador
+        // Apellido del jugador (más grande y con borde contrastado)
         const lastName = p.name.split(' ').slice(-1)[0]
-        ctx.font = '700 10.5px "Chakra Petch", sans-serif'
+        ctx.font = '700 13px "Chakra Petch", sans-serif'
         ctx.fillStyle = '#ffffff'
-        ctx.strokeStyle = 'rgba(0,0,0,0.88)'
-        ctx.lineWidth = 2.5
-        ctx.strokeText(lastName, x, y + 25)
-        ctx.fillText(lastName, x, y + 25)
+        ctx.strokeStyle = 'rgba(0,0,0,0.92)'
+        ctx.lineWidth = 3
+        ctx.strokeText(lastName, x, y + 33)
+        ctx.fillText(lastName, x, y + 33)
       })
     }
 
@@ -627,7 +657,7 @@ export default function MatchSimulator({
   // Ejecutar 1 tick de partido
   const stepOneTick = useCallback(async () => {
     let m = matchRef.current
-    if (!m || phase !== 'playing') return
+    if (!m || phase !== 'playing' || isFoulPausedRef.current) return
 
     // Si estamos interpolando una transición de pelota parada, esperar a que termine antes del próximo tick
     const now = performance.now()
@@ -648,8 +678,8 @@ export default function MatchSimulator({
 
     // Determinar si hubo pelota parada para activar transición suave (evita teletransportes bruscos)
     const hasDeadBallEvent = newEventsSlice.some(ev => ev.deadBall || ev.type === 'goal')
-    const baseTickMs = speed === 'x4' ? 38 : 145
-    const transitionMs = hasDeadBallEvent ? (speed === 'x4' ? 190 : 560) : baseTickMs
+    const baseTickMs = speed === 'x4' ? 32 : 105
+    const transitionMs = hasDeadBallEvent ? (speed === 'x4' ? 140 : 380) : baseTickMs
     animStateRef.current = {
       startTime: performance.now(),
       durationMs: transitionMs
@@ -667,7 +697,20 @@ export default function MatchSimulator({
       } else if (ev.type === 'redCard' || ev.type === 'yellowCard') {
         soundEngine.playWhistle('short')
         soundEngine.playCardBeep()
-      } else if (ev.type === 'foul' || ev.type === 'penalty' || ev.type === 'offside') {
+      } else if (ev.type === 'foul' || ev.type === 'freekick') {
+        soundEngine.playWhistle('short')
+        isFoulPausedRef.current = true
+        setFoulOverlay({
+          offender: ev.playerName,
+          victim: ev.victimName,
+          teamName: ev.teamName
+        })
+        const foulPauseMs = speed === 'x4' ? 600 : 1800
+        setTimeout(() => {
+          setFoulOverlay(null)
+          isFoulPausedRef.current = false
+        }, foulPauseMs)
+      } else if (ev.type === 'penalty' || ev.type === 'offside') {
         soundEngine.playWhistle('short')
       } else if (ev.type === 'shot') {
         soundEngine.playShotKick()
@@ -715,7 +758,7 @@ export default function MatchSimulator({
   // Loop del temporizador según la velocidad elegida
   useEffect(() => {
     if (phase !== 'playing' || speed === 'paused' || showTacticsModal) return
-    const intervalMs = speed === 'x4' ? 38 : 145
+    const intervalMs = speed === 'x4' ? 32 : 105
     const timer = setInterval(() => {
       stepOneTick()
     }, intervalMs)
@@ -1148,6 +1191,55 @@ export default function MatchSimulator({
               }}
             >
               ⚽ {goalBanner}
+            </div>
+          )}
+
+          {foulOverlay && (
+            <div
+              style={{
+                position: 'absolute',
+                top: '48%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.96) 0%, rgba(30, 41, 59, 0.96) 100%)',
+                border: '3px solid #facc15',
+                boxShadow: '0 0 45px rgba(250, 204, 21, 0.55), inset 0 0 20px rgba(0,0,0,0.85)',
+                color: '#ffffff',
+                padding: '1.25rem 2.5rem',
+                borderRadius: '8px',
+                textAlign: 'center',
+                zIndex: 50,
+                pointerEvents: 'none',
+                minWidth: '300px',
+                backdropFilter: 'blur(4px)'
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: 'Chakra Petch, sans-serif',
+                  fontWeight: 900,
+                  fontSize: '2.4rem',
+                  letterSpacing: '0.18em',
+                  color: '#facc15',
+                  textShadow: '0 0 16px rgba(250, 204, 21, 0.7), 2px 2px 0px #000',
+                  lineHeight: 1.1,
+                  marginBottom: '0.45rem'
+                }}
+              >
+                🚩 FALTA
+              </div>
+              <div
+                style={{
+                  fontFamily: 'Chakra Petch, sans-serif',
+                  fontWeight: 700,
+                  fontSize: '0.98rem',
+                  color: '#cbd5e1',
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase'
+                }}
+              >
+                {foulOverlay.offender ? `${foulOverlay.offender} sobre ${foulOverlay.victim || 'el rival'}` : 'Tiro Libre'}
+              </div>
             </div>
           )}
         </div>

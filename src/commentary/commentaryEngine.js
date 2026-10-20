@@ -294,6 +294,42 @@ export function generateCommentaryForIteration(matchDetails, prevScore, minuteFo
       return messages
     }
 
+    if (line.startsWith('Caudillo body check by: ') || line.startsWith('Caudillo tackle by: ')) {
+      const raw = line.replace('Caudillo body check by: ', '').replace('Caudillo tackle by: ', '')
+      const [caudillo, victim] = raw.includes(' against ') ? raw.split(' against ') : raw.split(' on ')
+      const alias = getAlias((caudillo || '').trim())
+      messages.push({
+        id: `${Date.now()}-${Math.random()}`,
+        minute: minuteFormatted,
+        speaker: 'Marcelo Araujo',
+        type: 'play',
+        text: pickRandom([
+          `¡Cuerpeó con todo ${alias} y lo desparramó a ${victim || 'su rival'}! ¡Impecable carga hombro a hombro!`,
+          `¡Qué caudillo es ${alias}! Puso el lomo con una fuerza colosal y le extirpó la pelota sin falta.`,
+          `¡A lo guapo ${alias}! Le tiró la carrocería encima a ${victim || 'su adversario'} y se queda con la posesión.`
+        ])
+      })
+      stateTracker.lastCommentTick = matchDetails.iterationCount
+      return messages
+    }
+
+    if (line.includes('Explosive sprint shot by: ')) {
+      const shooter = line.replace('Explosive sprint shot by: ', '').replace(' (Power boosted)', '').trim()
+      const alias = getAlias(shooter)
+      messages.push({
+        id: `${Date.now()}-${Math.random()}`,
+        minute: minuteFormatted,
+        speaker: 'Marcelo Araujo',
+        type: 'shot',
+        text: pickRandom([
+          `¡Sacó un misil a la carrera ${alias}! ¡Qué violencia en el disparo en plena velocidad!`,
+          `¡Bombazo en carrera de ${alias}! Aprovechó toda la inercia del sprint y reventó el arco.`
+        ])
+      })
+      stateTracker.lastCommentTick = matchDetails.iterationCount
+      return messages
+    }
+
     if (line.startsWith('Foul against: ')) {
       const raw = line.replace('Foul against: ', '')
       const [victim, offender] = raw.split(' by ')
@@ -317,6 +353,26 @@ export function generateCommentaryForIteration(matchDetails, prevScore, minuteFo
         speaker: 'Marcelo Araujo',
         type: 'play',
         text: `¡Qué cruce fenomenal de ${alias}! Limpito abajo para trabar y ganar la dividida.`
+      })
+      stateTracker.lastCommentTick = matchDetails.iterationCount
+      return messages
+    }
+
+    if (line.startsWith('One-two wall pass by: ')) {
+      const raw = line.replace('One-two wall pass by: ', '')
+      const [p1, p2] = raw.split(' with ')
+      const a1 = getAlias((p1 || '').trim())
+      const a2 = getAlias((p2 || '').trim())
+      messages.push({
+        id: `${Date.now()}-${Math.random()}`,
+        minute: minuteFormatted,
+        speaker: 'Marcelo Araujo',
+        type: 'play',
+        text: pickRandom([
+          `¡Qué pared armaron ${a1} y ${a2}! ¡Devolución de primera al espacio y rompieron la defensa!`,
+          `¡Tocaron y fueron a buscar! Magistral pared entre ${a1} y ${a2}, fútbol de alto vuelo.`,
+          `¡Viva el fútbol, Macaya! Qué triangulación limpia entre ${a1} y ${a2} para romper líneas.`
+        ])
       })
       stateTracker.lastCommentTick = matchDetails.iterationCount
       return messages

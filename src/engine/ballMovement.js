@@ -169,6 +169,26 @@ export function shotMade(matchDetails, team, player) {
   if (isVolley) shootingRoll += 4
   if (isHeader) shootingRoll += 3
 
+  const hasTrait = (t) => Array.isArray(player.traits) && player.traits.includes(t)
+  const isSprintingShot = !!(player.isSprinting || (player.sprintMomentum || 0) > 0.35)
+
+  // Física de remate en sprint: +22% potencia pero ligero castigo de puntería (mitigado por control/estrellas)
+  if (isSprintingShot) {
+    shotPower *= 1.22
+    const controlBuffer = Math.max(0, (Number(player.skill.control) || 70) - 78) * 0.5
+    const traitBuffer = (hasTrait('fenomeno_encarador') || hasTrait('playmaker_gambeteador')) ? 6 : 0
+    const sprintSpread = Math.max(0, 14 - controlBuffer - traitBuffer)
+    shootingRoll += sprintSpread
+    matchDetails.iterationLog.push(`Explosive sprint shot by: ${player.name} (Power boosted)`)
+  }
+
+  if (hasTrait('canonero_media_distancia') || hasTrait('lanzador_canonero')) {
+    shotPower *= 1.18
+  }
+  if (hasTrait('artillero_area') && distToGoalLine <= 180) {
+    shootingRoll -= 8
+  }
+
   const centreGoal = pitchWidth / 2
   if (player.skill.shooting >= shootingRoll) {
     thisTeamStats.shots.on++
@@ -230,10 +250,12 @@ export function freekickShotMade(matchDetails, team, player) {
   matchDetails.ball.lastTouch.bodyPart = 'foot'
 
   const fkSkill = Number(player.skill.freekick || player.skill.shooting || 70)
-  const shotPower = Math.max(
+  const isCanonero = Array.isArray(player.traits) && (player.traits.includes('canonero_media_distancia') || player.traits.includes('lanzador_canonero'))
+  const baseFkPower = Math.max(
     pitchHeight * 0.32,
     common.calculatePower(Math.max(player.skill.strength, fkSkill), pitchHeight)
   )
+  const shotPower = isCanonero ? baseFkPower * 1.20 : baseFkPower
   const thisTeamStats = getTeamStatisticsObject(matchDetails, team)
   thisTeamStats.shots.total++
   player.stats.shots.total++
@@ -875,13 +897,59 @@ export function ballPassed(matchDetails, team, player) {
 
   const aTop = player.originPOS[1] > (pitchHeight / 2)
   const dir = aTop ? -1 : 1
-  reachable.sort((a, b) => passScoreOption(b, aTop, ballPos, maxDist, styleCfg, pitchWidth) - passScoreOption(a, aTop, ballPos, maxDist, styleCfg, pitchWidth))
+  reachable.sort((a, b) => passScoreOption(b, aTop, ballPos, maxDist, styleCfg, pitchWidth, player) - passScoreOption(a, aTop, ballPos, maxDist, styleCfg, pitchWidth, player))
   const targetPlayer = reachable[0]
   matchDetails.iterationLog.push(`Target selected: ${targetPlayer.name}`)
 
   const passDist = common.distance(ballPos, targetPlayer.position)
   const horizontalSpan = Math.abs(targetPlayer.position[0] - ballPos[0])
+  const forwardDelta = aTop ? ballPos[1] - targetPlayer.position[1] : targetPlayer.position[1] - ballPos[1]
   const isSwitchOfPlay = horizontalSpan >= 230 && (targetPlayer.position[0] < 190 || targetPlayer.position[0] > (pitchWidth - 190))
+
+  // Gestión de Pared ("One-Two Wall Pass")
+  if (
+    matchDetails.wallPass &&
+    matchDetails.wallPass.wallPartnerID === player.playerID &&
+    currentIter <= matchDetails.wallPass.expireIter
+  ) {
+    const origPasserName = matchDetails.wallPass.passerName
+    matchDetails.iterationLog.push(`One-two wall pass by: ${origPasserName} with ${player.name}`)
+    if (Array.isArray(matchDetails.events)) {
+      matchDetails.events.push({
+        type: 'oneTwoPass',
+        teamID: team.teamID,
+        teamName: team.name,
+        playerName: origPasserName,
+        receiverName: player.name,
+        iteration: currentIter,
+        half: matchDetails.half
+      })
+    }
+    matchDetails.wallPass = null
+  } else if (
+    !isSwitchOfPlay &&
+    passDist >= 40 &&
+    passDist <= 165 &&
+    forwardDelta >= 15 &&
+    !targetPlayer.isMarked &&
+    ['CAM', 'ST', 'LM', 'RM', 'CM'].includes(player.tacticalRole || player.position)
+  ) {
+    matchDetails.wallPass = {
+      passerID: player.playerID,
+      passerName: player.name,
+      wallPartnerID: targetPlayer.playerID,
+      wallPartnerName: targetPlayer.name,
+      startIter: currentIter,
+      expireIter: currentIter + 12
+    }
+    player.offBallRun = {
+      type: 'wallReturnRun',
+      targetX: Math.max(30, Math.min(pitchWidth - 30, targetPlayer.position[0] + (targetPlayer.position[0] >= player.currentPOS[0] ? 35 : -35))),
+      targetY: Math.max(30, Math.min(pitchHeight - 30, targetPlayer.position[1] + (dir * 75))),
+      untilIteration: currentIter + 12
+    }
+    player.intentPOS = [player.offBallRun.targetX, player.offBallRun.targetY]
+  }
 
   // Si el compañero está picando al espacio o es un cambio de frente a la banda, adelantar el pase a su carrera
   let aimX = targetPlayer.position[0]
@@ -922,49 +990,81 @@ export function ballPassed(matchDetails, team, player) {
   const bodyPart = setAttackBodyPart(matchDetails.ball.position, calcHeight)
   matchDetails.ball.lastTouch.bodyPart = bodyPart
   const kickType = isSwitchOfPlay ? 'switch' : 'pass'
-  const kickPow = isSwitchOfPlay
+  const isSprintingPass = !!(player.isSprinting || (player.sprintMomentum || 0) > 0.35)
+  const isLanzadorPass = Array.isArray(player.traits) && player.traits.includes('lanzador_canonero')
+  let kickPow = isSwitchOfPlay
     ? Math.max(power, passDist * 1.35)
     : Math.min(power * 1.15, Math.max(150, passDist * 1.3))
+  if (isSprintingPass || isLanzadorPass) {
+    kickPow *= 1.18 // El pase sale más tenso y rápido
+  }
   return calcBallMovementOverTime(matchDetails, kickPow, finalTarget, player, kickType)
 }
 
-function passScoreOption(p, aTop, ballPos, maxDistance, styleCfg, pitchWidth = 680) {
+function passScoreOption(p, aTop, ballPos, maxDistance, styleCfg, pitchWidth = 680, passer = null) {
   let score = 0
   const d = common.distance(ballPos, p.position)
   const forward = aTop ? ballPos[1] - p.position[1] : p.position[1] - ballPos[1]
   const horizontalSpan = Math.abs(p.position[0] - ballPos[0])
   const isWideTarget = p.position[0] < 185 || p.position[0] > (pitchWidth - 185)
   const isSwitchCandidate = horizontalSpan >= 230 && isWideTarget && !p.isMarked && forward > -45
+  const isLanzador = Array.isArray(passer?.traits) && passer.traits.includes('lanzador_canonero')
 
-  // 1. Ganancia vertical o pausa inteligente
+  // 1. Ganancia vertical calibrada (no aplasta las opciones laterales ni la pausa asociativa)
   if (forward >= 0) {
-    score += forward * 1.65
+    score += Math.min(75, forward * 0.75)
   } else {
-    // Pase atrás (pausa/reciclaje): solo vale la pena si el receptor está libre para limpiar la jugada
-    score += (forward * 0.7) + (p.minOppDist > 34 ? 28 : -25)
+    // Pase atrás (pausa / reciclaje inteligente): si el compañero está desmarcado, premiar retención
+    if (p.minOppDist > 25) {
+      score += 45 + (styleCfg?.id === 'tikiTaka' ? 20 : 0)
+    } else {
+      score += forward * 0.6 - 15
+    }
   }
 
-  // 2. Espacio libre del receptor (no pasarle a un compañero marcado si hay otro libre)
+  // 2. Visión lateral y cambio de lado corto: pase a un compañero libre en la misma franja
+  if (Math.abs(forward) < 45 && horizontalSpan >= 55) {
+    if (!p.isMarked) score += 55
+  }
+
+  // 2.5 Salida limpia y segura desde el fondo: circulación entre defensores, laterales y arquero
+  const passerRole = passer?.tacticalRole || passer?.position
+  if (p.role === 'GK') {
+    if (['CB', 'LB', 'RB', 'CM'].includes(passerRole) && p.minOppDist > 28 && !p.laneBlocked) {
+      score += 65
+    } else {
+      score -= 100
+    }
+  } else if (['CB', 'LB', 'RB'].includes(passerRole) && ['CB', 'LB', 'RB', 'CM'].includes(p.role) && !p.isMarked && !p.laneBlocked) {
+    score += 48
+  }
+
+  // 3. Espacio libre del receptor (no pasarle a un compañero marcado si hay otro libre)
   score += Math.min(55, p.minOppDist || 20) * 1.45
   if (!p.isMarked) score += 50
   else score -= 45
 
-  // 3. Cambio de frente a la banda opuesta libre (no sufre bloqueo de línea raso porque va por arriba)
+  // 4. Cambio de frente a la banda opuesta libre (no sufre bloqueo de línea raso porque va por arriba)
   if (isSwitchCandidate) {
-    score += 78 * (styleCfg?.switchBoost || 1.2)
+    score += (isLanzador ? 125 : 78) * (styleCfg?.switchBoost || 1.2)
   } else {
-    if (p.laneBlocked) score -= 95
+    if (p.laneBlocked) score -= 115
     // Preferir distancias naturales de asociación (65px a 240px) cuando no es cambio de frente
     if (d < 34) score -= 22
     else if (d > 290) score -= (d - 290) * 0.35
   }
 
-  // 4. Compañero tirando un desmarque activo (diagonal, subida por banda o mostrándose entre líneas)
+  // 5. Compañero tirando un desmarque activo (diagonal, subida por banda o mostrándose entre líneas)
   if (p.offBallRun) {
     score += 58
   }
 
-  // 5. Bonificación según rol y Estilo de Juego
+  // 6. Enganche / Conductor de juego libre: el equipo busca naturalmente a su organizador (Riquelme, etc.)
+  if ((p.role === 'CAM' || (Array.isArray(p.traits) && p.traits.includes('organizador_mediocampo'))) && !p.isMarked) {
+    score += 50
+  }
+
+  // 7. Bonificación según rol y Estilo de Juego
   if (isWideTarget) {
     score += (styleCfg?.id === 'wingPlay' ? 48 : 28)
   }

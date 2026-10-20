@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { FORMATIONS, MENTALITIES, PLAY_STYLES, getPlayStyleConfig, getFormationCoordinates } from '../data/formations.js'
 import { getPositionCompatibility, updateTeamEffectiveSkills } from '../engine/modifiers.js'
 import { autoSetupTeamFromSquad } from '../draft/draftEngine.js'
+import { TRAIT_DEFINITIONS } from '../data/playersDB.js'
 
 export default function TacticsBoard({
   team,
@@ -560,7 +561,7 @@ export default function TacticsBoard({
                     </div>
 
                     <div>
-                      <div style={{ fontWeight: 800, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <div style={{ fontWeight: 800, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
                         <span>{player.name}</span>
                         {isCaptain && (
                           <span style={{ background: '#facc15', color: '#000', fontSize: '0.64rem', fontWeight: 900, padding: '1px 5px', borderRadius: '2px' }}>
@@ -573,6 +574,31 @@ export default function TacticsBoard({
                       <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
                         Puestos: <b style={{ color: '#fde047' }}>{allNaturalPos}</b> • {player.specialty} • TL {player.skill.freekick} / PEN {player.skill.penalty_taking}
                       </div>
+                      {Array.isArray(player.traits) && player.traits.length > 0 && (
+                        <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.22rem' }}>
+                          {player.traits.map(tId => {
+                            const tr = TRAIT_DEFINITIONS[tId]
+                            if (!tr) return null
+                            return (
+                              <span
+                                key={tId}
+                                title={tr.description}
+                                style={{
+                                  fontSize: '0.65rem',
+                                  fontWeight: 800,
+                                  padding: '1px 5px',
+                                  borderRadius: '2px',
+                                  background: 'rgba(0,0,0,0.6)',
+                                  border: `1px solid ${tr.color}`,
+                                  color: tr.color
+                                }}
+                              >
+                                {tr.icon} {tr.label}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
 
                     <div style={{ textAlign: 'right' }}>
@@ -586,8 +612,19 @@ export default function TacticsBoard({
                         <div style={{ fontFamily: 'VT323, monospace', fontWeight: 700, fontSize: '1.25rem', lineHeight: 1, color: compat.factor < 0.8 ? '#f87171' : '#00ff66' }}>
                           OVR {effectiveRating}
                         </div>
-                        <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>
-                          Físico: {Math.round(player.fitness ?? 100)}%
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', justifyContent: 'flex-end', marginTop: '0.15rem' }}>
+                          <div style={{ width: '38px', height: '4.5px', background: '#020617', borderRadius: '2px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.15)' }}>
+                            <div
+                              style={{
+                                width: `${Math.round(player.fitness ?? 100)}%`,
+                                height: '100%',
+                                background: (player.fitness ?? 100) > 65 ? '#4ade80' : ((player.fitness ?? 100) > 40 ? '#facc15' : '#ef4444')
+                              }}
+                            />
+                          </div>
+                          <span style={{ fontSize: '0.68rem', color: (player.fitness ?? 100) > 65 ? '#94a3b8' : ((player.fitness ?? 100) > 40 ? '#facc15' : '#f87171'), fontWeight: 700 }}>
+                            {Math.round(player.fitness ?? 100)}%
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -658,6 +695,31 @@ export default function TacticsBoard({
                       <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
                         {sub.specialty} • PAS {sub.skill.passing} • TIR {sub.skill.shooting} • ENT {sub.skill.tackling}
                       </div>
+                      {Array.isArray(sub.traits) && sub.traits.length > 0 && (
+                        <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.2rem' }}>
+                          {sub.traits.map(tId => {
+                            const tr = TRAIT_DEFINITIONS[tId]
+                            if (!tr) return null
+                            return (
+                              <span
+                                key={tId}
+                                title={tr.description}
+                                style={{
+                                  fontSize: '0.65rem',
+                                  fontWeight: 800,
+                                  padding: '1px 5px',
+                                  borderRadius: '2px',
+                                  background: 'rgba(0,0,0,0.6)',
+                                  border: `1px solid ${tr.color}`,
+                                  color: tr.color
+                                }}
+                              >
+                                {tr.icon} {tr.label}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -672,8 +734,19 @@ export default function TacticsBoard({
                       <div style={{ fontFamily: 'Chakra Petch', fontWeight: 800, fontSize: '0.92rem', color: '#fff' }}>
                         OVR {sub.rating}
                       </div>
-                      <div style={{ fontSize: '0.68rem', color: '#4ade80' }}>
-                        Físico: {Math.round(sub.fitness ?? 100)}%
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', justifyContent: 'flex-end', marginTop: '0.15rem' }}>
+                        <div style={{ width: '38px', height: '4.5px', background: '#020617', borderRadius: '2px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.15)' }}>
+                          <div
+                            style={{
+                              width: `${Math.round(sub.fitness ?? 100)}%`,
+                              height: '100%',
+                              background: (sub.fitness ?? 100) > 65 ? '#4ade80' : ((sub.fitness ?? 100) > 40 ? '#facc15' : '#ef4444')
+                            }}
+                          />
+                        </div>
+                        <span style={{ fontSize: '0.68rem', color: (sub.fitness ?? 100) > 65 ? '#94a3b8' : ((sub.fitness ?? 100) > 40 ? '#facc15' : '#f87171'), fontWeight: 700 }}>
+                          {Math.round(sub.fitness ?? 100)}%
+                        </span>
                       </div>
                     </div>
                   </div>

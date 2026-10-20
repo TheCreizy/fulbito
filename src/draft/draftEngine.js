@@ -8,7 +8,7 @@ export const INITIAL_BUDGET = 250.0
 export const TOTAL_ROUNDS = 16
 export const PACK_SIZE = 7
 export const REROLL_COST = 2.0
-export const MIN_RESERVE_PER_SLOT = 2.5
+export const MIN_RESERVE_PER_SLOT = 1.8
 
 /**
  * Calcula cuánto es el máximo que un jugador puede gastar en la ronda actual
@@ -34,7 +34,7 @@ export function getMaxSpendableForRound(currentBudget, currentSquadCount, unavai
   }
 
   const maxSpend = currentBudget - requiredReserve
-  return Math.max(1.0, Number(maxSpend.toFixed(2)))
+  return Math.max(MIN_RESERVE_PER_SLOT, Number(maxSpend.toFixed(2)))
 }
 
 export function canRerollPack(budget, squadCount, alreadyRerolledThisRound, unavailableIdsSet = null) {
@@ -144,14 +144,18 @@ export function generateDraftPack(roundNumber, unavailableIdsSet, currentBudget,
  * Equilibra presupuesto restante, posiciones faltantes (GK, DEF, MID, ATT) y calidad de jugador.
  */
 export function selectAICardFromPack(pack, aiBudget, aiSquad, roundNumber, unavailableIdsSet = null) {
+  const remainingSlots = Math.max(1, TOTAL_ROUNDS - aiSquad.length)
+  const remainingAfter = Math.max(0, remainingSlots - 1)
+  const minRequiredReserve = Number((remainingAfter * MIN_RESERVE_PER_SLOT).toFixed(2))
+
   const maxSpendable = getMaxSpendableForRound(aiBudget, aiSquad.length, unavailableIdsSet)
-  const affordable = pack.filter(p => p.price <= maxSpendable && p.price <= aiBudget)
+  let affordable = pack.filter(p => p.price <= maxSpendable && p.price <= aiBudget && Number((aiBudget - p.price).toFixed(2)) >= minRequiredReserve)
   if (affordable.length === 0) {
-    // Fallback extremo: la carta más barata del sobre
+    const strictlyAffordable = pack.filter(p => p.price <= aiBudget).sort((a, b) => a.price - b.price)
+    if (strictlyAffordable.length > 0) return strictlyAffordable[0]
     return [...pack].sort((a, b) => a.price - b.price)[0]
   }
 
-  const remainingSlots = Math.max(1, TOTAL_ROUNDS - aiSquad.length)
   const avgBudgetPerSlot = aiBudget / remainingSlots
   const counts = getPositionalCounts(aiSquad)
 

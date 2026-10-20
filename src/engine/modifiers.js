@@ -107,14 +107,16 @@ export function updatePlayerEffectiveSkills(player, team) {
   const compat = getPositionCompatibility(player, slotRole)
   player.positionFactor = compat.factor
 
-  // Curva de cansancio: entre 75 y 100 rinde al 100%. Debajo de 75 cae hasta 0.70 en fitness=20.
+  // Curva de cansancio calibrada: entre 70 y 100 rinde al 100%.
+  // Por debajo de 70 desciende de forma equilibrada (a 55% de energía rinde al 92%),
+  // con un piso de 0.74 si cae hasta el límite de 20%.
   const fitness = Number(player.fitness ?? 100)
   let fatigueFactor = 1.0
-  if (fitness < 75) {
-    fatigueFactor = Math.max(0.68, 0.68 + ((fitness - 20) / 55) * 0.32)
+  if (fitness < 70) {
+    fatigueFactor = Math.max(0.74, 0.74 + ((fitness - 20) / 50) * 0.26)
   }
   if (player.injured) {
-    fatigueFactor *= 0.80
+    fatigueFactor *= 0.82
   }
 
   const captainActive = isCaptainOnPitch(team)

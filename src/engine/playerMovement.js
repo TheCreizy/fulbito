@@ -50,13 +50,14 @@ export function decideMovement(closestPlayer, team, opp, matchDetails) {
           (minD, op) => Math.min(minD, common.distance(thisPlayer.currentPOS, op.currentPOS)),
           999
         )
-        const mustRelease = (nearbyOpps >= 2 && matchDetails.ball.carrierTicks >= 5) ||
-          (matchDetails.ball.carrierTicks >= 24 && minOppDist < 32)
+        const [pitchWidth, pitchHeight] = matchDetails.pitchSize
+        const attackingTop = thisPlayer.originPOS[1] > pitchHeight / 2
+        const distToGoalY = attackingTop ? thisPlayer.currentPOS[1] : (pitchHeight - thisPlayer.currentPOS[1])
+        const isWide = thisPlayer.currentPOS[0] < 168 || thisPlayer.currentPOS[0] > pitchWidth - 168
+        const inCornerZone = distToGoalY < 135 && isWide
+        const mustRelease = inCornerZone || (nearbyOpps >= 2 && matchDetails.ball.carrierTicks >= 5) ||
+          (matchDetails.ball.carrierTicks >= 20 && minOppDist < 35)
         if (mustRelease && (action === 'run' || action === 'sprint')) {
-          const [pitchWidth, pitchHeight] = matchDetails.pitchSize
-          const attackingTop = thisPlayer.originPOS[1] > pitchHeight / 2
-          const distToGoalY = attackingTop ? thisPlayer.currentPOS[1] : (pitchHeight - thisPlayer.currentPOS[1])
-          const isWide = thisPlayer.currentPOS[0] < 168 || thisPlayer.currentPOS[0] > pitchWidth - 168
           if (distToGoalY < 220 && isWide) action = 'cross'
           else if (distToGoalY < 160 && common.isBetween(thisPlayer.currentPOS[0], 185, pitchWidth - 185)) action = 'shoot'
           else action = 'pass'
@@ -74,15 +75,34 @@ export function decideMovement(closestPlayer, team, opp, matchDetails) {
       } else if (
         !thisPlayer.hasBall &&
         withTeam === team.teamID &&
-        thisPlayer.offBallRun &&
-        thisPlayer.offBallRun.untilIteration > (matchDetails.iterationCount || 0)
+        thisPlayer.position !== 'GK'
       ) {
-        action = 'sprint'
+        // Solo sprint si tiene un desmarque activo (carrera diagonal o pared)
+        if (thisPlayer.offBallRun && thisPlayer.offBallRun.untilIteration > (matchDetails.iterationCount || 0)) {
+          action = 'sprint'
+        }
       } else if ((!withPlayer || withTeam !== team.teamID) && closestPlayer.name === thisPlayer.name) {
         // El jugador más cercano de cada equipo busca activamente la pelota suelta o presiona al portador rival
         if (action !== 'tackle' && action !== 'slide' && action !== 'intercept') action = 'sprint'
         ballToPlayerX = closestPlayerActionBallX(ballToPlayerX)
         ballToPlayerY = closestPlayerActionBallY(ballToPlayerY)
+      } else if (
+        team.gamePhase === 'DefensiveTransition' &&
+        (!withPlayer || withTeam !== team.teamID) &&
+        common.distance(thisPlayer.currentPOS, position) < 36 &&
+        thisPlayer.position !== 'GK'
+      ) {
+        // Presión inmediata tras pérdida (Counter-Pressing de open-football)
+        if (action !== 'tackle' && action !== 'slide' && action !== 'intercept') action = 'sprint'
+        ballToPlayerX = closestPlayerActionBallX(ballToPlayerX)
+        ballToPlayerY = closestPlayerActionBallY(ballToPlayerY)
+      }
+      if (action === 'sprint') {
+        thisPlayer.isSprinting = true
+        thisPlayer.sprintMomentum = Math.min(1.0, (thisPlayer.sprintMomentum || 0) + 0.25)
+      } else {
+        thisPlayer.isSprinting = false
+        thisPlayer.sprintMomentum = Math.max(0, (thisPlayer.sprintMomentum || 0) - 0.25)
       }
       const move = getMovement(thisPlayer, action, opp, ballToPlayerX, ballToPlayerY, matchDetails, team)
       teamActions.push({ player: thisPlayer, action, move })
@@ -110,20 +130,30 @@ function tryCarrierGambeta(matchDetails, carrier, team, opp, move) {
   const defender = candidates[0]
   const role = carrier.tacticalRole || carrier.position
   const dribbleSkill = ((Number(carrier.skill?.agility) || 70) + (Number(carrier.skill?.control) || 70)) / 2
-  const attemptChance = ['CAM', 'LM', 'RM', 'ST'].includes(role) ? 72 : (dribbleSkill >= 78 ? 55 : 25)
+  const hasTrait = (p, t) => Array.isArray(p?.traits) && p.traits.includes(t)
+  const isEncarador = hasTrait(carrier, 'fenomeno_encarador') || hasTrait(carrier, 'playmaker_gambeteador')
+  const isVelocista = hasTrait(carrier, 'velocista_banda')
+  const isCaudillo = hasTrait(defender, 'caudillo_fisico')
+
+  let attemptChance = ['CAM', 'LM', 'RM', 'ST'].includes(role) ? 74 : (dribbleSkill >= 78 ? 58 : 25)
+  if (isEncarador) attemptChance = 92
+  if (isVelocista) attemptChance = 85
   if (common.getRandomNumber(1, 100) > attemptChance) return
 
-  const atkScore = (Number(carrier.skill?.agility || 70) * 0.56 + Number(carrier.skill?.control || 70) * 0.44) + common.getRandomNumber(-9, 14)
-  const defScore = (Number(defender.skill?.tackling || 65) * 0.52 + Number(defender.skill?.perception || 65) * 0.48) + common.getRandomNumber(-9, 9)
+  const encaradorBonus = isEncarador ? 12 : (isVelocista ? 8 : 0)
+  const caudilloBonus = isCaudillo ? 10 : 0
+
+  const atkScore = (Number(carrier.skill?.agility || 70) * 0.56 + Number(carrier.skill?.control || 70) * 0.44) + encaradorBonus + common.getRandomNumber(-9, 14)
+  const defScore = (Number(defender.skill?.tackling || 65) * 0.52 + Number(defender.skill?.perception || 65) * 0.48) + caudilloBonus + common.getRandomNumber(-9, 9)
 
   if (atkScore >= defScore) {
     // ¡Gambeta exitosa! El defensor queda pagando y el portador gana un paso explosivo al espacio
     defender.stunnedTicks = 5
-    carrier.gambetaCooldown = 14
+    carrier.gambetaCooldown = 12
     carrier.lastGambetaIter = matchDetails.iterationCount || 0
     carrier.stats.dribbles = (carrier.stats.dribbles || 0) + 1
-    const burstX = move[0] !== 0 ? Math.sign(move[0]) * 4 : (carrier.currentPOS[0] < defender.currentPOS[0] ? -4 : 4)
-    const burstY = dir * 4
+    const burstX = move[0] !== 0 ? Math.sign(move[0]) * 5 : (carrier.currentPOS[0] < defender.currentPOS[0] ? -5 : 5)
+    const burstY = dir * 5
     carrier.currentPOS = completeMovement(matchDetails, carrier.currentPOS, [burstX, burstY])
     matchDetails.iterationLog.push(`Gambeta by: ${carrier.name} past ${defender.name}`)
     if (Array.isArray(matchDetails.events)) {
@@ -138,7 +168,29 @@ function tryCarrierGambeta(matchDetails, carrier, team, opp, move) {
       })
     }
   } else {
-    carrier.gambetaCooldown = 8
+    // Si el defensor es un CAUDILLO FÍSICO y tiene ventaja de fuerza, usa el cuerpo (hombro a hombro limpio)
+    if (isCaudillo && (Number(defender.skill?.strength || 70) >= Number(carrier.skill?.strength || 65) + 3)) {
+      carrier.stunnedTicks = 4
+      defender.lastCaudilloIter = matchDetails.iterationCount || 0
+      if (!defender.stats.tackles) defender.stats.tackles = { total: 0, on: 0, off: 0, fouls: 0 }
+      defender.stats.tackles.total++
+      defender.stats.tackles.on++
+      actions.setPostTackleBall(matchDetails, opp, team, defender)
+      matchDetails.iterationLog.push(`Caudillo body check by: ${defender.name} against ${carrier.name}`)
+      if (Array.isArray(matchDetails.events)) {
+        matchDetails.events.push({
+          type: 'caudilloTackle',
+          teamID: opp.teamID,
+          teamName: opp.name,
+          playerName: defender.name,
+          victimName: carrier.name,
+          iteration: matchDetails.iterationCount || 0,
+          half: matchDetails.half
+        })
+      }
+    } else {
+      carrier.gambetaCooldown = 8
+    }
   }
 }
 
@@ -550,17 +602,23 @@ function getSmartDribbleMove(matchDetails, player, step, opposition, team) {
   ]
 
   const role = player.tacticalRole || player.position
-  const isWidePlayer = ['LM', 'RM', 'LB', 'RB'].includes(role)
+  const hasTrait = (traitName) => Array.isArray(player.traits) && player.traits.includes(traitName)
+  const isEncarador = hasTrait('fenomeno_encarador') || hasTrait('playmaker_gambeteador') || role === 'ST'
+  const isVelocista = hasTrait('velocista_banda')
+  const isWidePlayer = ['LM', 'RM', 'LB', 'RB'].includes(role) || isVelocista
   const inWideChannel = player.currentPOS[0] < 175 || player.currentPOS[0] > (pitchWidth - 175)
   const distToGoalY = side === 'bottom' ? player.currentPOS[1] : (pitchHeight - player.currentPOS[1])
   const playStyle = team?.playStyle || 'balanced'
 
-  // Determinar el carril objetivo (desiredX) según el rol, la zona y la congestión rival
+  // Determinar el carril objetivo (desiredX) según el rol, la zona, la personalidad y la congestión rival
   let desiredX = player.originPOS[0]
-  if (isWidePlayer || inWideChannel || playStyle === 'wingPlay') {
+  if (isEncarador && distToGoalY < 360) {
+    // Delanteros y encaradores (Ronaldo Nazário, Messi, Agüero): fijan la mira directo al corazón del área
+    desiredX = (pitchWidth / 2) + common.getRandomNumber(-15, 15)
+  } else if (isWidePlayer || inWideChannel || playStyle === 'wingPlay') {
     const onLeft = player.currentPOS[0] < (pitchWidth / 2)
     if (isWidePlayer || inWideChannel) {
-      // Corre bien abierto por la banda hasta llegar al fondo (distToGoalY < 92)
+      // Corre bien abierto por la banda hasta llegar al fondo (distToGoalY < 92) antes de cerrar al área
       if (distToGoalY < 92) {
         desiredX = onLeft ? 215 : (pitchWidth - 215)
       } else {
@@ -611,9 +669,9 @@ function getSmartDribbleMove(matchDetails, player, step, opposition, team) {
 
     // Premiar fuertemente ir hacia donde hay espacio libre (esquivar marcas)
     const clearanceScore = Math.min(46, minOppDist) * 1.65
-    // Premiar el avance hacia el arco rival
+    // Premiar el avance hacia el arco rival (multiplicado para encaradores)
     const forwardProgress = side === 'bottom' ? -dy : dy
-    const progressScore = forwardProgress * 6.8
+    const progressScore = forwardProgress * (isEncarador ? 9.8 : (team?.mentality === 'offensive' ? 8.2 : 6.8))
     // Afinidad hacia el carril táctico elegido (banda, abrir cancha o encarar al área)
     const xBefore = Math.abs(player.currentPOS[0] - desiredX)
     const xAfter = Math.abs(candX - desiredX)
@@ -631,7 +689,7 @@ function getSmartDribbleMove(matchDetails, player, step, opposition, team) {
 }
 
 /**
- * Desplazamiento vectorial suave hacia un punto objetivo con separación anti-amontonamiento entre compañeros.
+ * Desplazamiento vectorial suave hacia un punto objetivo con desaceleración Arrive y separación anti-amontonamiento.
  */
 function steerTowardsTarget(player, targetPOS, step, team, pitchSize) {
   const dx = targetPOS[0] - player.currentPOS[0]
@@ -639,18 +697,26 @@ function steerTowardsTarget(player, targetPOS, step, team, pitchSize) {
   const dist = Math.sqrt(dx * dx + dy * dy)
   if (dist < 2) return [0, 0]
 
-  let vx = (dx / dist) * Math.min(step, dist)
-  let vy = (dy / dist) * Math.min(step, dist)
+  // Desaceleración suave (Arrive Steering inspirado en open-football):
+  // Si está cerca del destino (< 18px), desacelera cuadráticamente para llegar asentado y perfilado sin jittering
+  let effectiveStep = step
+  if (dist < 18) {
+    const ratio = dist / 18
+    effectiveStep = Math.max(0.6, step * ratio * ratio)
+  }
 
-  // Fuerza de separación si hay un compañero pegado (< 18px) para evitar superposición de fichas
+  let vx = (dx / dist) * Math.min(effectiveStep, dist)
+  let vy = (dy / dist) * Math.min(effectiveStep, dist)
+
+  // Fuerza de separación para evitar aglutinamiento ("racimo de uvas") y mantener líneas de pase abiertas (36px)
   if (team && Array.isArray(team.players)) {
     for (const mate of team.players) {
       if (!common.isOnPitch(mate) || mate.playerID === player.playerID) continue
       const mx = player.currentPOS[0] - mate.currentPOS[0]
       const my = player.currentPOS[1] - mate.currentPOS[1]
       const mDist = Math.sqrt(mx * mx + my * my)
-      if (mDist > 0 && mDist < 18) {
-        const push = ((18 - mDist) / 18) * 1.5
+      if (mDist > 0 && mDist < 36) {
+        const push = ((36 - mDist) / 36) * 2.2
         vx += (mx / mDist) * push
         vy += (my / mDist) * push
       }
@@ -668,16 +734,28 @@ function steerTowardsTarget(player, targetPOS, step, team, pitchSize) {
 }
 
 export function getRunMovement(matchDetails, player, ballX, ballY, team, opposition) {
+  player.isSprinting = false
+  player.sprintMomentum = Math.max(0, (player.sprintMomentum || 0) - 0.25)
   if (player.position !== 'GK' && player.fitness > 20) {
     const captainMultiplier = isCaptainOnPitch(team) ? 0.85 : 1.0
     const mentalityMultiplier = team?.mentality === 'offensive' ? 1.15 : (team?.mentality === 'defensive' ? 0.85 : 1.0)
-    const drain = 0.014 * captainMultiplier * mentalityMultiplier
+    const drain = 0.018 * captainMultiplier * mentalityMultiplier
     player.fitness = common.round(Math.max(20, player.fitness - drain), 4)
-    if (matchDetails.iterationCount % 40 === 0) updatePlayerEffectiveSkills(player, team)
+    if (matchDetails.iterationCount % 35 === 0) updatePlayerEffectiveSkills(player, team)
   }
-  const step = player.skill.agility >= 80 ? 3 : 2
+  let step = player.skill.agility >= 80 ? 3 : 2
   if (player.hasBall) {
     return getSmartDribbleMove(matchDetails, player, step, opposition, team)
+  }
+
+  // Si nuestro equipo tiene la posesión y el jugador apoya la jugada, avance coordinado sin atropellar
+  if (matchDetails.ball.withTeam === team?.teamID && player.position !== 'GK') {
+    const distToTarget = Array.isArray(player.intentPOS)
+      ? common.distance(player.currentPOS, player.intentPOS)
+      : 0
+    if (distToTarget > 25) {
+      step = player.skill.agility >= 84 ? 3.6 : 3.0
+    }
   }
 
   // Solo ir directo a la pelota si está suelta muy cerca (< 48px)
@@ -689,15 +767,26 @@ export function getRunMovement(matchDetails, player, ballX, ballY, team, opposit
 }
 
 export function getSprintMovement(matchDetails, player, ballX, ballY, team, opposition) {
+  player.isSprinting = true
+  player.sprintMomentum = Math.min(1.0, (player.sprintMomentum || 0) + 0.25)
   if (player.position !== 'GK' && player.fitness > 20) {
     const captainMultiplier = isCaptainOnPitch(team) ? 0.85 : 1.0
-    const mentalityMultiplier = team?.mentality === 'offensive' ? 1.15 : (team?.mentality === 'defensive' ? 0.85 : 1.0)
-    const drain = 0.026 * captainMultiplier * mentalityMultiplier
+    const mentalityMultiplier = team?.mentality === 'offensive' ? 1.20 : (team?.mentality === 'defensive' ? 0.90 : 1.0)
+    const drain = 0.048 * captainMultiplier * mentalityMultiplier
     player.fitness = common.round(Math.max(20, player.fitness - drain), 4)
-    if (matchDetails.iterationCount % 40 === 0) updatePlayerEffectiveSkills(player, team)
+    if (matchDetails.iterationCount % 35 === 0) updatePlayerEffectiveSkills(player, team)
   }
-  const baseStep = player.skill.agility >= 85 ? 6 : (player.skill.agility >= 65 ? 5 : 4)
-  const step = player.fitness < 42 ? Math.max(3, baseStep - 2) : baseStep
+  // Sprint explosivo: 6.5 a 9.5 px/tick según agilidad
+  let baseStep = 6.5
+  if (player.skill.agility >= 94) baseStep = 9.5
+  else if (player.skill.agility >= 86) baseStep = 8.5
+  else if (player.skill.agility >= 76) baseStep = 7.5
+  else if (player.skill.agility < 65) baseStep = 5.5
+
+  const step = player.fitness < 45
+    ? Math.max(3.5, baseStep * (0.60 + ((player.fitness - 20) / 25) * 0.40))
+    : baseStep
+
   if (player.hasBall) {
     return getSmartDribbleMove(matchDetails, player, step, opposition, team)
   }
