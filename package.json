@@ -1,0 +1,21 @@
+{
+  "name": "futbol-de-primera-simulador",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Simulador de Fútbol 2D con Modo Draft ($250M), Pizarra Táctica y Relatos estilo Araujo y Macaya",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:engine": "node tests/verifyEngineAndDraft.js"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^6.0.5"
+  }
+}

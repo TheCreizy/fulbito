@@ -1,0 +1,211 @@
+import assert from 'node:assert'
+import { PLAYERS_DB } from '../src/data/playersDB.js'
+import { PITCH_CONFIG } from '../src/data/formations.js'
+import {
+  INITIAL_BUDGET,
+  TOTAL_ROUNDS,
+  REROLL_COST,
+  canRerollPack,
+  generateDraftPack,
+  selectAICardFromPack,
+  autoSetupTeamFromSquad
+} from '../src/draft/draftEngine.js'
+import {
+  initiateGame,
+  playIteration,
+  startSecondHalf,
+  startExtraTimeHalf,
+  applyLiveTactics,
+  makeSubstitution,
+  simulateShootoutKick
+} from '../src/engine/engine.js'
+import { getPositionCompatibility } from '../src/engine/modifiers.js'
+import { generateCommentaryForIteration } from '../src/commentary/commentaryEngine.js'
+
+async function runTests() {
+  console.log('=== 1. Verificando Base de Datos de 100 Jugadores y Polifuncionalidad ===')
+  assert.strictEqual(PLAYERS_DB.length, 100, 'Debe haber exactamente 100 jugadores')
+  const legends = PLAYERS_DB.filter(p => p.category === 'legend')
+  const idols = PLAYERS_DB.filter(p => p.category === 'idol')
+  const squad = PLAYERS_DB.filter(p => p.category === 'squad')
+  const filler = PLAYERS_DB.filter(p => p.category === 'filler')
+  assert.strictEqual(legends.length, 20, '20 Leyendas')
+  assert.strictEqual(idols.length, 25, '25 Ídolos')
+  assert.strictEqual(squad.length, 30, '30 Plantilla')
+  assert.strictEqual(filler.length, 25, '25 Relleno')
+
+  // Validar polifuncionalidad de Messi (ST, RM, CAM, CM) y asignación correcta de LB / RB
+  const messi = PLAYERS_DB.find(p => p.name === 'Lionel Messi')
+  assert.strictEqual(getPositionCompatibility(messi, 'ST').factor, 1.0, 'Messi 100% como ST')
+  assert.strictEqual(getPositionCompatibility(messi, 'RM').factor, 1.0, 'Messi 100% como RM')
+  assert.strictEqual(getPositionCompatibility(messi, 'CAM').factor, 1.0, 'Messi 100% como CAM (Enganche)')
+
+  // Validar que Cafú (RB 93) y Morel Rodríguez (LB 76) se ubiquen cada uno en su banda correcta (LD y LI)
+  const testPool16 = [
+    PLAYERS_DB.find(p => p.position === 'GK'),
+    PLAYERS_DB.find(p => p.name === 'Cafú'), // RB 93
+    PLAYERS_DB.find(p => p.name === 'Morel Rodríguez'), // LB 76
+    ...PLAYERS_DB.filter(p => p.position === 'CB').slice(0, 3),
+    ...PLAYERS_DB.filter(p => p.position === 'CM').slice(0, 4),
+    PLAYERS_DB.find(p => p.name === 'Ángel Di María'), // RM 89
+    PLAYERS_DB.find(p => p.name === 'Jesús Dátolo'), // LM 75
+    ...PLAYERS_DB.filter(p => p.position === 'ST').slice(0, 4)
+  ]
+  const testSetup = autoSetupTeamFromSquad(testPool16, { formationId: '4-4-2' })
+  assert.strictEqual(testSetup.players[1].name, 'Morel Rodríguez', 'Slot 1 (LI/LB) debe ser el lateral izquierdo natural')
+  assert.strictEqual(testSetup.players[4].name, 'Cafú', 'Slot 4 (LD/RB) debe ser el lateral derecho natural')
+  console.log('✔ 100 jugadores validados, polifuncionalidad activa y laterales LI/LD asignados sin inversión.')
+
+  console.log('\n=== 2. Simulando Draft Completo ($250M, 16 Rondas + Reroll $2M) ===')
+  const usedIds = new Set()
+  let budget1 = INITIAL_BUDGET
+  let budget2 = INITIAL_BUDGET
+  const roster1 = []
+  const roster2 = []
+
+  for (let round = 1; round <= TOTAL_ROUNDS; round++) {
+    let pack1 = generateDraftPack(round, usedIds, budget1, roster1)
+    assert.strictEqual(pack1.length, 7, 'Sobre de 7 cartas para Equipo 1')
+
+    // Probar Reroll en las rondas 2 y 5 si es válido
+    if ((round === 2 || round === 5) && canRerollPack(budget1, roster1.length, false)) {
+      budget1 = Number((budget1 - REROLL_COST).toFixed(2))
+      pack1 = generateDraftPack(round, usedIds, budget1, roster1)
+    }
+
+    const pick1 = selectAICardFromPack(pack1, budget1, roster1, round)
+    assert.ok(pick1, `Equipo 1 debe poder elegir carta en ronda ${round}`)
+    assert.ok(pick1.price <= budget1, `Precio (${pick1.price}) dentro de presupuesto (${budget1})`)
+    budget1 = Number((budget1 - pick1.price).toFixed(2))
+    roster1.push(pick1)
+    usedIds.add(pick1.id)
+
+    const pack2 = generateDraftPack(round, usedIds, budget2, roster2)
+    const pick2 = selectAICardFromPack(pack2, budget2, roster2, round)
+    assert.ok(pick2, `Equipo 2 debe poder elegir carta en ronda ${round}`)
+    assert.ok(pick2.price <= budget2, `Precio (${pick2.price}) dentro de presupuesto (${budget2})`)
+    budget2 = Number((budget2 - pick2.price).toFixed(2))
+    roster2.push(pick2)
+    usedIds.add(pick2.id)
+  }
+
+  assert.strictEqual(roster1.length, 16, 'Equipo 1 completó 16 jugadores')
+  assert.strictEqual(roster2.length, 16, 'Equipo 2 completó 16 jugadores')
+  assert.strictEqual(usedIds.size, 32, '32 jugadores únicos entre ambos planteles sin repetidos')
+  console.log(`✔ Draft completado sin bloqueos. Presupuesto sobrante E1: $${budget1}M | E2: $${budget2}M`)
+
+  console.log('\n=== 3. Configurando Pizarra Táctica y Simulando Partido Completo ===')
+  const team1 = autoSetupTeamFromSquad(roster1, {
+    teamName: 'Boca Legends',
+    formationId: '4-3-1-2',
+    mentalityId: 'balanced'
+  })
+  const team2 = autoSetupTeamFromSquad(roster2, {
+    teamName: 'River Idols',
+    formationId: '4-3-3',
+    mentalityId: 'offensive'
+  })
+
+  let match = await initiateGame(team1, team2, PITCH_CONFIG)
+  const commTracker = { lastCommentTick: 0 }
+  let totalComments = 0
+
+  // Primer Tiempo (1000 iteraciones)
+  for (let i = 0; i < 1000; i++) {
+    match = await playIteration(match)
+    const msgs = generateCommentaryForIteration(match, null, `${Math.floor((i / 1000) * 45)}'`, commTracker)
+    totalComments += msgs.length
+  }
+
+  // Entretiempo
+  match = await startSecondHalf(match)
+  assert.strictEqual(match.half, 2, 'Debe estar en el 2do tiempo')
+
+  // Cambio táctico en vivo y 2 sustituciones en el minuto 60
+  match = applyLiveTactics(match, 'kickOffTeam', { formationId: '4-4-2', mentalityId: 'offensive' })
+  const activeFieldIndex = match.kickOffTeam.players.findIndex((p, idx) => idx > 0 && !p.sentOff)
+  if (activeFieldIndex !== -1) {
+    match = makeSubstitution(match, 'kickOffTeam', activeFieldIndex, 0)
+  }
+
+  // Segundo Tiempo (1000 iteraciones)
+  for (let i = 0; i < 1000; i++) {
+    match = await playIteration(match)
+    const msgs = generateCommentaryForIteration(match, null, `${45 + Math.floor((i / 1000) * 45)}'`, commTracker)
+    totalComments += msgs.length
+  }
+
+  // Probar Alargue (2 tiempos de 330 iteraciones)
+  match = await startExtraTimeHalf(match)
+  assert.strictEqual(match.half, 3, 'Primer tiempo de alargue (half = 3)')
+  for (let i = 0; i < 330; i++) {
+    match = await playIteration(match)
+  }
+  match = await startExtraTimeHalf(match)
+  assert.strictEqual(match.half, 4, 'Segundo tiempo de alargue (half = 4)')
+  for (let i = 0; i < 330; i++) {
+    match = await playIteration(match)
+  }
+
+  // Probar tanda de penales
+  const penResult = simulateShootoutKick(match.kickOffTeam.players[9], match.secondTeam.players[0])
+  assert.ok(['goal', 'saved', 'missed'].includes(penResult.outcome), 'Resultado de penal válido')
+
+  console.log(`✔ Partido + Alargue (2660 iteraciones) ejecutado sin errores.`)
+  console.log(`  Resultado: ${match.kickOffTeam.name} ${match.kickOffTeamStatistics.goals} - ${match.secondTeamStatistics.goals} ${match.secondTeam.name}`)
+  console.log(`  Tiros: ${match.kickOffTeamStatistics.shots.total} (${match.kickOffTeamStatistics.shots.on} al arco) vs ${match.secondTeamStatistics.shots.total} (${match.secondTeamStatistics.shots.on} al arco)`)
+  console.log(`  Pases completados: ${match.kickOffTeamStatistics.passesCompleted}/${match.kickOffTeamStatistics.passesTotal} vs ${match.secondTeamStatistics.passesCompleted}/${match.secondTeamStatistics.passesTotal}`)
+  console.log(`  Relatos de Araujo y Macaya generados: ${totalComments}`)
+
+  console.log('\n=== 4. Verificando IA v3.0 (Gambetas 1v1, Cambios de Frente, Centros y Tiros Realistas en 5 Partidos) ===')
+  let totalGambetas = 0
+  let totalSwitches = 0
+  let totalCrosses = 0
+  let totalThroughBalls = 0
+  let totalShots = 0
+  let totalGoals = 0
+
+  for (let mIdx = 0; mIdx < 5; mIdx++) {
+    const tA = autoSetupTeamFromSquad(roster1, {
+      teamName: 'Equipo Bandas',
+      formationId: '4-3-3',
+      mentalityId: 'offensive',
+      playStyleId: 'wingPlay'
+    })
+    const tB = autoSetupTeamFromSquad(roster2, {
+      teamName: 'Equipo Gambeta',
+      formationId: '4-3-1-2',
+      mentalityId: 'balanced',
+      playStyleId: 'tikiTaka'
+    })
+    let sim = await initiateGame(tA, tB, PITCH_CONFIG)
+    for (let tick = 0; tick < 1000; tick++) sim = await playIteration(sim)
+    sim = await startSecondHalf(sim)
+    for (let tick = 0; tick < 1000; tick++) sim = await playIteration(sim)
+
+    const evs = sim.events || []
+    totalGambetas += evs.filter(e => e.type === 'gambeta').length
+    totalSwitches += evs.filter(e => e.type === 'switchOfPlay').length
+    totalCrosses += evs.filter(e => e.type === 'cross').length
+    totalThroughBalls += evs.filter(e => e.type === 'throughBall').length
+    totalShots += sim.kickOffTeamStatistics.shots.total + sim.secondTeamStatistics.shots.total
+    totalGoals += sim.kickOffTeamStatistics.goals + sim.secondTeamStatistics.goals
+  }
+
+  console.log(`  En 5 partidos completos (10,000 ticks):`)
+  console.log(`  - Gambetas 1v1 exitosas: ${totalGambetas} (${(totalGambetas / 5).toFixed(1)} por partido)`)
+  console.log(`  - Cambios de Frente: ${totalSwitches} (${(totalSwitches / 5).toFixed(1)} por partido)`)
+  console.log(`  - Centros al área desde la banda: ${totalCrosses} (${(totalCrosses / 5).toFixed(1)} por partido)`)
+  console.log(`  - Pases filtrados largos al vacío: ${totalThroughBalls} (${(totalThroughBalls / 5).toFixed(1)} por partido)`)
+  console.log(`  - Tiros totales: ${totalShots} (${(totalShots / 5).toFixed(1)} por partido) | Goles: ${totalGoals} (${(totalGoals / 5).toFixed(1)} por partido)`)
+
+  assert.ok(totalGambetas > 0, 'Deben ocurrir gambetas 1v1 en los partidos')
+  assert.ok(totalSwitches > 0, 'Deben ocurrir cambios de frente en los partidos')
+  assert.ok(totalCrosses > 0, 'Deben ocurrir centros desde las bandas')
+  console.log('✔ IA v3.0 validada exitosamente.')
+}
+
+runTests().catch(err => {
+  console.error('❌ Error en tests:', err)
+  process.exit(1)
+})
