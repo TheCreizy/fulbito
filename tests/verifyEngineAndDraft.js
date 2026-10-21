@@ -22,6 +22,8 @@ import {
 import { getPositionCompatibility } from '../src/engine/modifiers.js'
 import { generateCommentaryForIteration } from '../src/commentary/commentaryEngine.js'
 import { getBallTrajectory } from '../src/engine/common.js'
+import { calculateInterceptMovement, calculateEarliestMeeting, steerTowardsTarget } from '../src/engine/steering.js'
+import { evaluateMatchCoach, COACH_INSTRUCTIONS, updateTeamCoachDirectives } from '../src/engine/coachAI.js'
 
 async function runTests() {
   console.log('=== 1. Verificando Base de Datos de 100 Jugadores y Polifuncionalidad ===')
@@ -394,6 +396,161 @@ async function runTests() {
   console.log(`  - Despejes largos de arquero registrados: ${gkClearances} | Erróneos como "cambio de frente": ${errantGkSwitches}`)
   assert.strictEqual(errantGkSwitches, 0, 'Los despejes o pases del arquero jamás deben relatarse como "cambio de frente"')
   console.log('✔ Motor v8.0 verificado exitosamente.')
+
+  console.log('\n=== 10. Verificando Fases 1 y 2 de Open Football (TeamShape Deslizante e Incumbency Bonus) ===')
+  let simOF = await initiateGame(tA8, tB8, PITCH_CONFIG)
+  let maxBlockLengthObserved = 0
+  let maxRearJumpObserved = 0
+  let previousRearY = null
+  let slotAssignmentsRecorded = 0
+  let slotSwapsRecorded = 0
+  let lastPenaltySpotID = null
+
+  for (let tick = 0; tick < 1000; tick++) {
+    simOF = await playIteration(simOF)
+    const team = simOF.kickOffTeam
+    if (team.teamShape && team.teamShape.anchors) {
+      // Medir longitud real del bloque en base a las anclas de jugadores de campo
+      const outfieldAnchorsY = team.players
+        .filter(p => p.position !== 'GK' && team.teamShape.anchors[p.playerID])
+        .map(p => team.teamShape.anchors[p.playerID][1])
+      if (outfieldAnchorsY.length > 0) {
+        const span = Math.max(...outfieldAnchorsY) - Math.min(...outfieldAnchorsY)
+        maxBlockLengthObserved = Math.max(maxBlockLengthObserved, span)
+      }
+
+      const currentRear = team.teamShape.rearProgress * 1050
+      if (previousRearY != null) {
+        const deltaRear = Math.abs(currentRear - previousRearY)
+        if (deltaRear < 200) { // Ignorar reinicios de pelota parada
+          maxRearJumpObserved = Math.max(maxRearJumpObserved, deltaRear)
+        }
+      }
+      previousRearY = currentRear
+    }
+
+    // Comprobar persistencia (Incumbency Bonus) en BoxSlots de ataque
+    if (team.attackPlan && team.attackPlan.boxSlots) {
+      const curPenaltySpotID = team.attackPlan.boxSlots.penaltySpot
+      if (curPenaltySpotID) {
+        slotAssignmentsRecorded++
+        if (lastPenaltySpotID && curPenaltySpotID !== lastPenaltySpotID) {
+          slotSwapsRecorded++
+        }
+        lastPenaltySpotID = curPenaltySpotID
+      }
+    }
+  }
+
+  console.log(`  - Máxima longitud del bloque de campo observada: ${Math.round(maxBlockLengthObserved)}px (~${Math.round(maxBlockLengthObserved / 10)}m, rango óptimo 28-48m)`)
+  assert.ok(maxBlockLengthObserved <= 480, `El bloque no debe estirarse a 80m (observado: ${maxBlockLengthObserved}px)`)
+
+  console.log(`  - Máximo desplazamiento de línea por tick (BLOCK_SPEED): ${maxRearJumpObserved.toFixed(2)}px/tick (límite 9.5px)`)
+  assert.ok(maxRearJumpObserved <= 9.5, `El bloque debe respetar el límite de velocidad y no teletransportarse (observado: ${maxRearJumpObserved}px)`)
+
+  const swapRate = slotSwapsRecorded / Math.max(1, slotAssignmentsRecorded)
+  console.log(`  - Tasa de rotación de asignación de BoxSlot (PenaltySpot): ${(swapRate * 100).toFixed(1)}% (estabilidad alta)`)
+  assert.ok(swapRate < 0.12, 'El Incumbency Bonus debe mantener estable la asignación de slots durante los ataques')
+  console.log('✔ Fases 1 y 2 de Open Football verificadas exitosamente (TeamShape compacto y asignaciones estables con Incumbency).')
+
+  console.log('\n=== 11. Verificando Fases 3 y 4 de Open Football (Constant-Bearing Intercept y Coach AI Autónomo) ===')
+
+  // A. Fase 3: Constant-Bearing Interception
+  // Simular balón moviéndose transversalmente: el jugador no debe apuntar a donde está el balón, sino anticiparlo
+  const dummyMatch = {
+    pitchSize: [680, 1050],
+    ball: {
+      position: [340, 500, 0],
+      velocity: [15, 0],
+      ballOverIterations: [[355, 500, 0]]
+    }
+  }
+  const dummyPlayer = {
+    currentPOS: [340, 560]
+  }
+  const interceptMove = calculateInterceptMovement(dummyPlayer, dummyMatch, 14)
+  console.log(`  - Vector de intercepción rumbo constante ante balón lateral vx=15: dx=${interceptMove[0]}, dy=${interceptMove[1]}`)
+  assert.ok(interceptMove[0] > 0, 'La componente transversal debe adelantarse hacia la trayectoria futura del balón')
+  assert.ok(interceptMove[1] < 0, 'La componente longitudinal debe cerrar la distancia hacia el balón')
+
+  // Probar caso de Causa Perdida (Lost-Cause Decaying Friction)
+  const lostMatch = {
+    pitchSize: [680, 1050],
+    ball: {
+      position: [340, 200, 0],
+      velocity: [0, -35],
+      ballOverIterations: [[340, 165, 0]]
+    }
+  }
+  const lostPlayer = {
+    currentPOS: [340, 500]
+  }
+  const lostMove = calculateInterceptMovement(lostPlayer, lostMatch, 10)
+  assert.ok(!Number.isNaN(lostMove[0]) && !Number.isNaN(lostMove[1]), 'No debe generar valores NaN')
+  assert.ok(Math.abs(lostMove[1]) <= 10, 'El desplazamiento debe estar acotado por maxSpeed')
+
+  // Probar Arrive en steerTowardsTarget
+  const closeArrival = steerTowardsTarget({ currentPOS: [100, 100] }, [105, 100], 10, null, [680, 1050])
+  console.log(`  - Desaceleración Arrive para distancia 5px (step 10): dx=${closeArrival[0]}`)
+  assert.ok(Math.abs(closeArrival[0]) < 10, 'Arrive Steering debe suavizar el paso cerca del objetivo para no oscilar')
+
+  // B. Fase 4: Coach AI Escalation Ladder
+  const teamMock = {
+    teamID: 'T1',
+    players: Array.from({ length: 11 }, (_, i) => ({
+      position: i === 0 ? 'GK' : 'ST',
+      currentPOS: [340, 500],
+      fitness: 100
+    }))
+  }
+  const oppMock = {
+    teamID: 'T2',
+    players: []
+  }
+
+  // 1. Ganando 3-0 en el minuto 78 (iteración 1600/2000 -> 0.80): debe pausar o enfriar el partido (WasteTime / SlowDown)
+  const winningMatchDetails = {
+    iterationCount: 1600,
+    kickOffTeam: teamMock,
+    kickOffTeamStatistics: { goals: 3 },
+    secondTeamStatistics: { goals: 0 }
+  }
+  const leadInstr = evaluateMatchCoach(teamMock, oppMock, winningMatchDetails)
+  console.log(`  - DT ganando 3-0 en minuto 72 (iter 1600): Instrucción elegida = ${leadInstr} (esperado: WasteTime o SlowDown)`)
+  assert.ok(['WasteTime', 'SlowDown'].includes(leadInstr), 'Con ventaja de 3 goles debe buscar pausar o enfriar')
+
+  // 2. Perdiendo 1-2 en el minuto 88 (iteración 1850/2000 -> 0.925): debe pasar a Ataque Total
+  const losingMatchDetails = {
+    iterationCount: 1850,
+    kickOffTeam: teamMock,
+    kickOffTeamStatistics: { goals: 1 },
+    secondTeamStatistics: { goals: 2 }
+  }
+  const trailInstr = evaluateMatchCoach(teamMock, oppMock, losingMatchDetails)
+  console.log(`  - DT perdiendo 1-2 en minuto 83 (iter 1850): Instrucción elegida = ${trailInstr} (esperado: AllOutAttack)`)
+  assert.strictEqual(trailInstr, 'AllOutAttack', 'Perdiendo en el tramo final debe ordenar Ataque Total')
+  assert.strictEqual(COACH_INSTRUCTIONS[trailInstr].ambition, 1.0, 'Ambición debe alcanzar 1.0 en AllOutAttack')
+
+  // 3. Ganando 1-0 sobre la hora en el minuto 94 (iteración 1950/2000 -> 0.975): debe colgarse del travesaño (ParkTheBus)
+  const clingingMatchDetails = {
+    iterationCount: 1950,
+    kickOffTeam: teamMock,
+    kickOffTeamStatistics: { goals: 1 },
+    secondTeamStatistics: { goals: 0 }
+  }
+  const clingInstr = evaluateMatchCoach(teamMock, oppMock, clingingMatchDetails)
+  console.log(`  - DT ganando 1-0 en tiempo cumplido (iter 1950): Instrucción elegida = ${clingInstr} (esperado: ParkTheBus)`)
+  assert.strictEqual(clingInstr, 'ParkTheBus', 'Ganando por la mínima al final debe colgarse del travesaño')
+
+  // 4. Bloqueo manual (manualMentalityLock)
+  let simTactics = await initiateGame(tA8, tB8, PITCH_CONFIG)
+  simTactics = applyLiveTactics(simTactics, 'kickOffTeam', { mentalityId: 'defensive' })
+  assert.strictEqual(simTactics.kickOffTeam.manualMentalityLock, true, 'applyLiveTactics debe bloquear la mentalidad manual')
+  simTactics.iterationCount = 50 // tick de evaluación de DT
+  updateTeamCoachDirectives(simTactics)
+  assert.strictEqual(simTactics.kickOffTeam.mentality, 'defensive', 'El DT autónomo no debe sobrescribir la mentalidad fijada por el usuario')
+
+  console.log('✔ Fases 3 y 4 de Open Football verificadas exitosamente (Constant-Bearing Intercept, Lost-Cause Decay y Escalation Ladder autónomo).')
 }
 
 runTests().catch(err => {

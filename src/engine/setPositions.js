@@ -2,6 +2,12 @@ import * as common from './common.js'
 import * as setVariables from './setVariables.js'
 import * as setFreekicks from './setFreekicks.js'
 import { getPlayStyleConfig } from '../data/formations.js'
+import {
+  buildTeamShape,
+  getBoxSlotGeometry,
+  assignAttackPlanWithIncumbency,
+  assignDefensivePlanWithIncumbency
+} from './teamShape.js'
 
 export function selectCornerTaker(team) {
   const active = team.players.filter(p => common.isOnPitch(p) && p.position !== 'GK')
@@ -803,10 +809,11 @@ export function setIntentPosition(matchDetails, closestPlayer) {
 
 function setLooseintentPOS(matchDetails, thisTeam, closestPlayer) {
   const { ball } = matchDetails
+  buildTeamShape(matchDetails, thisTeam, false)
+  const anchors = thisTeam.teamShape?.anchors || {}
+
   for (const player of thisTeam.players) {
     if (!common.isOnPitch(player)) continue
-    const baseX = player.originPOS[0]
-    const baseY = player.originPOS[1]
     const diffX = ball.position[0] - player.currentPOS[0]
     const diffY = ball.position[1] - player.currentPOS[1]
     const distance = Math.sqrt(diffX * diffX + diffY * diffY)
@@ -830,14 +837,12 @@ function setLooseintentPOS(matchDetails, thisTeam, closestPlayer) {
       continue
     }
 
-    const role = player.tacticalRole || player.position
-    const isWide = ['LM', 'RM', 'LB', 'RB'].includes(role)
-    const compressX = (ball.position[0] - baseX) * (isWide ? 0.08 : 0.16)
-    const compressY = (ball.position[1] - baseY) * 0.15
-    player.intentPOS = [
-      baseX + compressX,
-      baseY + compressY
-    ]
+    const anchor = anchors[player.playerID]
+    if (anchor) {
+      player.intentPOS = [anchor[0], anchor[1]]
+    } else {
+      player.intentPOS = [player.originPOS[0], player.originPOS[1]]
+    }
   }
 }
 
@@ -845,71 +850,31 @@ function setDefenceRelativePos(matchDetails, defendingTeam, closestPlayer, attac
   const { ball, pitchSize } = matchDetails
   const [pitchWidth, pitchHeight] = pitchSize
   const isTopTeam = defendingTeam.players[0].originPOS[1] < (pitchHeight / 2)
-  const mentality = defendingTeam.mentality || 'balanced'
-  const distBallToOwnGoalY = isTopTeam ? ball.position[1] : (pitchHeight - ball.position[1])
+  const goalDirY = isTopTeam ? -1 : 1
 
-  // Cálculo del Bloque Defensivo Colectivo
-  let cbBaseDist = 115
-  let lineSpread = 65
-  if (mentality === 'defensive') {
-    cbBaseDist = 90 + Math.min(130, distBallToOwnGoalY * 0.22)
-    lineSpread = 50
-  } else if (mentality === 'offensive') {
-    cbBaseDist = 165 + Math.min(190, distBallToOwnGoalY * 0.32)
-    lineSpread = 72
-  } else {
-    cbBaseDist = 120 + Math.min(160, distBallToOwnGoalY * 0.26)
-    lineSpread = 60
-  }
+  // 1. Construir Bloque Deslizante TeamShape con limitador de velocidad BLOCK_SPEED
+  buildTeamShape(matchDetails, defendingTeam, false)
+  const anchors = defendingTeam.teamShape?.anchors || {}
 
-  // 1. Asignar Presser exclusivo: jugador de campo más cercano a la pelota
-  let presser = null
-  let minPresserDist = 999
-  for (const p of defendingTeam.players) {
-    if (!common.isOnPitch(p) || p.position === 'GK') continue
-    const d = common.distance(p.currentPOS, ball.position)
-    if (d < minPresserDist) {
-      minPresserDist = d
-      presser = p
-    }
-  }
-
-  // 2. Asignar Cover exclusivo: segundo jugador de campo más cercano al presser
-  let cover = null
-  let minCoverDist = 999
-  if (presser) {
-    for (const p of defendingTeam.players) {
-      if (!common.isOnPitch(p) || p.position === 'GK' || p.playerID === presser.playerID) continue
-      const d = common.distance(p.currentPOS, presser.currentPOS)
-      if (d < minCoverDist) {
-        minCoverDist = d
-        cover = p
-      }
-    }
-  }
-
-  // 3. Obtener BoxSlots rivales para asignar marcas personales (Markers)
-  const oppAttackPlan = attackingTeam?.attackPlan || {}
-  const markedOppIDs = [oppAttackPlan.penaltySpotID, oppAttackPlan.nearPostID].filter(Boolean)
+  // 2. Asignar Plan Defensivo (Press, Cover, Mark, HoldZone) con Incumbency Bonus
+  const defPlan = assignDefensivePlanWithIncumbency(defendingTeam, attackingTeam, matchDetails, isTopTeam)
+  const duties = defPlan?.duties || {}
 
   for (const player of defendingTeam.players) {
     if (!common.isOnPitch(player)) continue
     player.offBallRun = null
-    const baseX = player.originPOS[0]
-    const role = player.tacticalRole || player.position
+    const anchor = anchors[player.playerID] || player.originPOS
 
-    // Arquero
+    // Arquero: anchor del bloque
     if (player.position === 'GK') {
-      const gkDist = Math.max(22, Math.min(75, distBallToOwnGoalY * 0.15))
-      const gkY = isTopTeam ? gkDist : (pitchHeight - gkDist)
-      const gkX = Math.max(pitchSize[0] / 2 - 40, Math.min(pitchSize[0] / 2 + 40, ball.position[0] * 0.25 + (pitchSize[0] / 2) * 0.75))
-      player.intentPOS = [gkX, gkY]
+      player.intentPOS = [anchor[0], anchor[1]]
       continue
     }
 
+    const playerDuty = duties[player.playerID] || { duty: 'HoldZone' }
+
     // A. PRESSER: Sale a presionar al portador goal-side
-    if (presser && player.playerID === presser.playerID) {
-      const goalDirY = isTopTeam ? -1 : 1
+    if (playerDuty.duty === 'Press') {
       const pressX = ball.position[0] * 0.85 + player.currentPOS[0] * 0.15
       const pressY = ball.position[1] + goalDirY * 12
       player.intentPOS = [
@@ -920,10 +885,11 @@ function setDefenceRelativePos(matchDetails, defendingTeam, closestPlayer, attac
     }
 
     // B. COVER: Cobertura escalonada unos 24px detrás del presser
-    if (cover && player.playerID === cover.playerID) {
-      const goalDirY = isTopTeam ? -1 : 1
-      const coverX = presser.currentPOS[0] * 0.6 + baseX * 0.4
-      const coverY = presser.currentPOS[1] + goalDirY * 26
+    if (playerDuty.duty === 'Cover') {
+      const presser = defendingTeam.players.find(p => p.playerID === defPlan.presserID)
+      const presserPOS = presser ? presser.currentPOS : ball.position
+      const coverX = presserPOS[0] * 0.6 + anchor[0] * 0.4
+      const coverY = presserPOS[1] + goalDirY * 26
       player.intentPOS = [
         Math.max(30, Math.min(pitchWidth - 30, coverX)),
         isTopTeam ? Math.max(45, coverY) : Math.min(pitchHeight - 45, coverY)
@@ -931,12 +897,10 @@ function setDefenceRelativePos(matchDetails, defendingTeam, closestPlayer, attac
       continue
     }
 
-    // C. MARKERS: Defensores CBs tomando la marca personal en el área
-    if (role === 'CB' && markedOppIDs.length > 0 && distBallToOwnGoalY < 280) {
-      const targetOppID = markedOppIDs.shift()
-      const oppPlayer = attackingTeam?.players?.find(op => op.playerID === targetOppID)
+    // C. MARKERS: Defensores tomando la marca personal en el área
+    if (playerDuty.duty === 'Mark' && playerDuty.targetID) {
+      const oppPlayer = attackingTeam?.players?.find(op => op.playerID === playerDuty.targetID)
       if (oppPlayer && common.isOnPitch(oppPlayer)) {
-        const goalDirY = isTopTeam ? -1 : 1
         const markX = oppPlayer.currentPOS[0]
         const markY = oppPlayer.currentPOS[1] + goalDirY * 12
         player.intentPOS = [
@@ -947,25 +911,8 @@ function setDefenceRelativePos(matchDetails, defendingTeam, closestPlayer, attac
       }
     }
 
-    // D. HOLD ZONE: Mantener el bloque defensivo
-    const isWide = ['LM', 'RM', 'LB', 'RB'].includes(role)
-    let roleDistFromOwnGoal = cbBaseDist
-    if (role === 'CB') roleDistFromOwnGoal = cbBaseDist
-    else if (role === 'LB' || role === 'RB') roleDistFromOwnGoal = cbBaseDist + 16
-    else if (role === 'CM') roleDistFromOwnGoal = cbBaseDist + lineSpread
-    else if (role === 'LM' || role === 'RM') roleDistFromOwnGoal = cbBaseDist + lineSpread + 20
-    else if (role === 'CAM') roleDistFromOwnGoal = cbBaseDist + lineSpread * 1.6
-    else if (role === 'ST') roleDistFromOwnGoal = cbBaseDist + lineSpread * 2.2
-
-    const targetY = isTopTeam
-      ? Math.max(30, Math.min(pitchHeight - 45, roleDistFromOwnGoal))
-      : Math.min(pitchHeight - 30, Math.max(45, pitchHeight - roleDistFromOwnGoal))
-
-    const compressX = (ball.position[0] - baseX) * (isWide ? 0.14 : 0.24)
-    player.intentPOS = [
-      Math.max(25, Math.min(pitchSize[0] - 25, baseX + compressX)),
-      targetY
-    ]
+    // D. HOLD ZONE: Anclado dentro del bloque defensivo dinámico y compacto (TeamShape)
+    player.intentPOS = [anchor[0], anchor[1]]
   }
 }
 
@@ -1027,85 +974,29 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
   const isAttackingPhase = kickingTeam.gamePhase === 'Attack' || distBallToGoalY < 360
   const wingCrossSituation = distBallToGoalY < 320 && (ballOnLeftWing || ballOnRightWing)
 
-  // 1. Identificar portador del balón
+  // 1. Construir Bloque Deslizante de Ataque (TeamShape)
+  buildTeamShape(matchDetails, kickingTeam, true)
+  const anchors = kickingTeam.teamShape?.anchors || {}
+
+  // 2. Construir AttackPlan con Roles Exclusivos e Incumbency Bonus
+  const attackPlan = assignAttackPlanWithIncumbency(kickingTeam, defendingTeam, matchDetails, isTopTeam, onsideLimitY)
+  const boxSlots = attackPlan.boxSlots || {}
+  const slotGeom = getBoxSlotGeometry(matchDetails, isTopTeam, onsideLimitY)
+
+  // 3. Identificar portador del balón
   const carrier = kickingTeam.players.find(p => p.hasBall)
-  const carrierID = carrier ? carrier.playerID : null
 
-  // 2. Construir AttackPlan con Roles Exclusivos (open-football model)
-  // BoxSlots: NearPost, PenaltySpot, FarPost, CutbackEdge
-  const boxSlots = {
-    nearPost: null,
-    penaltySpot: null,
-    farPost: null,
-    cutbackEdge: null
-  }
-  const slotTargets = {
-    nearPost: [
-      ballOnLeftWing ? 275 : (ballOnRightWing ? 405 : (pitchWidth / 2 - 35)),
-      clampOnsideY(isTopTeam ? pitchHeight - 74 : 74)
-    ],
-    penaltySpot: [
-      340,
-      clampOnsideY(isTopTeam ? pitchHeight - 110 : 110)
-    ],
-    farPost: [
-      ballOnLeftWing ? 425 : (ballOnRightWing ? 255 : (pitchWidth / 2 + 35)),
-      clampOnsideY(isTopTeam ? pitchHeight - 88 : 88)
-    ],
-    cutbackEdge: [
-      ballOnLeftWing ? 365 : 315,
-      clampOnsideY(isTopTeam ? pitchHeight - 165 : 165)
-    ]
-  }
-
-  // Asignar candidatos a los BoxSlots:
+  // 4. NearSupport (Apoyo cercano para descargar el juego)
   const availableAttackers = kickingTeam.players.filter(
-    p => common.isOnPitch(p) && p.position !== 'GK' && p.playerID !== carrierID
+    p => common.isOnPitch(p) && p.position !== 'GK' && p.playerID !== carrier?.playerID
   )
-
-  const stPlayers = availableAttackers.filter(p => (p.tacticalRole || p.position) === 'ST')
-  const camPlayers = availableAttackers.filter(p => (p.tacticalRole || p.position) === 'CAM')
-  const wingers = availableAttackers.filter(p => ['LM', 'RM'].includes(p.tacticalRole || p.position))
-
-  // PenaltySpot (9 de área principal)
-  if (stPlayers.length > 0) {
-    boxSlots.penaltySpot = stPlayers[0]
-  }
-  // CutbackEdge (CAM / Enganche o volante con llegada)
-  if (camPlayers.length > 0) {
-    boxSlots.cutbackEdge = camPlayers[0]
-  } else if (stPlayers.length > 1) {
-    boxSlots.cutbackEdge = stPlayers[1]
-  }
-  // NearPost & FarPost
-  for (const w of wingers) {
-    const isWingerOnBallFlank = (ballOnLeftWing && w.originPOS[0] < pitchWidth / 2) ||
-                               (ballOnRightWing && w.originPOS[0] >= pitchWidth / 2)
-    if (isWingerOnBallFlank && !boxSlots.nearPost) {
-      boxSlots.nearPost = w
-    } else if (!isWingerOnBallFlank && !boxSlots.farPost) {
-      boxSlots.farPost = w
-    }
-  }
-  if (!boxSlots.nearPost && stPlayers.length > 1 && boxSlots.cutbackEdge !== stPlayers[1]) {
-    boxSlots.nearPost = stPlayers[1]
-  }
-
-  // Guardar en kickingTeam.attackPlan para acceso diagnóstico/evaluación
-  kickingTeam.attackPlan = {
-    nearPostID: boxSlots.nearPost?.playerID,
-    penaltySpotID: boxSlots.penaltySpot?.playerID,
-    farPostID: boxSlots.farPost?.playerID,
-    cutbackEdgeID: boxSlots.cutbackEdge?.playerID
-  }
-
-  // 3. NearSupport (Apoyo cercano para descargar el juego)
   let nearSupportPlayer = null
   let minSupportDist = 999
   if (carrier) {
     for (const p of availableAttackers) {
       const role = p.tacticalRole || p.position
-      if (['CM', 'CDM', 'LB', 'RB'].includes(role) && p !== boxSlots.cutbackEdge) {
+      const isAssignedSlot = Object.values(boxSlots).includes(p.playerID)
+      if (['CM', 'CDM', 'LB', 'RB'].includes(role) && !isAssignedSlot) {
         const d = common.distance(p.currentPOS, carrier.currentPOS)
         if (d < minSupportDist && d > 20) {
           minSupportDist = d
@@ -1115,19 +1006,19 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
     }
   }
 
-  // 4. RestDefence (defensa de reposo para custodiar la contra)
+  // 5. RestDefence (defensa de reposo para custodiar la contra)
   const onLeftFlank = ball.position[0] < pitchWidth / 2
   const oppositeFullbackRole = onLeftFlank ? 'RB' : 'LB'
   const restDefencePlayers = availableAttackers.filter(p => {
     const role = p.tacticalRole || p.position
-    return role === 'CB' || role === oppositeFullbackRole
+    return role === 'CB' || role === 'DFC' || role === 'LÍBERO' || role === 'STOP I' || role === 'STOP D' || role === oppositeFullbackRole
   })
 
   let activeDiagonalRunners = kickingTeam.players.filter(
     p => common.isOnPitch(p) && p.offBallRun && p.offBallRun.untilIteration > currentIter && p.offBallRun.type === 'diagonalInBehind'
   ).length
 
-  // 5. Asignar intentPOS a cada jugador
+  // 6. Asignar intentPOS a cada jugador
   for (const player of kickingTeam.players) {
     if (!common.isOnPitch(player) || player.position === 'GK') continue
     if (player.hasBall) {
@@ -1135,8 +1026,7 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
       continue
     }
 
-    const baseX = player.originPOS[0]
-    const baseY = player.originPOS[1]
+    const anchor = anchors[player.playerID] || player.originPOS
     const role = player.tacticalRole || player.position
     const isWide = ['LM', 'RM', 'LB', 'RB'].includes(role)
     const hasTrait = (t) => Array.isArray(player.traits) && player.traits.includes(t)
@@ -1144,53 +1034,45 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
     // A. ¿Ocupa un BoxSlot en situación de ataque o centro?
     let assignedSlotKey = null
     if (isAttackingPhase) {
-      if (boxSlots.nearPost && boxSlots.nearPost.playerID === player.playerID) assignedSlotKey = 'nearPost'
-      else if (boxSlots.penaltySpot && boxSlots.penaltySpot.playerID === player.playerID) assignedSlotKey = 'penaltySpot'
-      else if (boxSlots.farPost && boxSlots.farPost.playerID === player.playerID) assignedSlotKey = 'farPost'
-      else if (boxSlots.cutbackEdge && boxSlots.cutbackEdge.playerID === player.playerID) assignedSlotKey = 'cutbackEdge'
+      for (const [k, pid] of Object.entries(boxSlots)) {
+        if (pid === player.playerID) {
+          assignedSlotKey = k
+          break
+        }
+      }
     }
 
-    if (assignedSlotKey) {
-      const finishTarget = slotTargets[assignedSlotKey]
-      // Wait Target vs Finish Target: si la pelota todavía está a más de 250px del arco rival,
-      // esperan en la puerta del área (wait_target) para no quedar en offside ni estáticos
-      if (distBallToGoalY > 250 && !wingCrossSituation) {
-        const waitDepth = assignedSlotKey === 'cutbackEdge' ? 215 : 185
-        const waitY = clampOnsideY(isTopTeam ? pitchHeight - waitDepth : waitDepth)
-        player.intentPOS = [finishTarget[0], waitY]
+    if (assignedSlotKey && slotGeom[assignedSlotKey]) {
+      const geom = slotGeom[assignedSlotKey]
+      // Wait Target vs Finish Target: si la pelota todavía está lejos de la zona de centro o definición,
+      // esperan en la puerta del área (wait_target) para llegar en carrera y no en estático (open-football model)
+      if (distBallToGoalY > 240 && !wingCrossSituation) {
+        player.intentPOS = [geom.wait[0], geom.wait[1]]
       } else {
-        // En fase de definición rompen hacia su slot
+        // En fase de definición rompen hacia su punto de remate (finish_target)
         player.offBallRun = {
           type: 'boxSlotEntry',
           slot: assignedSlotKey,
-          targetX: finishTarget[0],
-          targetY: finishTarget[1],
+          targetX: geom.finish[0],
+          targetY: geom.finish[1],
           untilIteration: currentIter + 6
         }
-        player.intentPOS = [finishTarget[0], finishTarget[1]]
+        player.intentPOS = [geom.finish[0], geom.finish[1]]
       }
       continue
     }
 
     // B. NearSupport: posicionarse de apoyo unos 30-45px detrás de la pelota
     if (nearSupportPlayer && nearSupportPlayer.playerID === player.playerID && carrier) {
-      const supportX = Math.max(40, Math.min(pitchWidth - 40, carrier.currentPOS[0] + (carrier.currentPOS[0] < pitchWidth / 2 ? 15 : -15)))
+      const supportX = Math.max(40, Math.min(pitchWidth - 40, carrier.currentPOS[0] + (carrier.currentPOS[0] < pitchWidth / 2 ? 18 : -18)))
       const supportY = clampOnsideY(carrier.currentPOS[1] - dir * 35)
       player.intentPOS = [supportX, supportY]
       continue
     }
 
-    // C. RestDefence: mantener bloque de seguridad
+    // C. RestDefence: mantener ancla compacta dentro del TeamShape
     if (restDefencePlayers.some(rp => rp.playerID === player.playerID)) {
-      const restDepthFromOwnGoal = (kickingTeam.mentality === 'offensive' ? 240 : (kickingTeam.mentality === 'defensive' ? 140 : 190))
-      const safeOwnY = isTopTeam
-        ? Math.max(60, Math.min(pitchHeight - 120, restDepthFromOwnGoal))
-        : Math.min(pitchHeight - 60, Math.max(120, pitchHeight - restDepthFromOwnGoal))
-      const compressX = (ball.position[0] - baseX) * (isWide ? 0.08 : 0.16)
-      player.intentPOS = [
-        Math.max(45, Math.min(pitchWidth - 45, baseX + compressX)),
-        safeOwnY
-      ]
+      player.intentPOS = [anchor[0], anchor[1]]
       continue
     }
 
@@ -1204,7 +1086,7 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
       const rawLatY = isTopTeam ? (pitchHeight - targetDepth) : targetDepth
       const latY = clampOnsideY(rawLatY)
       const flankMargin = styleCfg.id === 'wingPlay' || hasLateralOfensivo ? 50 : 66
-      const latX = baseX < pitchWidth / 2 ? flankMargin : (pitchWidth - flankMargin)
+      const latX = anchor[0] < pitchWidth / 2 ? flankMargin : (pitchWidth - flankMargin)
       player.intentPOS = [latX, latY]
       continue
     }
@@ -1217,36 +1099,18 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
     }
     player.offBallRun = null
 
-    // F. Posición táctica base con amplitud (WideHolders)
-    const widthFactor = isWide ? 0.0 : (styleCfg.id === 'wingPlay' ? 0.04 : 0.08)
-    const compressX = (ball.position[0] - baseX) * widthFactor
-    let tacticalX = baseX + compressX
-    if (isWide) {
-      const leftSide = baseX < pitchWidth / 2
-      tacticalX = leftSide ? Math.min(65, baseX) : Math.max(pitchWidth - 65, baseX)
-    }
-
-    const isOffensive = kickingTeam.mentality === 'offensive'
-    const isDefensive = kickingTeam.mentality === 'defensive'
-    let roleAdvance = isOffensive ? 245 : (isDefensive ? 135 : 195)
-    if (role === 'LM' || role === 'RM') roleAdvance = hasTrait('velocista_banda') ? 315 : (isOffensive ? 300 : 280)
-    else if (role === 'CM') roleAdvance = isOffensive ? 280 : (isDefensive ? 195 : 240)
-    const ballShift = (ball.position[1] - baseY) * 0.48
-    const defaultY = clampOnsideY(baseY + (dir * roleAdvance) + ballShift)
-    const defaultX = common.upToMax(common.upToMin(tacticalX, 28), pitchWidth - 28)
-
-    // G. Evaluar inicio de un nuevo Desmarque Dinámico (Off-Ball Run)
+    // F. Evaluar inicio de un nuevo Desmarque Dinámico (Off-Ball Run)
     const roll = common.getRandomNumber(1, 100)
     const diagonalChance = Math.round(14 * (styleCfg.throughBoost || 1.1))
     const overlapChance = Math.round(16 * (styleCfg.switchBoost || 1.1))
     const showChance = styleCfg.id === 'tikiTaka' ? 22 : 13
 
     if ((role === 'ST' || role === 'LM' || role === 'RM') && activeDiagonalRunners < 2 && roll <= diagonalChance) {
-      const rawDeepY = isTopTeam ? Math.max(defaultY + 75, onsideLimitY - 4) : Math.min(defaultY - 75, onsideLimitY + 4)
+      const rawDeepY = isTopTeam ? Math.max(anchor[1] + 75, onsideLimitY - 4) : Math.min(anchor[1] - 75, onsideLimitY + 4)
       const runTargetY = clampOnsideY(rawDeepY)
       const preferredX = role === 'ST'
-        ? findOpenPocketX(defaultX, defendingTeam, runTargetY, pitchWidth)
-        : (baseX < pitchWidth / 2 ? common.getRandomNumber(115, 220) : common.getRandomNumber(pitchWidth - 220, pitchWidth - 115))
+        ? findOpenPocketX(anchor[0], defendingTeam, runTargetY, pitchWidth)
+        : (anchor[0] < pitchWidth / 2 ? common.getRandomNumber(115, 220) : common.getRandomNumber(pitchWidth - 220, pitchWidth - 115))
       player.offBallRun = {
         type: 'diagonalInBehind',
         targetX: preferredX,
@@ -1259,7 +1123,7 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
     }
 
     if (isWide && roll > diagonalChance && roll <= (diagonalChance + overlapChance)) {
-      const flankX = baseX < pitchWidth / 2 ? common.getRandomNumber(42, 78) : common.getRandomNumber(pitchWidth - 78, pitchWidth - 42)
+      const flankX = anchor[0] < pitchWidth / 2 ? common.getRandomNumber(42, 78) : common.getRandomNumber(pitchWidth - 78, pitchWidth - 42)
       const advanceFromBall = dir * common.getRandomNumber(90, 175)
       const flankY = clampOnsideY(ball.position[1] + advanceFromBall)
       player.offBallRun = {
@@ -1274,7 +1138,7 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
 
     if ((role === 'CAM' || role === 'CM') && roll > (diagonalChance + overlapChance) && roll <= (diagonalChance + overlapChance + showChance)) {
       const supportY = clampOnsideY(ball.position[1] + dir * common.getRandomNumber(55, 115))
-      const pocketX = findOpenPocketX(defaultX, defendingTeam, supportY, pitchWidth)
+      const pocketX = findOpenPocketX(anchor[0], defendingTeam, supportY, pitchWidth)
       player.offBallRun = {
         type: 'showBetweenLines',
         targetX: pocketX,
@@ -1285,6 +1149,7 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
       continue
     }
 
-    player.intentPOS = [defaultX, defaultY]
+    // Por defecto: posicionado en su ancla del bloque deslizante TeamShape
+    player.intentPOS = [anchor[0], anchor[1]]
   }
 }

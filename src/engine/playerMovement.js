@@ -3,6 +3,7 @@ import * as ballMovement from './ballMovement.js'
 import * as setPositions from './setPositions.js'
 import * as actions from './actions.js'
 import { isCaptainOnPitch, updatePlayerEffectiveSkills } from './modifiers.js'
+import { calculateInterceptMovement, steerTowardsTarget } from './steering.js'
 
 export function decideMovement(closestPlayer, team, opp, matchDetails) {
   const { position, withPlayer, withTeam } = matchDetails.ball
@@ -492,7 +493,13 @@ export function getMovement(player, action, opposition, ballX, ballY, matchDetai
     return getTackleMovement(ballX, ballY)
   }
   if (action === 'intercept') {
-    return getInterceptMovement(player, opposition, position, matchDetails.pitchSize)
+    const isSprinting = player.isSprinting || (player.sprintMomentum || 0) > 0.35
+    let maxSpeed = isSprinting
+      ? (player.skill.agility >= 86 ? 8.5 : 7.0)
+      : (player.skill.agility >= 80 ? 3.6 : 2.8)
+    const tempo = team?.coachState?.coefficients?.tempoMultiplier || 1.0
+    maxSpeed *= tempo
+    return calculateInterceptMovement(player, matchDetails, maxSpeed)
   }
   if (action === 'run') {
     return getRunMovement(matchDetails, player, ballX, ballY, team, opposition)
@@ -510,75 +517,6 @@ function getTackleMovement(ballX, ballY) {
   if (ballY > 0) move[1] = -Math.min(4, ballY)
   else if (ballY < 0) move[1] = Math.min(4, -ballY)
   return move
-}
-
-function getInterceptMovement(player, opposition, ballPosition, pitchSize) {
-  let move = [0, 0]
-  const intcptPos = getInterceptPosition(player.currentPOS, opposition, ballPosition, pitchSize)
-  const intcptPosX = player.currentPOS[0] - intcptPos[0]
-  const intcptPosY = player.currentPOS[1] - intcptPos[1]
-  if (intcptPosX === 0) {
-    if (intcptPosY === 0) move = [0, 0]
-    else if (intcptPosY < 0) move = [0, 1]
-    else if (intcptPosY > 0) move = [0, -1]
-  } else if (intcptPosY === 0) {
-    if (intcptPosX < 0) move = [1, 0]
-    else if (intcptPosX > 0) move = [-1, 0]
-  } else if (intcptPosX < 0 && intcptPosY < 0) move = [1, 1]
-  else if (intcptPosX > 0 && intcptPosY > 0) move = [-1, -1]
-  else if (intcptPosX > 0 && intcptPosY < 0) move = [-1, 1]
-  else if (intcptPosX < 0 && intcptPosY > 0) move = [1, -1]
-  return move
-}
-
-function getInterceptPosition(currentPOS, opposition, ballPosition, pitchSize) {
-  const BallPlyTraj = getInterceptTrajectory(opposition, ballPosition, pitchSize)
-  const intcptPos = getClosestTrajPosition(currentPOS, BallPlyTraj, false)
-  if (JSON.stringify(intcptPos) === JSON.stringify(currentPOS)) {
-    const index = getClosestTrajPosition(currentPOS, BallPlyTraj, true)
-    if (index > 0) return BallPlyTraj[index - 1]
-  }
-  return intcptPos
-}
-
-function getClosestTrajPosition(playerPos, BallPlyTraj, getIndex) {
-  let intcptPos = playerPos
-  let theDiff = 10000000
-  let index = 0
-  for (const thisPos of BallPlyTraj) {
-    const xDiff = Math.abs(playerPos[0] - thisPos[0])
-    const yDiff = Math.abs(playerPos[1] - thisPos[1])
-    const totalDiff = xDiff + yDiff
-    if (totalDiff < theDiff) {
-      theDiff = totalDiff
-      intcptPos = thisPos
-    }
-    if (JSON.stringify(thisPos) === JSON.stringify(playerPos) && getIndex) return index
-    index++
-  }
-  return intcptPos
-}
-
-function getInterceptTrajectory(opposition, ballPosition, pitchSize) {
-  const [pitchWidth, pitchHeight] = pitchSize
-  const playerInformation = setPositions.closestPlayerToPosition(null, opposition, ballPosition)
-  const interceptPlayer = playerInformation.thePlayer
-  if (!interceptPlayer || !common.isOnPitch(interceptPlayer)) return [ballPosition]
-  const targetX = pitchWidth / 2
-  const targetY = (interceptPlayer.originPOS[1] < pitchHeight / 2) ? pitchHeight : 0
-  const moveX = targetX - interceptPlayer.currentPOS[0]
-  const moveY = targetY - interceptPlayer.currentPOS[1]
-  const highNum = Math.max(1, Math.abs(moveX) <= Math.abs(moveY) ? Math.abs(moveY) : Math.abs(moveX))
-  const xDiff = moveX / highNum
-  const yDiff = moveY / highNum
-  const POI = [interceptPlayer.currentPOS]
-  for (let i = 0; i < Math.round(highNum); i++) {
-    const lastArrayPOS = POI.length - 1
-    const lastXPOS = POI[lastArrayPOS][0]
-    const lastYPOS = POI[lastArrayPOS][1]
-    POI.push([common.round(lastXPOS + xDiff, 0), common.round(lastYPOS + yDiff, 0)])
-  }
-  return POI
 }
 
 /**
@@ -688,51 +626,6 @@ function getSmartDribbleMove(matchDetails, player, step, opposition, team) {
   return bestMove
 }
 
-/**
- * Desplazamiento vectorial suave hacia un punto objetivo con desaceleración Arrive y separación anti-amontonamiento.
- */
-function steerTowardsTarget(player, targetPOS, step, team, pitchSize) {
-  const dx = targetPOS[0] - player.currentPOS[0]
-  const dy = targetPOS[1] - player.currentPOS[1]
-  const dist = Math.sqrt(dx * dx + dy * dy)
-  if (dist < 2) return [0, 0]
-
-  // Desaceleración suave (Arrive Steering inspirado en open-football):
-  // Si está cerca del destino (< 18px), desacelera cuadráticamente para llegar asentado y perfilado sin jittering
-  let effectiveStep = step
-  if (dist < 18) {
-    const ratio = dist / 18
-    effectiveStep = Math.max(0.6, step * ratio * ratio)
-  }
-
-  let vx = (dx / dist) * Math.min(effectiveStep, dist)
-  let vy = (dy / dist) * Math.min(effectiveStep, dist)
-
-  // Fuerza de separación para evitar aglutinamiento ("racimo de uvas") y mantener líneas de pase abiertas (36px)
-  if (team && Array.isArray(team.players)) {
-    for (const mate of team.players) {
-      if (!common.isOnPitch(mate) || mate.playerID === player.playerID) continue
-      const mx = player.currentPOS[0] - mate.currentPOS[0]
-      const my = player.currentPOS[1] - mate.currentPOS[1]
-      const mDist = Math.sqrt(mx * mx + my * my)
-      if (mDist > 0 && mDist < 36) {
-        const push = ((36 - mDist) / 36) * 2.2
-        vx += (mx / mDist) * push
-        vy += (my / mDist) * push
-      }
-    }
-  }
-
-  const finalDx = Math.max(-step, Math.min(step, Math.round(vx)))
-  const finalDy = Math.max(-step, Math.min(step, Math.round(vy)))
-  const nextX = player.currentPOS[0] + finalDx
-  const nextY = player.currentPOS[1] + finalDy
-  return [
-    (nextX >= 8 && nextX <= pitchSize[0] - 8) ? finalDx : 0,
-    (nextY >= 8 && nextY <= pitchSize[1] - 8) ? finalDy : 0
-  ]
-}
-
 export function getRunMovement(matchDetails, player, ballX, ballY, team, opposition) {
   player.isSprinting = false
   player.sprintMomentum = Math.max(0, (player.sprintMomentum || 0) - 0.25)
@@ -744,6 +637,8 @@ export function getRunMovement(matchDetails, player, ballX, ballY, team, opposit
     if (matchDetails.iterationCount % 35 === 0) updatePlayerEffectiveSkills(player, team)
   }
   let step = player.skill.agility >= 80 ? 3 : 2
+  const tempo = team?.coachState?.coefficients?.tempoMultiplier || 1.0
+  step *= tempo
   if (player.hasBall) {
     return getSmartDribbleMove(matchDetails, player, step, opposition, team)
   }
@@ -783,9 +678,10 @@ export function getSprintMovement(matchDetails, player, ballX, ballY, team, oppo
   else if (player.skill.agility >= 76) baseStep = 7.5
   else if (player.skill.agility < 65) baseStep = 5.5
 
-  const step = player.fitness < 45
+  const tempo = team?.coachState?.coefficients?.tempoMultiplier || 1.0
+  const step = (player.fitness < 45
     ? Math.max(3.5, baseStep * (0.60 + ((player.fitness - 20) / 25) * 0.40))
-    : baseStep
+    : baseStep) * tempo
 
   if (player.hasBall) {
     return getSmartDribbleMove(matchDetails, player, step, opposition, team)

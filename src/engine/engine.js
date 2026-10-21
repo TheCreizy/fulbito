@@ -7,6 +7,7 @@ import * as validate from './validate.js'
 import * as actions from './actions.js'
 import { updateTeamEffectiveSkills, updatePlayerEffectiveSkills } from './modifiers.js'
 import { getFormationCoordinates } from '../data/formations.js'
+import { updateTeamCoachDirectives } from './coachAI.js'
 
 export async function initiateGame(team1, team2, pitchDetails) {
   validate.validateArguments(team1, team2, pitchDetails)
@@ -54,6 +55,7 @@ export async function playIteration(matchDetails) {
   }
 
   matchDetails.iterationCount = (matchDetails.iterationCount || 0) + 1
+  updateTeamCoachDirectives(matchDetails)
   matchDetails.iterationLog = []
   matchDetails.iterationLog.push(`Ball start position: ${matchDetails.ball.position}`)
 
@@ -173,7 +175,10 @@ export function applyLiveTactics(matchDetails, teamKey, { formationId, mentality
   const currentSide = (team.players[0].originPOS[1] < pitchHeight / 2) ? 'top' : 'bottom'
 
   if (formationId) team.formation = formationId
-  if (mentalityId) team.mentality = mentalityId
+  if (mentalityId) {
+    team.mentality = mentalityId
+    team.manualMentalityLock = true
+  }
   if (playStyleId) team.playStyle = playStyleId
   if (setPieces) team.setPieces = { ...team.setPieces, ...setPieces }
 

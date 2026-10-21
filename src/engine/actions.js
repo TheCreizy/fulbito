@@ -150,11 +150,58 @@ export function scanCarrierEnvironment(matchDetails, player, team, opposition) {
 }
 
 export function evaluateCarrierDecision(matchDetails, player, team, opposition) {
+  const env = scanCarrierEnvironment(matchDetails, player, team, opposition)
+  const baseDecision = computeBaseCarrierDecision(matchDetails, player, team, opposition, env)
+  return applyCoachDirectivesToDecision(baseDecision, team, env, player)
+}
+
+function applyCoachDirectivesToDecision(decision, team, env, player) {
+  if (player?.position === 'GK') return decision
+  const coachCoeffs = team?.coachState?.coefficients
+  if (!coachCoeffs) return decision
+
+  const res = [...decision]
+  // 1. Modulación de remate por shootingReluctance (open-football model)
+  if (coachCoeffs.shootingReluctance > 0) {
+    if (res[0] > 0 && env.distToGoalY > 95) {
+      const reduction = Math.round(res[0] * coachCoeffs.shootingReluctance)
+      res[0] = Math.max(0, res[0] - reduction)
+      res[2] += Math.round(reduction * 0.7) // Pase de circulación
+      res[7] += Math.round(reduction * 0.3) // Mantener / esperar
+    }
+  } else if (coachCoeffs.shootingReluctance < 0) {
+    if (env.distToGoalY < 260 && !env.shotBlocked) {
+      const shootBoost = Math.abs(Math.round(coachCoeffs.shootingReluctance * 30))
+      res[0] += shootBoost
+      if (res[2] >= shootBoost) res[2] -= shootBoost
+    }
+  }
+
+  // 2. Modulación de pases seguros vs verticalidad por backwardPassPreference
+  if (coachCoeffs.backwardPassPreference > 0) {
+    if (res[8] > 12) {
+      const transfer = Math.round(res[8] * Math.min(0.55, coachCoeffs.backwardPassPreference * 0.65))
+      res[8] -= transfer
+      res[2] += Math.round(transfer * 0.7)
+      res[7] += Math.round(transfer * 0.3)
+    }
+  } else if (coachCoeffs.backwardPassPreference < 0) {
+    if (res[2] > 20 && env.distToGoalY < 360) {
+      const verticalPush = Math.round(res[2] * Math.abs(coachCoeffs.backwardPassPreference) * 0.45)
+      res[2] -= verticalPush
+      res[8] += Math.round(verticalPush * 0.6)
+      res[1] += Math.round(verticalPush * 0.4)
+    }
+  }
+
+  return res
+}
+
+function computeBaseCarrierDecision(matchDetails, player, team, opposition, env) {
   const [pitchWidth, pitchHeight] = matchDetails.pitchSize
   const { position, currentPOS, skill } = player
   const role = player.tacticalRole || position
   const styleCfg = getPlayStyleConfig(team?.playStyle, team?.formation)
-  const env = scanCarrierEnvironment(matchDetails, player, team, opposition)
   const carrierTicks = (matchDetails.ball.lastCarrierID === player.playerID) ? (matchDetails.ball.carrierTicks || 1) : 1
 
   const hasTrait = (t) => Array.isArray(player.traits) && player.traits.includes(t)
