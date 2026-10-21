@@ -515,17 +515,38 @@ function tballScoreOption(p, attackingTop, ballPos, maxDistance, styleCfg) {
   let score = 0
   const d = common.distance(ballPos, p.position)
   const forward = attackingTop ? ballPos[1] - p.position[1] : p.position[1] - ballPos[1]
-  score += forward * 1.9
-  score += Math.min(55, p.minOppDist || 25) * 1.35
-  if (p.offBallRun) {
-    score += 75 * (styleCfg?.throughBoost || 1.2)
+  // Progreso vertical equilibrado (no monopoilzar con forward * 1.9)
+  score += forward * 1.15
+  score += Math.min(50, p.minOppDist || 25) * 1.4
+
+  const isOverlapRun = p.offBallRun?.type === 'overlapFlank'
+  if (isOverlapRun) {
+    // Máxima prioridad al desdoble del lateral/extremo hacia el fondo (open-football FlankPlay)
+    score += Math.round(90 * (styleCfg?.switchBoost || 1.25))
+  } else if (p.offBallRun) {
+    score += Math.round(55 * (styleCfg?.throughBoost || 1.15))
   }
-  if (!p.isMarked) score += 45
+
+  // Penalizar fuertemente pases forzados al 9 entre los centrales si está marcado
+  if (p.role === 'ST' && (p.isMarked || (p.minOppDist != null && p.minOppDist < 22))) {
+    score -= 75
+  } else if (!p.isMarked) {
+    score += 45
+  }
+
   if (p.laneBlocked && d < 210) score -= 85
+
+  // Bonificación por apertura a las bandas
   if (p.position[0] < 170 || p.position[0] > 510) {
-    score += styleCfg?.id === 'wingPlay' ? 42 : 26
+    score += styleCfg?.id === 'wingPlay' ? 65 : 42
   }
-  if (['ST', 'LM', 'RM', 'CAM'].includes(p.role)) score += 25
+
+  if (['LM', 'RM', 'LB', 'RB'].includes(p.role)) {
+    score += styleCfg?.id === 'wingPlay' ? 35 : 20
+  } else if (['ST', 'CAM'].includes(p.role)) {
+    score += 20
+  }
+
   return score
 }
 
@@ -1172,16 +1193,18 @@ export function ballCrossed(matchDetails, team, player) {
     boxAttackers.sort((a, b) => {
       const distA = aTop ? a.position[1] : (pitchHeight - a.position[1])
       const distB = aTop ? b.position[1] : (pitchHeight - b.position[1])
-      const scoreA = (220 - distA) + Math.min(45, a.minOppDist || 20) * 1.4 + (a.offBallRun?.type === 'boxCrash' ? 45 : 0)
-      const scoreB = (220 - distB) + Math.min(45, b.minOppDist || 20) * 1.4 + (b.offBallRun?.type === 'boxCrash' ? 45 : 0)
+      const slotBonusA = a.offBallRun?.type === 'boxSlotEntry' ? 65 : (a.offBallRun?.type === 'boxCrash' ? 45 : 0)
+      const slotBonusB = b.offBallRun?.type === 'boxSlotEntry' ? 65 : (b.offBallRun?.type === 'boxCrash' ? 45 : 0)
+      const scoreA = (220 - distA) + Math.min(45, a.minOppDist || 20) * 1.5 + slotBonusA
+      const scoreB = (220 - distB) + Math.min(45, b.minOppDist || 20) * 1.5 + slotBonusB
       return scoreB - scoreA
     })
     selectedAttacker = boxAttackers[0]
     targetX = selectedAttacker.offBallRun?.targetX || selectedAttacker.position[0]
-    const rawTargetY = selectedAttacker.offBallRun?.targetY || (selectedAttacker.position[1] + dir * 18)
+    const rawTargetY = selectedAttacker.offBallRun?.targetY || (selectedAttacker.position[1] + dir * 16)
     targetY = aTop
-      ? Math.max(42, Math.min(155, rawTargetY))
-      : Math.min(pitchHeight - 42, Math.max(pitchHeight - 155, rawTargetY))
+      ? Math.max(38, Math.min(160, rawTargetY))
+      : Math.min(pitchHeight - 38, Math.max(pitchHeight - 160, rawTargetY))
   } else {
     // Punto penal / corazón del área si nadie llegó todavía
     targetX = (player.currentPOS[0] < (pitchWidth / 2))

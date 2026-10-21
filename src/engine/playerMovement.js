@@ -54,13 +54,13 @@ export function decideMovement(closestPlayer, team, opp, matchDetails) {
         const [pitchWidth, pitchHeight] = matchDetails.pitchSize
         const attackingTop = thisPlayer.originPOS[1] > pitchHeight / 2
         const distToGoalY = attackingTop ? thisPlayer.currentPOS[1] : (pitchHeight - thisPlayer.currentPOS[1])
-        const isWide = thisPlayer.currentPOS[0] < 168 || thisPlayer.currentPOS[0] > pitchWidth - 168
-        const inCornerZone = distToGoalY < 135 && isWide
+        const isWide = thisPlayer.currentPOS[0] < 210 || thisPlayer.currentPOS[0] > pitchWidth - 210
+        const inCornerZone = distToGoalY < 155 && isWide
         const mustRelease = inCornerZone || (nearbyOpps >= 2 && matchDetails.ball.carrierTicks >= 5) ||
-          (matchDetails.ball.carrierTicks >= 20 && minOppDist < 35)
+          (matchDetails.ball.carrierTicks >= 18 && minOppDist < 35)
         if (mustRelease && (action === 'run' || action === 'sprint')) {
-          if (distToGoalY < 220 && isWide) action = 'cross'
-          else if (distToGoalY < 160 && common.isBetween(thisPlayer.currentPOS[0], 185, pitchWidth - 185)) action = 'shoot'
+          if (distToGoalY < 240 && isWide) action = 'cross'
+          else if (distToGoalY < 160 && common.isBetween(thisPlayer.currentPOS[0], 195, pitchWidth - 195)) action = 'shoot'
           else action = 'pass'
           matchDetails.ball.carrierTicks = 0
         }
@@ -640,6 +640,12 @@ export function getRunMovement(matchDetails, player, ballX, ballY, team, opposit
   const tempo = team?.coachState?.coefficients?.tempoMultiplier || 1.0
   step *= tempo
   if (player.hasBall) {
+    const carrierTicks = (matchDetails.ball.lastCarrierID === player.playerID) ? (matchDetails.ball.carrierTicks || 1) : 1
+    const distToGoalY = (player.originPOS[1] > matchDetails.pitchSize[1] / 2) ? player.currentPOS[1] : (matchDetails.pitchSize[1] - player.currentPOS[1])
+    // Temporización y escaneo (open-football model): ritmo pausado en posesión para esperar desmarques
+    if (carrierTicks <= 4 && distToGoalY > 210) {
+      step = Math.max(0.8, step * 0.5)
+    }
     return getSmartDribbleMove(matchDetails, player, step, opposition, team)
   }
 

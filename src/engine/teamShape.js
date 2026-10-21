@@ -288,18 +288,95 @@ export function getBoxSlotGeometry(matchDetails, isTopTeam, onsideLimitY) {
  * Asigna los 4 BoxSlots de ataque y apoyos con Incumbency Bonus para evitar fluctuaciones
  * de roles entre jugadores durante la misma posesión.
  */
+/**
+ * Asigna los roles de ataque:
+ * 1. WidePlan: Hombres en la cal (touchline holders) y lateral desdoblando por fuera (overlap_runner)
+ * 2. BoxSlots: Los 4 corredores del área (nearPost, penaltySpot, farPost, cutbackEdge) con Incumbency Bonus
+ * Inspirado directamente en wide.rs y attack.rs de open-football-master.
+ */
 export function assignAttackPlanWithIncumbency(kickingTeam, defendingTeam, matchDetails, isTopTeam, onsideLimitY) {
+  const [pitchWidth, pitchHeight] = matchDetails.pitchSize
+  const ball = matchDetails.ball.position
+  const ballFlank = ball[0] < pitchWidth / 2 ? 'left' : 'right'
+  const distBallToGoalY = isTopTeam ? (pitchHeight - ball[1]) : ball[1]
+
   const carrier = kickingTeam.players.find(p => p.hasBall)
   const carrierID = carrier ? carrier.playerID : null
-  const prevSlots = kickingTeam.attackPlan?.boxSlots || {}
+  const prevAttackPlan = kickingTeam.attackPlan || {}
+  const prevSlots = prevAttackPlan.boxSlots || {}
+  const prevWidePlan = prevAttackPlan.widePlan || {}
 
   const available = kickingTeam.players.filter(
     p => common.isOnPitch(p) && p.position !== 'GK' && p.playerID !== carrierID
   )
 
+  // ── A. WIDE PLAN (Amplitud estructural: un hombre en cada banda tocando la cal) ──
+  // El holder mantiene la banda abierta para estirar la defensa.
+  let leftHolder = null
+  let rightHolder = null
+
+  // Candidatos izquierdos: ordenados por cercanía a la banda izquierda
+  const leftCandidates = available.filter(p => (p.originPOS[0] < pitchWidth / 2 || p.currentPOS[0] < pitchWidth / 2))
+  leftCandidates.sort((a, b) => {
+    const roleA = a.tacticalRole || a.position
+    const roleB = b.tacticalRole || b.position
+    const aWingBonus = (roleA === 'LM' || roleA === 'LB') ? -100 : 0
+    const bWingBonus = (roleB === 'LM' || roleB === 'LB') ? -100 : 0
+    const incA = prevWidePlan.leftHolderID === a.playerID ? -50 : 0
+    const incB = prevWidePlan.leftHolderID === b.playerID ? -50 : 0
+    return (a.currentPOS[0] + aWingBonus + incA) - (b.currentPOS[0] + bWingBonus + incB)
+  })
+  if (leftCandidates.length > 0) leftHolder = leftCandidates[0]
+
+  // Candidatos derechos: ordenados por cercanía a la banda derecha
+  const rightCandidates = available.filter(p => (p.originPOS[0] >= pitchWidth / 2 || p.currentPOS[0] >= pitchWidth / 2))
+  rightCandidates.sort((a, b) => {
+    const roleA = a.tacticalRole || a.position
+    const roleB = b.tacticalRole || b.position
+    const aWingBonus = (roleA === 'RM' || roleA === 'RB') ? -100 : 0
+    const bWingBonus = (roleB === 'RM' || roleB === 'RB') ? -100 : 0
+    const incA = prevWidePlan.rightHolderID === a.playerID ? -50 : 0
+    const incB = prevWidePlan.rightHolderID === b.playerID ? -50 : 0
+    return ((pitchWidth - a.currentPOS[0]) + aWingBonus + incA) - ((pitchWidth - b.currentPOS[0]) + bWingBonus + incB)
+  })
+  if (rightCandidates.length > 0) rightHolder = rightCandidates[0]
+
+  // ── B. OVERLAP RUNNER (Lateral de la banda del balón licenciado para desdoblar) ──
+  // En open-football: un jugador detrás del portador corre por fuera hacia el fondo
+  let overlapRunner = null
+  const coachInstruction = kickingTeam?.coachState?.instruction || 'Normal'
+  const allowOverlap = kickingTeam?.mentality !== 'defensive' && coachInstruction !== 'ParkTheBus' && distBallToGoalY < 420
+
+  if (allowOverlap) {
+    const targetFlankRole = ballFlank === 'left' ? 'LB' : 'RB'
+    const fullback = available.find(p => (p.tacticalRole || p.position) === targetFlankRole)
+    if (fullback) {
+      // Verificar que no sea el portador y esté en distancia de desdoble (~300px)
+      const distToBall = common.distance(fullback.currentPOS, ball)
+      if (distToBall < 340) {
+        overlapRunner = fullback
+      }
+    }
+  }
+
+  const widePlan = {
+    leftHolderID: leftHolder ? leftHolder.playerID : null,
+    rightHolderID: rightHolder ? rightHolder.playerID : null,
+    ballFlank,
+    overlapRunnerID: overlapRunner ? overlapRunner.playerID : null,
+    active: true
+  }
+
+  // ── C. BOX SLOTS (Los 4 corredores del área) ──
+  // IMPORTANTE (Open-Football model): El extremo o holder de la banda OPUESTA al balón
+  // (far_holder) NO queda retenido en la cal: ataca el segundo palo (FarPost)!
+  // Solo se reserva en la banda el holder de la banda DEL BALÓN.
+  const reservedWidePlayerID = ballFlank === 'left' ? widePlan.leftHolderID : widePlan.rightHolderID
+
   const slots = ['penaltySpot', 'cutbackEdge', 'nearPost', 'farPost']
   const assigned = {}
   const takenIDs = new Set()
+  if (overlapRunner) takenIDs.add(overlapRunner.playerID)
 
   const geom = getBoxSlotGeometry(matchDetails, isTopTeam, onsideLimitY)
 
@@ -312,6 +389,9 @@ export function assignAttackPlanWithIncumbency(kickingTeam, defendingTeam, match
 
     for (const p of available) {
       if (takenIDs.has(p.playerID)) continue
+      // El holder del lado del balón no entra al área antes del centro para fijar la marca
+      if (p.playerID === reservedWidePlayerID && slotKey !== 'cutbackEdge') continue
+
       const role = p.tacticalRole || p.position
       const distToTarget = common.distance(p.currentPOS, target)
 
@@ -320,18 +400,21 @@ export function assignAttackPlanWithIncumbency(kickingTeam, defendingTeam, match
         if (role === 'ST') score += 60
         if (role === 'CAM') score += 20
       } else if (slotKey === 'cutbackEdge') {
-        if (role === 'CAM') score += 60
-        if (role === 'CM' || role === 'ST') score += 30
+        if (role === 'CAM') score += 65
+        if (role === 'CM') score += 35
       } else if (slotKey === 'nearPost') {
         if (role === 'LM' || role === 'RM') score += 40
         if (role === 'ST') score += 35
       } else if (slotKey === 'farPost') {
-        if (role === 'LM' || role === 'RM') score += 50
-        if (role === 'ST') score += 25
+        // En open-football el extremo del lado ciego que cierra al segundo palo es el más peligroso
+        const isFarWing = (ballFlank === 'left' && (role === 'RM' || p.playerID === widePlan.rightHolderID)) ||
+                          (ballFlank === 'right' && (role === 'LM' || p.playerID === widePlan.leftHolderID))
+        if (isFarWing) score += 75
+        else if (role === 'LM' || role === 'RM') score += 45
+        if (role === 'ST') score += 20
       }
 
       // INCUMBENCY BONUS: mantener la asignación previa vale 45 puntos
-      // para evitar que dos jugadores intercambien carreras a mitad de ataque
       if (incumbentID && incumbentID === p.playerID) {
         score += 45
       }
@@ -350,6 +433,7 @@ export function assignAttackPlanWithIncumbency(kickingTeam, defendingTeam, match
 
   kickingTeam.attackPlan = {
     boxSlots: assigned,
+    widePlan,
     nearPostID: assigned.nearPost,
     penaltySpotID: assigned.penaltySpot,
     farPostID: assigned.farPost,

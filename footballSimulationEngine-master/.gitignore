@@ -1,6 +1,0 @@
-.DS_Store
-node_modules
-.history
-.nyc_output
-coverage
-temp.js

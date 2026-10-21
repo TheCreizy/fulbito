@@ -978,9 +978,10 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
   buildTeamShape(matchDetails, kickingTeam, true)
   const anchors = kickingTeam.teamShape?.anchors || {}
 
-  // 2. Construir AttackPlan con Roles Exclusivos e Incumbency Bonus
+  // 2. Construir AttackPlan con Roles Exclusivos e Incumbency Bonus (BoxSlots + WidePlan)
   const attackPlan = assignAttackPlanWithIncumbency(kickingTeam, defendingTeam, matchDetails, isTopTeam, onsideLimitY)
   const boxSlots = attackPlan.boxSlots || {}
+  const widePlan = attackPlan.widePlan || {}
   const slotGeom = getBoxSlotGeometry(matchDetails, isTopTeam, onsideLimitY)
 
   // 3. Identificar portador del balón
@@ -996,7 +997,8 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
     for (const p of availableAttackers) {
       const role = p.tacticalRole || p.position
       const isAssignedSlot = Object.values(boxSlots).includes(p.playerID)
-      if (['CM', 'CDM', 'LB', 'RB'].includes(role) && !isAssignedSlot) {
+      const isOverlapRunner = widePlan.overlapRunnerID === p.playerID
+      if (['CM', 'CDM', 'LB', 'RB'].includes(role) && !isAssignedSlot && !isOverlapRunner) {
         const d = common.distance(p.currentPOS, carrier.currentPOS)
         if (d < minSupportDist && d > 20) {
           minSupportDist = d
@@ -1062,7 +1064,34 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
       continue
     }
 
-    // B. NearSupport: posicionarse de apoyo unos 30-45px detrás de la pelota
+    // B. WidePlan: Overlap Runner (lateral desdoblando por la banda hacia el fondo)
+    if (widePlan.active && widePlan.overlapRunnerID === player.playerID) {
+      const isBallFlankLeft = widePlan.ballFlank === 'left'
+      const flankX = isBallFlankLeft ? 38 : (pitchWidth - 38)
+      const targetDepth = distBallToGoalY < 260 ? 85 : Math.max(120, distBallToGoalY - 60)
+      const rawFlankY = isTopTeam ? (pitchHeight - targetDepth) : targetDepth
+      const flankY = clampOnsideY(rawFlankY)
+      player.offBallRun = {
+        type: 'overlapFlank',
+        targetX: flankX,
+        targetY: flankY,
+        untilIteration: currentIter + 14
+      }
+      player.intentPOS = [flankX, flankY]
+      continue
+    }
+
+    // C. WidePlan: Touchline Holder (extremo/lateral manteniendo amplitud en la cal)
+    if (widePlan.active && (widePlan.leftHolderID === player.playerID || widePlan.rightHolderID === player.playerID)) {
+      const isLeft = widePlan.leftHolderID === player.playerID
+      const touchlineX = isLeft ? 42 : (pitchWidth - 42)
+      // Avanzar con la línea de la jugada manteniendo la línea de cal
+      const holderY = clampOnsideY(anchor[1])
+      player.intentPOS = [touchlineX, holderY]
+      continue
+    }
+
+    // D. NearSupport: posicionarse de apoyo unos 30-45px detrás de la pelota
     if (nearSupportPlayer && nearSupportPlayer.playerID === player.playerID && carrier) {
       const supportX = Math.max(40, Math.min(pitchWidth - 40, carrier.currentPOS[0] + (carrier.currentPOS[0] < pitchWidth / 2 ? 18 : -18)))
       const supportY = clampOnsideY(carrier.currentPOS[1] - dir * 35)
@@ -1070,28 +1099,13 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
       continue
     }
 
-    // C. RestDefence: mantener ancla compacta dentro del TeamShape
+    // E. RestDefence: mantener ancla compacta dentro del TeamShape
     if (restDefencePlayers.some(rp => rp.playerID === player.playerID)) {
       player.intentPOS = [anchor[0], anchor[1]]
       continue
     }
 
-    // D. Lateral ofensivo con libertad de subida en la banda del balón
-    if ((role === 'LB' || role === 'RB') && !restDefencePlayers.some(rp => rp.playerID === player.playerID)) {
-      const hasLateralOfensivo = hasTrait('lateral_ofensivo')
-      const isWingOrOffensive = styleCfg.id === 'wingPlay' || kickingTeam.mentality === 'offensive' || hasLateralOfensivo
-      const targetDepth = (distBallToGoalY < 380 || isWingOrOffensive)
-        ? (hasLateralOfensivo ? 155 : 205)
-        : Math.max(220, distBallToGoalY + 55)
-      const rawLatY = isTopTeam ? (pitchHeight - targetDepth) : targetDepth
-      const latY = clampOnsideY(rawLatY)
-      const flankMargin = styleCfg.id === 'wingPlay' || hasLateralOfensivo ? 50 : 66
-      const latX = anchor[0] < pitchWidth / 2 ? flankMargin : (pitchWidth - flankMargin)
-      player.intentPOS = [latX, latY]
-      continue
-    }
-
-    // E. Mantener desmarques activos previos
+    // F. Mantener desmarques activos previos
     if (player.offBallRun && player.offBallRun.untilIteration > currentIter) {
       const safeRunY = clampOnsideY(player.offBallRun.targetY)
       player.intentPOS = [player.offBallRun.targetX, safeRunY]
@@ -1099,7 +1113,7 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
     }
     player.offBallRun = null
 
-    // F. Evaluar inicio de un nuevo Desmarque Dinámico (Off-Ball Run)
+    // G. Evaluar inicio de un nuevo Desmarque Dinámico complementario (Off-Ball Run)
     const roll = common.getRandomNumber(1, 100)
     const diagonalChance = Math.round(14 * (styleCfg.throughBoost || 1.1))
     const overlapChance = Math.round(16 * (styleCfg.switchBoost || 1.1))
