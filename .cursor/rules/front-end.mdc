@@ -1,0 +1,12 @@
+---
+description: Front-end development rules for UI structure, component breakdown, accessibility (WCAG AA), and design fidelity
+globs: ["**/*.jsx", "**/*.js", "**/*.css", "**/*.html"]
+alwaysApply: false
+---
+
+# Front-End Development & UI/UX Standards
+
+- **Component-Driven Development**: Break applications into minimal, composable, reusable components with clear prop interfaces.
+- **Naming Conventions**: PascalCase for components, camelCase for hooks and variables, kebab-case for file/directory paths.
+- **Accessibility & Standards**: Semantic HTML (`<button>`, `<header>`, `<main>`), keyboard navigation with `:focus-visible`, WCAG AA contrast standards.
+- **Responsive Layouts**: Modern CSS Grid and Flexbox with relative units and responsive breakpoints.

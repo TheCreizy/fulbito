@@ -55,16 +55,16 @@ export const FORMATIONS = {
     description: 'Presión alta, extremos bien abiertos por las puntas y un 9 de referencia en el área.',
     slots: [
       { index: 0, role: 'GK', label: 'ARQ', pos: [340, 30] },
-      { index: 1, role: 'LB', label: 'LI', pos: [95, 170] },
+      { index: 1, role: 'LB', label: 'LI', pos: [75, 170] },
       { index: 2, role: 'CB', label: 'DFC', pos: [250, 145] },
       { index: 3, role: 'CB', label: 'DFC', pos: [430, 145] },
-      { index: 4, role: 'RB', label: 'LD', pos: [585, 170] },
+      { index: 4, role: 'RB', label: 'LD', pos: [605, 170] },
       { index: 5, role: 'CM', label: 'MC I', pos: [195, 315] },
       { index: 6, role: 'CM', label: 'MC C', pos: [340, 285] },
       { index: 7, role: 'CM', label: 'MC D', pos: [485, 315] },
-      { index: 8, role: 'LM', label: 'EXT I', pos: [120, 465] },
+      { index: 8, role: 'LM', label: 'EXT I', pos: [48, 465] },
       { index: 9, role: 'ST', label: '9 ÁREA', pos: [340, 495] },
-      { index: 10, role: 'RM', label: 'EXT D', pos: [560, 465] }
+      { index: 10, role: 'RM', label: 'EXT D', pos: [632, 465] }
     ]
   },
   '5-3-2': {
@@ -133,12 +133,12 @@ export const PLAY_STYLES = {
     shortLabel: 'Bandas',
     color: '#06b6d4',
     description: 'Abre la cancha al máximo con los laterales y extremos en la cal, genera desdoblamientos por fuera y bombardea el área con centros.',
-    switchBoost: 1.65,
+    switchBoost: 0.95,
     crossBoost: 1.85,
-    gambetaBoost: 1.15,
-    throughBoost: 1.15,
+    gambetaBoost: 1.30,
+    throughBoost: 1.55,
     carryPatience: 1.25,
-    overlapRate: 1.5
+    overlapRate: 1.65
   },
   tikiTaka: {
     id: 'tikiTaka',
@@ -146,7 +146,7 @@ export const PLAY_STYLES = {
     shortLabel: 'Gambeta / 10',
     color: '#f59e0b',
     description: 'Pausa, tenencia, protagonismo del Enganche (10), paredes cortas, gambeta 1v1 para romper líneas y llegadas tocando al área.',
-    switchBoost: 1.20,
+    switchBoost: 0.85,
     crossBoost: 0.70,
     gambetaBoost: 1.55,
     throughBoost: 1.35,
@@ -159,7 +159,7 @@ export const PLAY_STYLES = {
     shortLabel: 'Vertical',
     color: '#a855f7',
     description: 'Transiciones rápidas sin pausa: diagonales al espacio y pases largos filtrados a espaldas de los defensores.',
-    switchBoost: 1.20,
+    switchBoost: 0.90,
     crossBoost: 1.15,
     gambetaBoost: 1.10,
     throughBoost: 1.70,
@@ -172,7 +172,7 @@ export const PLAY_STYLES = {
     shortLabel: 'Dinámico',
     color: '#10b981',
     description: 'Combina temporización, cambios de frente cuando una banda se cierra, subida alternada de laterales y juego entre líneas.',
-    switchBoost: 1.30,
+    switchBoost: 0.95,
     crossBoost: 1.35,
     gambetaBoost: 1.20,
     throughBoost: 1.25,

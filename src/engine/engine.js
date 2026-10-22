@@ -62,6 +62,8 @@ export async function playIteration(matchDetails) {
   const { kickOffTeam, secondTeam } = matchDetails
   common.matchInjury(matchDetails, kickOffTeam)
   common.matchInjury(matchDetails, secondTeam)
+  checkSeriousInjurySubstitutions(matchDetails, kickOffTeam, 'kickOffTeam')
+  checkSeriousInjurySubstitutions(matchDetails, secondTeam, 'secondTeam')
 
   // Contabilizar posesión en tiempo real y transiciones de posesión (open-football model)
   const currentTeamWithBall = matchDetails.ball.withTeam || matchDetails.ball.lastTouch?.teamID
@@ -187,7 +189,10 @@ export function applyLiveTactics(matchDetails, teamKey, { formationId, mentality
     const slot = slots[idx] || slots[slots.length - 1]
     player.tacticalRole = slot.role
     player.originPOS = slot.coords.slice()
-    if (common.isOnPitch(player)) {
+    if (player.sentOff || player.currentPOS?.[0] === 'NP') {
+      player.currentPOS = ['NP', 'NP']
+      player.intentPOS = ['NP', 'NP']
+    } else if (common.isOnPitch(player)) {
       player.intentPOS = slot.coords.slice()
     }
   })
@@ -195,6 +200,42 @@ export function applyLiveTactics(matchDetails, teamKey, { formationId, mentality
   updateTeamEffectiveSkills(team)
   matchDetails.iterationLog.push(`Tactical change applied by ${team.name}: ${team.formation} (${team.mentality})`)
   return matchDetails
+}
+
+export function checkSeriousInjurySubstitutions(matchDetails, team, teamKey) {
+  if (!team || !Array.isArray(team.players)) return
+  for (let i = 0; i < team.players.length; i++) {
+    const p = team.players[i]
+    if (p.injuryStatus?.grade === 'serious' && !p.forcedOff) {
+      p.forcedOff = true
+      const maxSubs = team.maxSubstitutions || 5
+      const usedSubs = team.substitutionsUsed || 0
+      let substituted = false
+
+      if (usedSubs < maxSubs && Array.isArray(team.bench) && team.bench.length > 0) {
+        const role = p.tacticalRole || p.position
+        let benchIdx = team.bench.findIndex(bp => !bp.substitutedOut && (bp.tacticalRole || bp.position) === role)
+        if (benchIdx === -1 && role !== 'GK') {
+          benchIdx = team.bench.findIndex(bp => !bp.substitutedOut && bp.position !== 'GK')
+        }
+        if (benchIdx !== -1) {
+          try {
+            makeSubstitution(matchDetails, teamKey, i, benchIdx)
+            matchDetails.iterationLog.push(`Forced injury substitution (${team.name}): ${team.players[i].name} replaced ${p.name}`)
+            substituted = true
+          } catch (e) {
+            // Ignorar y dejar con 10 si falla la sustitución
+          }
+        }
+      }
+
+      if (!substituted) {
+        p.currentPOS = ['NP', 'NP']
+        p.hasBall = false
+        matchDetails.iterationLog.push(`${team.name} plays with 10 men due to serious injury of ${p.name}`)
+      }
+    }
+  }
 }
 
 /**

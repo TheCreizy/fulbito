@@ -167,7 +167,8 @@ export function buildTeamShape(matchDetails, team, inPossession) {
   prev.centreX = centreX
 
   // Ajuste lateral: estrechar en banda para no salirse de la cancha sin perder compacidad
-  const teamWidthTarget = inPossession ? 0.85 : (isDefensive ? 0.35 : 0.6)
+  const isWingPlay = team?.playStyle === 'wingPlay'
+  const teamWidthTarget = inPossession ? (isWingPlay ? 0.96 : 0.85) : (isDefensive ? 0.35 : 0.6)
   const fullWidth = SHAPE_CONFIG.WIDTH_NARROW + (SHAPE_CONFIG.WIDTH_WIDE - SHAPE_CONFIG.WIDTH_NARROW) * teamWidthTarget
   const loX = Math.max(SHAPE_CONFIG.PITCH_MARGIN, centreX - fullWidth * 0.5)
   const hiX = Math.min(pitchWidth - SHAPE_CONFIG.PITCH_MARGIN, centreX + fullWidth * 0.5)
@@ -315,26 +316,26 @@ export function assignAttackPlanWithIncumbency(kickingTeam, defendingTeam, match
   let leftHolder = null
   let rightHolder = null
 
-  // Candidatos izquierdos: ordenados por cercanía a la banda izquierda
+  // Candidatos izquierdos: ordenados por cercanía a la banda izquierda (prioridad a extremos LM sobre laterales LB)
   const leftCandidates = available.filter(p => (p.originPOS[0] < pitchWidth / 2 || p.currentPOS[0] < pitchWidth / 2))
   leftCandidates.sort((a, b) => {
     const roleA = a.tacticalRole || a.position
     const roleB = b.tacticalRole || b.position
-    const aWingBonus = (roleA === 'LM' || roleA === 'LB') ? -100 : 0
-    const bWingBonus = (roleB === 'LM' || roleB === 'LB') ? -100 : 0
+    const aWingBonus = (roleA === 'LM') ? -160 : ((roleA === 'LB') ? -80 : 0)
+    const bWingBonus = (roleB === 'LM') ? -160 : ((roleB === 'LB') ? -80 : 0)
     const incA = prevWidePlan.leftHolderID === a.playerID ? -50 : 0
     const incB = prevWidePlan.leftHolderID === b.playerID ? -50 : 0
     return (a.currentPOS[0] + aWingBonus + incA) - (b.currentPOS[0] + bWingBonus + incB)
   })
   if (leftCandidates.length > 0) leftHolder = leftCandidates[0]
 
-  // Candidatos derechos: ordenados por cercanía a la banda derecha
+  // Candidatos derechos: ordenados por cercanía a la banda derecha (prioridad a extremos RM sobre laterales RB)
   const rightCandidates = available.filter(p => (p.originPOS[0] >= pitchWidth / 2 || p.currentPOS[0] >= pitchWidth / 2))
   rightCandidates.sort((a, b) => {
     const roleA = a.tacticalRole || a.position
     const roleB = b.tacticalRole || b.position
-    const aWingBonus = (roleA === 'RM' || roleA === 'RB') ? -100 : 0
-    const bWingBonus = (roleB === 'RM' || roleB === 'RB') ? -100 : 0
+    const aWingBonus = (roleA === 'RM') ? -160 : ((roleA === 'RB') ? -80 : 0)
+    const bWingBonus = (roleB === 'RM') ? -160 : ((roleB === 'RB') ? -80 : 0)
     const incA = prevWidePlan.rightHolderID === a.playerID ? -50 : 0
     const incB = prevWidePlan.rightHolderID === b.playerID ? -50 : 0
     return ((pitchWidth - a.currentPOS[0]) + aWingBonus + incA) - ((pitchWidth - b.currentPOS[0]) + bWingBonus + incB)

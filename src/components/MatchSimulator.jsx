@@ -134,18 +134,42 @@ function buildPitchBannerFromEvent(ev, minuteLabel) {
       return {
         type: 'offside',
         icon: '🚩',
-        title: `POSICIÓN ADELANTADA • ${(ev.playerName || '').toUpperCase()}`,
-        subtitle: `Tiro libre indirecto rival (${minuteLabel})`,
-        duration: 2100
+        title: `¡POSICIÓN ADELANTADA! • ${(ev.playerName || '').toUpperCase()}`,
+        subtitle: `Offside tras pase de ${ev.passerName || 'su compañero'} • Tiro libre indirecto (${minuteLabel})`,
+        duration: 3600
       }
-    case 'save':
+    case 'save': {
+      const isCorner = ev.outcome === 'corner'
+      const isRebound = ev.outcome === 'rebound'
+      let title = `¡ATAJADA DE ${(ev.playerName || 'ARQUERO').toUpperCase()}!`
+      let subtitle = `Salvada clave para ${ev.teamName} (${minuteLabel})`
+      if (isCorner) {
+        title = `¡ATAJADA AL CÓRNER DE ${(ev.playerName || 'ARQUERO').toUpperCase()}!`
+        subtitle = `Desvió la pelota sobre la línea final al tiro de esquina (${minuteLabel})`
+      } else if (isRebound) {
+        title = `¡REBOTE TRAS ATAJADA DE ${(ev.playerName || 'ARQUERO').toUpperCase()}!`
+        subtitle = `La pelota quedó suelta en zona de peligro (${minuteLabel})`
+      }
       return {
         type: 'save',
-        icon: '🧤',
-        title: `¡ATAJADA DE ${(ev.playerName || 'ARQUERO').toUpperCase()}!`,
-        subtitle: `Salvada clave para ${ev.teamName} (${minuteLabel})`,
+        icon: isCorner ? '🧤🚩' : '🧤',
+        title,
+        subtitle,
         duration: 2100
       }
+    }
+    case 'injury': {
+      const isSerious = ev.grade === 'serious'
+      const icon = isSerious ? '🚨' : (ev.grade === 'hurt' ? '⚠️' : '🩹')
+      const gradeLabel = isSerious ? 'LESIÓN GRAVE' : (ev.grade === 'hurt' ? 'MOLESTIA FÍSICA' : 'GOLPE LEVE')
+      return {
+        type: 'injury',
+        icon,
+        title: `${gradeLabel} • ${(ev.playerName || '').toUpperCase()}`,
+        subtitle: `${ev.injuryName || 'Atención médica'} — ${ev.canContinue ? 'Continúa disminuido' : 'Pide el cambio obligatorio'} (${minuteLabel})`,
+        duration: 2800
+      }
+    }
     case 'gambeta':
       return {
         type: 'play',
@@ -209,6 +233,216 @@ function calculatePlayerMatchRating(p, teamGoals, oppGoals) {
   return Math.max(3.5, Math.min(10.0, Number(score.toFixed(1))))
 }
 
+
+function drawVarReplayLines(ctx, varData, isHorizontal, W, H, padX, padY, playableW, playableH) {
+  if (!varData) return
+  const now = performance.now()
+  const pulse = Math.sin(now / 160) * 0.15 + 0.85
+
+  if (isHorizontal) {
+    // Eje Y motor (0 a 1050) -> Eje X pantalla (padX + (Y / 1050) * playableW)
+    // Eje X motor (0 a 680)  -> Eje Y pantalla (padY + (X / 680) * playableH)
+    const defY = varData.defendingLineY ?? 525
+    const offY = varData.targetPlayerPOS?.[1] ?? 525
+    const ballPos = varData.ballPOS || [340, 525]
+    const passerPos = varData.passerPOS || [340, 525]
+    const targetPos = varData.targetPlayerPOS || [340, 525]
+
+    const screenDefX = padX + (defY / 1050) * playableW
+    const screenOffX = padX + (offY / 1050) * playableW
+
+    const screenBallX = padX + (ballPos[1] / 1050) * playableW
+    const screenBallY = padY + (ballPos[0] / 680) * playableH
+
+    const screenPasserX = padX + (passerPos[1] / 1050) * playableW
+    const screenPasserY = padY + (passerPos[0] / 680) * playableH
+
+    const screenTargetX = padX + (targetPos[1] / 1050) * playableW
+    const screenTargetY = padY + (targetPos[0] / 680) * playableH
+
+    // 1. Zona sombreada de fuera de juego entre la línea defensiva y la del atacante
+    const minX = Math.min(screenDefX, screenOffX)
+    const spanW = Math.max(4, Math.abs(screenOffX - screenDefX))
+    ctx.save()
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.28)'
+    ctx.fillRect(minX, padY, spanW, playableH)
+
+    // Rayas diagonales estilo VAR en la zona
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.35)'
+    ctx.lineWidth = 1.5
+    ctx.setLineDash([4, 6])
+    for (let lx = minX; lx < minX + spanW + playableH; lx += 16) {
+      ctx.beginPath()
+      ctx.moveTo(lx, padY)
+      ctx.lineTo(lx - 25, padY + playableH)
+      ctx.stroke()
+    }
+    ctx.restore()
+
+    // 2. Línea punteada y flecha de pase desde el pasador hacia el balón
+    ctx.save()
+    ctx.beginPath()
+    ctx.setLineDash([5, 4])
+    ctx.moveTo(screenPasserX, screenPasserY)
+    ctx.lineTo(screenBallX, screenBallY)
+    ctx.lineTo(screenTargetX, screenTargetY)
+    ctx.strokeStyle = '#facc15'
+    ctx.lineWidth = 2.5
+    ctx.stroke()
+    ctx.restore()
+
+    // Círculo concéntrico de impacto en el momento del pase
+    ctx.save()
+    ctx.beginPath()
+    ctx.arc(screenBallX, screenBallY, 12 * pulse, 0, Math.PI * 2)
+    ctx.strokeStyle = '#facc15'
+    ctx.lineWidth = 2.5
+    ctx.stroke()
+    ctx.font = 'bold 10px "Chakra Petch", sans-serif'
+    ctx.fillStyle = '#facc15'
+    ctx.textAlign = 'center'
+    ctx.fillText('MOMENTO DEL IMPACTO', screenBallX, Math.max(padY + 16, screenBallY - 16))
+    ctx.restore()
+
+    // 3. Línea AZUL del penúltimo defensor
+    ctx.save()
+    ctx.beginPath()
+    ctx.moveTo(screenDefX, padY)
+    ctx.lineTo(screenDefX, padY + playableH)
+    ctx.strokeStyle = '#38bdf8'
+    ctx.lineWidth = 3
+    ctx.shadowColor = '#0284c7'
+    ctx.shadowBlur = 10
+    ctx.stroke()
+
+    // Badge de la línea defensiva
+    ctx.fillStyle = '#0284c7'
+    ctx.fillRect(screenDefX - 70, padY + 12, 140, 20)
+    ctx.strokeStyle = '#ffffff'
+    ctx.lineWidth = 1
+    ctx.strokeRect(screenDefX - 70, padY + 12, 140, 20)
+    ctx.fillStyle = '#ffffff'
+    ctx.font = 'bold 9.5px "Chakra Petch", sans-serif'
+    ctx.textAlign = 'center'
+    const defLastName = varData.secondLastDefenderName ? varData.secondLastDefenderName.split(' ').pop() : 'DEF'
+    ctx.fillText(`LÍNEA DEFENSIVA (${defLastName})`, screenDefX, padY + 25)
+    ctx.restore()
+
+    // 4. Línea ROJA del atacante en offside
+    ctx.save()
+    ctx.beginPath()
+    ctx.moveTo(screenOffX, padY)
+    ctx.lineTo(screenOffX, padY + playableH)
+    ctx.strokeStyle = '#ef4444'
+    ctx.lineWidth = 3.5
+    ctx.shadowColor = '#dc2626'
+    ctx.shadowBlur = 12
+    ctx.stroke()
+
+    // Badge del jugador en offside
+    ctx.fillStyle = '#dc2626'
+    ctx.fillRect(screenOffX - 80, padY + playableH - 32, 160, 22)
+    ctx.strokeStyle = '#ffffff'
+    ctx.lineWidth = 1
+    ctx.strokeRect(screenOffX - 80, padY + playableH - 32, 160, 22)
+    ctx.fillStyle = '#ffffff'
+    ctx.font = 'bold 10px "Chakra Petch", sans-serif'
+    ctx.textAlign = 'center'
+    const offLastName = varData.targetPlayerName ? varData.targetPlayerName.split(' ').pop() : 'DEL'
+    ctx.fillText(`🚩 OFFSIDE: ${offLastName}`, screenOffX, padY + playableH - 18)
+    ctx.restore()
+
+    // 5. Marca de cámara lenta TV VAR en esquina
+    ctx.save()
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.82)'
+    ctx.fillRect(padX + 10, padY + 10, 260, 40)
+    ctx.strokeStyle = '#ef4444'
+    ctx.lineWidth = 1.5
+    ctx.strokeRect(padX + 10, padY + 10, 260, 40)
+    ctx.fillStyle = '#ef4444'
+    ctx.beginPath(); ctx.arc(padX + 24, padY + 30, 6, 0, Math.PI * 2); ctx.fill()
+    ctx.font = 'bold 11px "Chakra Petch", sans-serif'
+    ctx.fillStyle = '#ffffff'
+    ctx.textAlign = 'left'
+    ctx.fillText('VAR 3D • REPETICIÓN CÁMARA LENTA', padX + 36, padY + 24)
+    ctx.font = '9.5px sans-serif'
+    ctx.fillStyle = '#cbd5e1'
+    ctx.fillText(`Pase: ${varData.passerName || 'Compañero'} ➔ Adelantado: ${varData.targetPlayerName || 'Atacante'}`, padX + 36, padY + 40)
+    ctx.restore()
+  } else {
+    // Eje vertical
+    const defY = varData.defendingLineY ?? 525
+    const offY = varData.targetPlayerPOS?.[1] ?? 525
+    const ballPos = varData.ballPOS || [340, 525]
+    const passerPos = varData.passerPOS || [340, 525]
+    const targetPos = varData.targetPlayerPOS || [340, 525]
+
+    const screenDefY = padY + (defY / 1050) * playableH
+    const screenOffY = padY + (offY / 1050) * playableH
+
+    const screenBallX = padX + (ballPos[0] / 680) * playableW
+    const screenBallY = padY + (ballPos[1] / 1050) * playableH
+
+    const screenPasserX = padX + (passerPos[0] / 680) * playableW
+    const screenPasserY = padY + (passerPos[1] / 1050) * playableH
+
+    const screenTargetX = padX + (targetPos[0] / 680) * playableW
+    const screenTargetY = padY + (targetPos[1] / 1050) * playableH
+
+    const minY = Math.min(screenDefY, screenOffY)
+    const spanH = Math.max(4, Math.abs(screenOffY - screenDefY))
+
+    ctx.save()
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.28)'
+    ctx.fillRect(padX, minY, playableW, spanH)
+    ctx.restore()
+
+    ctx.save()
+    ctx.beginPath()
+    ctx.setLineDash([5, 4])
+    ctx.moveTo(screenPasserX, screenPasserY)
+    ctx.lineTo(screenBallX, screenBallY)
+    ctx.lineTo(screenTargetX, screenTargetY)
+    ctx.strokeStyle = '#facc15'
+    ctx.lineWidth = 2.5
+    ctx.stroke()
+    ctx.restore()
+
+    // Círculo de impacto
+    ctx.save()
+    ctx.beginPath()
+    ctx.arc(screenBallX, screenBallY, 12 * pulse, 0, Math.PI * 2)
+    ctx.strokeStyle = '#facc15'
+    ctx.lineWidth = 2.5
+    ctx.stroke()
+    ctx.restore()
+
+    // Línea AZUL defensiva
+    ctx.save()
+    ctx.beginPath()
+    ctx.moveTo(padX, screenDefY)
+    ctx.lineTo(padX + playableW, screenDefY)
+    ctx.strokeStyle = '#38bdf8'
+    ctx.lineWidth = 3
+    ctx.shadowColor = '#0284c7'
+    ctx.shadowBlur = 10
+    ctx.stroke()
+    ctx.restore()
+
+    // Línea ROJA offside
+    ctx.save()
+    ctx.beginPath()
+    ctx.moveTo(padX, screenOffY)
+    ctx.lineTo(padX + playableW, screenOffY)
+    ctx.strokeStyle = '#ef4444'
+    ctx.lineWidth = 3.5
+    ctx.shadowColor = '#dc2626'
+    ctx.shadowBlur = 12
+    ctx.stroke()
+    ctx.restore()
+  }
+}
+
 export default function MatchSimulator({
   initialTeam1,
   initialTeam2,
@@ -225,6 +459,8 @@ export default function MatchSimulator({
   const [goalBanner, setGoalBanner] = useState(null)
   const [foulOverlay, setFoulOverlay] = useState(null)
   const [deadBallOverlay, setDeadBallOverlay] = useState(null)
+  const [varReplay, setVarReplay] = useState(null)
+  const [tacticalStoppage, setTacticalStoppage] = useState(null)
   const [pitchOrientation, setPitchOrientation] = useState('horizontal') // 'horizontal' | 'vertical'
   const [showDetailPanels, setShowDetailPanels] = useState(false)
   const [penaltyWinner, setPenaltyWinner] = useState(null)
@@ -251,6 +487,7 @@ export default function MatchSimulator({
   const commTrackerRef = useRef({ lastCommentTick: 0 })
   const commentaryQueueRef = useRef([])
   const bannerTimeoutRef = useRef(null)
+  const varTimeoutRef = useRef(null)
   const isFoulPausedRef = useRef(false)
   const isDeadBallPausedRef = useRef(false)
   const goalAnimRef = useRef({ time: 0, goalSide: null })
@@ -555,7 +792,19 @@ export default function MatchSimulator({
 
         if (p.stats?.cards?.yellow > 0) {
           ctx.fillStyle = '#facc15'
-          ctx.fillRect(x - 18, y - 16, 7, 10)
+          ctx.fillRect(x - 20, y - 17, 8, 11)
+          ctx.strokeStyle = '#000000'
+          ctx.lineWidth = 1
+          ctx.strokeRect(x - 20, y - 17, 8, 11)
+        }
+
+        if (p.injuryStatus?.grade === 'knock' || p.injuryStatus?.grade === 'hurt') {
+          ctx.save()
+          ctx.font = '12px sans-serif'
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          ctx.fillText('🩹', x + 16, y - 12)
+          ctx.restore()
         }
 
         const fit = Math.max(0, Math.min(100, Number(p.fitness ?? 100)))
@@ -566,17 +815,24 @@ export default function MatchSimulator({
         ctx.fillRect(x - barW / 2, y + 18, (barW * fit) / 100, 4)
 
         const lastName = p.name.split(' ').slice(-1)[0]
-        ctx.font = '700 13px "Chakra Petch", sans-serif'
+        const yellowTag = p.stats?.cards?.yellow > 0 ? ' 🟨' : ''
+        const injuryTag = (p.injuryStatus?.grade === 'knock' || p.injuryStatus?.grade === 'hurt') ? ' 🩹' : ''
+        const displayName = lastName + yellowTag + injuryTag
+        ctx.font = '700 12.5px "Chakra Petch", sans-serif'
         ctx.fillStyle = '#ffffff'
         ctx.strokeStyle = 'rgba(0,0,0,0.92)'
         ctx.lineWidth = 3
-        ctx.strokeText(lastName, x, y + 33)
-        ctx.fillText(lastName, x, y + 33)
+        ctx.strokeText(displayName, x, y + 33)
+        ctx.fillText(displayName, x, y + 33)
       })
     }
 
     renderTeamPlayersH(m.kickOffTeam, m.prevSnapshot?.kickOffTeam)
     renderTeamPlayersH(m.secondTeam, m.prevSnapshot?.secondTeam)
+
+    if (varReplay?.active) {
+      drawVarReplayLines(ctx, varReplay.varData, true, W, H, padX, padY, playableW, playableH)
+    }
 
     // Renderizar Pelota en horizontal con penetración de red en gol
     if (m.ball && Array.isArray(m.ball.position)) {
@@ -855,6 +1111,10 @@ export default function MatchSimulator({
     renderTeamPlayersV(m.kickOffTeam, m.prevSnapshot?.kickOffTeam)
     renderTeamPlayersV(m.secondTeam, m.prevSnapshot?.secondTeam)
 
+    if (varReplay?.active) {
+      drawVarReplayLines(ctx, varReplay.varData, false, W, H, padX, padY, playableW, playableH)
+    }
+
     if (m.ball && Array.isArray(m.ball.position)) {
       const targetBX = Number(m.ball.position[0]) || W / 2
       const targetBY = Number(m.ball.position[1]) || H / 2
@@ -1066,8 +1326,43 @@ export default function MatchSimulator({
         soundEngine.playShotKick()
       }
 
-      // Pausa de 1.5s con cartel flotante y silbato en todas las pelotas paradas
-      if (isDeadBall) {
+      // Pausa obligatoria del partido ante expulsión o lesión grave para ajustes tácticos
+      if (ev.type === 'redCard' || (ev.type === 'injury' && (ev.grade === 'serious' || !ev.canContinue))) {
+        setSpeed('paused')
+        setTacticalStoppage({
+          isRed: ev.type === 'redCard',
+          playerName: ev.playerName || 'Jugador',
+          teamName: ev.teamName || 'Equipo',
+          teamID: ev.teamID
+        })
+      }
+
+      // Repetición cinematográfica en cámara lenta estilo VAR ante offside
+      if (ev.type === 'offside') {
+        isDeadBallPausedRef.current = true
+        const varData = ev.varData || {
+          passerName: ev.passerName || 'Compañero',
+          targetPlayerName: ev.playerName,
+          defendingLineY: m.pitchSize[1] / 2,
+          ballPOS: [m.pitchSize[0] / 2, m.pitchSize[1] / 2],
+          passerPOS: [m.pitchSize[0] / 2, m.pitchSize[1] / 2 + 60],
+          targetPlayerPOS: [m.pitchSize[0] / 2, m.pitchSize[1] / 2 - 20]
+        }
+        setVarReplay({
+          active: true,
+          varData,
+          ev,
+          startTime: performance.now(),
+          durationMs: speed === 'x4' ? 2200 : 5200
+        })
+        const varDuration = speed === 'x4' ? 2200 : 5200
+        if (varTimeoutRef.current) clearTimeout(varTimeoutRef.current)
+        varTimeoutRef.current = setTimeout(() => {
+          setVarReplay(null)
+          isDeadBallPausedRef.current = false
+        }, varDuration)
+      } else if (isDeadBall && ev.type !== 'redCard') {
+        // Pausa de asimilación con cartel flotante y silbato en todas las pelotas paradas
         isDeadBallPausedRef.current = true
         setDeadBallOverlay({
           type: ev.type,
@@ -1075,7 +1370,7 @@ export default function MatchSimulator({
           title: bannerObj?.title || 'PELOTA PARADA',
           subtitle: bannerObj?.subtitle || `${minLabel} • Reanudación del juego`
         })
-        const pauseMs = speed === 'x4' ? 500 : 1500
+        const pauseMs = speed === 'x4' ? 950 : 2700
         setTimeout(() => {
           setDeadBallOverlay(null)
           isDeadBallPausedRef.current = false
@@ -1686,7 +1981,48 @@ export default function MatchSimulator({
               </div>
             )}
 
-            {deadBallOverlay && (
+            {varReplay && (
+              <div className="var-replay-banner-overlay" style={{
+                position: 'absolute',
+                top: '14px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                zIndex: 150,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.8rem',
+                background: 'rgba(10, 15, 29, 0.95)',
+                border: '2px solid #ef4444',
+                boxShadow: '0 0 25px rgba(239, 68, 68, 0.55)',
+                padding: '0.65rem 1.25rem',
+                borderRadius: '4px',
+                backdropFilter: 'blur(6px)'
+              }}>
+                <span style={{ fontSize: '1.5rem' }}>📺</span>
+                <div>
+                  <div style={{ color: '#ef4444', fontWeight: 900, fontSize: '0.92rem', letterSpacing: '0.5px' }}>
+                    REVISIÓN VAR • FUERA DE JUEGO (OFFSIDE)
+                  </div>
+                  <div style={{ color: '#ffffff', fontSize: '0.78rem' }}>
+                    Pase de <b style={{ color: '#facc15' }}>{varReplay.varData?.passerName || 'Compañero'}</b> • Receptor adelantado: <b style={{ color: '#f87171' }}>{varReplay.varData?.targetPlayerName || 'Atacante'}</b>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline"
+                  style={{ marginLeft: '0.5rem', fontSize: '0.74rem', padding: '0.25rem 0.65rem' }}
+                  onClick={() => {
+                    if (varTimeoutRef.current) clearTimeout(varTimeoutRef.current)
+                    setVarReplay(null)
+                    isDeadBallPausedRef.current = false
+                  }}
+                >
+                  Saltar VAR ⏭️
+                </button>
+              </div>
+            )}
+
+            {deadBallOverlay && !varReplay && (
               <div
                 style={{
                   position: 'absolute',
@@ -1879,7 +2215,48 @@ export default function MatchSimulator({
               </div>
             )}
 
-            {deadBallOverlay && (
+            {varReplay && (
+              <div className="var-replay-banner-overlay" style={{
+                position: 'absolute',
+                top: '14px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                zIndex: 150,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.8rem',
+                background: 'rgba(10, 15, 29, 0.95)',
+                border: '2px solid #ef4444',
+                boxShadow: '0 0 25px rgba(239, 68, 68, 0.55)',
+                padding: '0.65rem 1.25rem',
+                borderRadius: '4px',
+                backdropFilter: 'blur(6px)'
+              }}>
+                <span style={{ fontSize: '1.5rem' }}>📺</span>
+                <div>
+                  <div style={{ color: '#ef4444', fontWeight: 900, fontSize: '0.92rem', letterSpacing: '0.5px' }}>
+                    REVISIÓN VAR • FUERA DE JUEGO (OFFSIDE)
+                  </div>
+                  <div style={{ color: '#ffffff', fontSize: '0.78rem' }}>
+                    Pase de <b style={{ color: '#facc15' }}>{varReplay.varData?.passerName || 'Compañero'}</b> • Receptor adelantado: <b style={{ color: '#f87171' }}>{varReplay.varData?.targetPlayerName || 'Atacante'}</b>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline"
+                  style={{ marginLeft: '0.5rem', fontSize: '0.74rem', padding: '0.25rem 0.65rem' }}
+                  onClick={() => {
+                    if (varTimeoutRef.current) clearTimeout(varTimeoutRef.current)
+                    setVarReplay(null)
+                    isDeadBallPausedRef.current = false
+                  }}
+                >
+                  Saltar VAR ⏭️
+                </button>
+              </div>
+            )}
+
+            {deadBallOverlay && !varReplay && (
               <div
                 style={{
                   position: 'absolute',
@@ -2066,6 +2443,7 @@ export default function MatchSimulator({
                             <span style={{ color: '#64748b', fontSize: '0.66rem' }}>({p.tacticalRole || p.position})</span>{' '}
                             {p.stats?.goals > 0 && `⚽x${p.stats.goals}`}{' '}
                             {p.stats?.cards?.yellow > 0 && '🟨'}
+                            {(p.injuryStatus?.grade === 'knock' || p.injuryStatus?.grade === 'hurt') && '🩹'}
                             {p.sentOff && '🟥'}
                           </span>
                           <span style={{ color: fit > 65 ? '#4ade80' : (fit > 40 ? '#facc15' : '#ef4444'), fontWeight: 800 }}>
@@ -2077,6 +2455,48 @@ export default function MatchSimulator({
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Detención Obligatoria por Expulsión o Lesión Grave */}
+      {tacticalStoppage && (
+        <div className="modal-backdrop" style={{ zIndex: 9999 }}>
+          <div className="panel" style={{ maxWidth: '520px', width: '92%', textAlign: 'center', border: '2px solid #ef4444', boxShadow: '0 0 35px rgba(239, 68, 68, 0.6)', background: '#0a0f1d', padding: '1.8rem' }}>
+            <div style={{ fontSize: '3.2rem', marginBottom: '0.4rem' }}>
+              {tacticalStoppage.isRed ? '🟥' : '🚑'}
+            </div>
+            <h2 style={{ color: '#ef4444', fontSize: '1.35rem', textTransform: 'uppercase', marginBottom: '0.4rem', letterSpacing: '0.5px' }}>
+              {tacticalStoppage.isRed ? '¡JUGADOR EXPULSADO CON ROJA!' : '¡LESIÓN GRAVE DE UN JUGADOR!'}
+            </h2>
+            <p style={{ color: '#f8fafc', fontSize: '1.05rem', fontWeight: 700, marginBottom: '0.3rem' }}>
+              {tacticalStoppage.playerName} ({tacticalStoppage.teamName})
+            </p>
+            <p style={{ color: '#94a3b8', fontSize: '0.84rem', lineHeight: 1.45, marginBottom: '1.4rem' }}>
+              El partido se pausó automáticamente para que puedas reacomodar tu equipo, cubrir puestos vacantes (por ejemplo si expulsaron al arquero) o realizar sustituciones tácticas.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-gold btn-lg"
+                onClick={() => {
+                  setTacticalStoppage(null)
+                  setShowTacticsModal(true)
+                }}
+              >
+                📋 Abrir Pizarra Táctica y Cambios
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => {
+                  setTacticalStoppage(null)
+                  setSpeed('x1')
+                }}
+              >
+                ▶️ Reanudar Partido
+              </button>
             </div>
           </div>
         </div>

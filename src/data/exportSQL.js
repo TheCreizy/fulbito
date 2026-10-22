@@ -2,12 +2,12 @@ import { PLAYERS_DB } from './playersDB.js'
 
 /**
  * Genera el script SQL completo compatible con MySQL / MariaDB de Hostinger
- * para crear la tabla de jugadores e insertar los 100 registros calibrados.
+ * para crear la tabla de jugadores e insertar los 200 registros calibrados.
  */
 export function generateHostingerSQL() {
   const lines = [
     '-- ============================================================================',
-    '-- Base de Datos MySQL para Hostinger: Simulador de Fútbol + Draft (100 Jugadores)',
+    '-- Base de Datos MySQL para Hostinger: Simulador de Fútbol + Draft (200 Jugadores)',
     '-- ============================================================================',
     '',
     'CREATE TABLE IF NOT EXISTS `players` (',
@@ -54,7 +54,7 @@ export function downloadPlayersSQLFile() {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = 'hostinger_futbol_100_players.sql'
+  link.download = 'hostinger_futbol_200_players.sql'
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)

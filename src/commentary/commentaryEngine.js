@@ -52,7 +52,97 @@ const PLAYER_NICKNAMES = {
   'Chiqui Pérez': ['el Chiqui Pérez'],
   'Naohiro Takahara': ['el japonés Takahara'],
   'Franco Soldano': ['el incansable Soldano'],
-  'Emmanuel Gigliotti': ['el Puma Gigliotti']
+  'Emmanuel Gigliotti': ['el Puma Gigliotti'],
+
+  // Nuevas Leyendas (101-120)
+  'Alfredo Di Stéfano': ['la Saeta Rubia', 'don Alfredo'],
+  'Garrincha': ['Mané Garrincha', 'la Alegría del Pueblo', 'el Ángel de las Piernas Torcidas'],
+  'Franco Baresi': ['Capitano Baresi', 'il Grande Franco'],
+  'Michel Platini': ['le Roi Michel', 'Platini'],
+  'Marco van Basten': ['el Cisne de Utrecht', 'Van Basten'],
+  'Romário': ['O Baixinho', 'Romário de Souza'],
+  'Roberto Baggio': ['il Divin Codino', 'Roby Baggio'],
+  'Ronald Koeman': ['Tintín Koeman', 'el bombardero de Zaandam'],
+  'Thierry Henry': ['Tití Henry', 'el rey de Highbury'],
+  'Andrea Pirlo': ['il Maestro Pirlo', 'el Arquitecto'],
+  'Luka Modrić': ['el mago de Zadar', 'Lukita Modrić'],
+  'Toni Kroos': ['el Francotirador Kroos', 'el reloj alemán'],
+  'Dani Alves': ['Dani Alves', 'el tren de Bahía'],
+  'Marcelo': ['Marcelo', 'el crack carioca'],
+  'Alessandro Nesta': ['Sandro Nesta', 'el muro italiano'],
+  'Carles Puyol': ['Tarzán Puyol', 'el Tiburón Puyol', 'el Capitán eterno'],
+  'Manuel Neuer': ['Manu Neuer', 'el arquero-líbero'],
+  'Iker Casillas': ['San Iker', 'el Santo de Móstoles'],
+  'Mario Kempes': ['el Matador Kempes', 'el héroe del 78'],
+  'Ricardo Bochini': ['el Bocha Bochini', 'el Maestro Bochini'],
+
+  // Nuevos Ídolos (121-145)
+  'Ángel Clemente Rojas': ['Rojitas', 'la cintura mágica'],
+  'Rubén Suñé': ['el Chapa Suñé'],
+  'Roberto Mouzo': ['el gran Mouzo'],
+  'Antonio Rattín': ['el Rata Rattín', 'el caudillo'],
+  'Alberto Márcico': ['el Beto Márcico'],
+  'Sergio Martínez': ['el Manteca Martínez'],
+  'Silvio Marzolini': ['Silvio Marzolini', 'el mejor tres de la historia'],
+  'Hugo Gatti': ['el Loco Gatti'],
+  'Ubaldo Fillol': ['el Pato Fillol', 'el invencible Fillol'],
+  'José Luis Chilavert': ['Chila', 'el León de Guaraní', 'José Luis Félix'],
+  'Oscar Ruggeri': ['el Cabezón Ruggeri'],
+  'Gabriel Heinze': ['el Gringo Heinze'],
+  'Javier Mascherano': ['el Jefecito Mascherano'],
+  'Esteban Cambiasso': ['el Cuchu Cambiasso'],
+  'Lucho González': ['el Comandante Lucho'],
+  'Andrés D\'Alessandro': ['el Cabezón D\'Alessandro', 'el Mago de la Boba'],
+  'Leandro Romagnoli': ['el Pipi Romagnoli'],
+  'Diego Milito': ['el Príncipe Milito'],
+  'Lisandro López': ['Licha López'],
+  'Claudio López': ['el Piojo López'],
+  'Ezequiel Lavezzi': ['el Pocho Lavezzi'],
+  'Fernando Cavenaghi': ['el Torito Cavenaghi'],
+  'Diego Forlán': ['Cachavacha Forlán'],
+  'Enzo Pérez': ['Enzo Pérez', 'el alma del equipo'],
+  'Carlos Bianchi': ['el Virrey Bianchi', 'el goleador insaciable'],
+
+  // Nuevos Plantilla y Relleno Destacados
+  'Luis Islas': ['el Loco Islas'],
+  'Sebastián Saja': ['el Chino Saja'],
+  'Mauricio Caranta': ['Mauricio Caranta'],
+  'Germán Lux': ['Poroto Lux'],
+  'Néstor Fabbri': ['la Tota Fabbri'],
+  'Aníbal Matellán': ['Aníbal Matellán'],
+  'Juan Manuel Insaurralde': ['el Chaco Insaurralde'],
+  'Carlos Izquierdoz': ['el Cali Izquierdoz'],
+  'Javier Pinola': ['Javier Pinola'],
+  'Leonel Vangioni': ['el Piri Vangioni'],
+  'Frank Fabra': ['Frank Fabra'],
+  'Iván Pillud': ['Iván Pillud'],
+  'Julio Buffarini': ['Buffa', 'Julio Buffarini'],
+  'Marcelo Weigandt': ['el Chelo Weigandt'],
+  'Iván Marcone': ['el Capo Marcone'],
+  'Andrés Cubas': ['Cubitas'],
+  'Leandro Somoza': ['Leandro Somoza'],
+  'Pablo Ledesma': ['Pablo Ledesma'],
+  'Pablo Guiñazú': ['el Cholo Guiñazú'],
+  'Ignacio Fernández': ['Nacho Fernández'],
+  'Maxi Moralez': ['Frasquito Moralez'],
+  'Ricardo Centurión': ['Ricky Centurión'],
+  'Nicolás Bertolo': ['Nico Bertolo'],
+  'Cristian Pavón': ['Kichán Pavón'],
+  'Rodrigo Mora': ['la fiera Mora', 'el uruguayo Mora'],
+  'Ignacio Scocco': ['Nacho Scocco'],
+  'Ramón Ábila': ['Wanchope Ábila'],
+  'Nicolás Blandi': ['Nico Blandi'],
+  'Fernando Gamboa': ['el Negro Gamboa'],
+  'Cristian Lucchetti': ['el Laucha Lucchetti'],
+  'Juan Krupoviesa': ['el Tucumano Krupoviesa'],
+  'Marcelo Meli': ['Cesarini Meli'],
+  'Federico Carrizo': ['el Pachi Carrizo'],
+  'Pablo Mouche': ['Pablito Mouche'],
+  'Andrés Chávez': ['el Comandante Chávez'],
+  'Lucas Viatri': ['Lucas Viatri'],
+  'Lucas Boyé': ['el Tanque Boyé'],
+  'Jan Hurtado': ['el venezolano Hurtado'],
+  'Lucas Castromán': ['Lucas Castromán']
 }
 
 export function getPlayerNickname(playerName) {
@@ -206,21 +296,59 @@ export function generateCommentaryForIteration(matchDetails, prevScore, minuteFo
       return messages
     }
 
-    // 7. ATAJADA DEL ARQUERO
-    if (line.startsWith('ball saved by ') || line.startsWith('Ball saved by ')) {
-      const gkName = line.replace('ball saved by ', '').replace('Ball saved by ', '').split(' possesion')[0].trim()
+    // 7. ATAJADA DEL ARQUERO (Córner, Rebote o Embolsada)
+    if (
+      line.startsWith('ball saved by ') ||
+      line.startsWith('Ball saved by ') ||
+      line.startsWith('Magnificent save by ') ||
+      line.startsWith('Sensational goal-line save by ') ||
+      line.startsWith('Save by ') ||
+      line.startsWith('Ball saved on the line by ')
+    ) {
+      const isCornerSave = line.includes('corner') || line.includes('tipped out')
+      const isReboundSave = line.includes('spills') || line.includes('rebounds')
+      let gkName = 'el arquero'
+      const mGk = line.match(/(?:by|de)\s+([A-Za-zÁ-ÿ\s]+?)(?:!|\s+possesion|\s+Team|$)/)
+      if (mGk) gkName = mGk[1].trim()
       const alias = getAlias(gkName)
-      messages.push({
-        id: `${Date.now()}-${Math.random()}`,
-        minute: minuteFormatted,
-        speaker: 'Marcelo Araujo',
-        type: 'save',
-        text: pickRandom([
-          `¡ATAJÓ ${alias.toUpperCase()}! ¡Tremendo manotazo salvador cuando ya lo gritaban!`,
-          `¡Gigante ${alias} abajo de los tres palos! Se quedó con una pelota imposible, Macaya.`,
-          `¡Nooooo! ¡Lo que acaba de sacar ${alias}, por favor! Era el gol del partido.`
-        ])
-      })
+
+      if (isCornerSave) {
+        messages.push({
+          id: `${Date.now()}-${Math.random()}`,
+          minute: minuteFormatted,
+          speaker: 'Marcelo Araujo',
+          type: 'save',
+          text: pickRandom([
+            `¡¡LA MANDÓ AL CÓRNER ${alias.toUpperCase()}!! ¡Qué tapada monumental por arriba del travesaño, Macaya!`,
+            `¡Sensacional intervención de ${alias}! Se estiró cuan largo es y la desvió al tiro de esquina. ¡Monumental!`,
+            `¡Uhhhhhh! ¡Manotazo salvador de ${alias} contra el palo y al córner! ¡Cantalo, cantalo... todavía no!`
+          ])
+        })
+      } else if (isReboundSave) {
+        messages.push({
+          id: `${Date.now()}-${Math.random()}`,
+          minute: minuteFormatted,
+          speaker: 'Marcelo Araujo',
+          type: 'save',
+          text: pickRandom([
+            `¡Rebotó ${alias}! ¡Quedó la pelota viva y suelta en el corazón del área, peligro total!`,
+            `¡Tapó ${alias} a quemarropa pero dio rebote! ¡Alerta máxima en el área chica!`,
+            `¡Le quemó las manos el disparo a ${alias}! Rebote caliente en la medialuna...`
+          ])
+        })
+      } else {
+        messages.push({
+          id: `${Date.now()}-${Math.random()}`,
+          minute: minuteFormatted,
+          speaker: 'Marcelo Araujo',
+          type: 'save',
+          text: pickRandom([
+            `¡ATAJÓ ${alias.toUpperCase()}! ¡Tremendo manotazo salvador cuando ya lo gritaban!`,
+            `¡Gigante ${alias} abajo de los tres palos! Se quedó con una pelota imposible, Macaya.`,
+            `¡Nooooo! ¡Lo que acaba de embolsar ${alias}, por favor! Seguridad absoluta bajo el arco.`
+          ])
+        })
+      }
       stateTracker.lastCommentTick = matchDetails.iterationCount
       return messages
     }
@@ -255,15 +383,43 @@ export function generateCommentaryForIteration(matchDetails, prevScore, minuteFo
       return messages
     }
 
-    // 9. LESIÓN
-    if (line.startsWith('Player Injured - ')) {
-      const pName = line.replace('Player Injured - ', '').trim()
+    // 9. LESIÓN (Knock, Hurt o Serious)
+    if (line.startsWith('Player Injured')) {
+      let grade = 'knock'
+      let pName = 'el jugador'
+      let detail = ''
+      if (line.includes('[KNOCK]')) {
+        grade = 'knock'
+        const match = line.match(/\[KNOCK\] - ([^:]+): (.+)/)
+        if (match) { pName = match[1].trim(); detail = match[2].trim() }
+      } else if (line.includes('[HURT]')) {
+        grade = 'hurt'
+        const match = line.match(/\[HURT\] - ([^:]+): (.+)/)
+        if (match) { pName = match[1].trim(); detail = match[2].trim() }
+      } else if (line.includes('[SERIOUS]')) {
+        grade = 'serious'
+        const match = line.match(/\[SERIOUS\] - ([^:]+): (.+)/)
+        if (match) { pName = match[1].trim(); detail = match[2].trim() }
+      } else {
+        pName = line.replace('Player Injured - ', '').trim()
+      }
+
+      let injuryText = ''
+      if (grade === 'serious') {
+        injuryText = `¡Atención Marcelo, no va más ${pName}! Se tira al piso con claros gestos de dolor (${detail}). Piden el cambio de urgencia desde el banco.`
+      } else if (grade === 'hurt') {
+        injuryText = `Ojo Marcelo, está rengueando ${pName} tras una molestia física (${detail}). Va a seguir en cancha pero visiblemente disminuido.`
+      } else {
+        injuryText = `Fue un susto, Marcelo. ${pName} recibió un golpe (${detail}), pero tras la atención médica se reincorpora al juego.`
+      }
+
       messages.push({
         id: `${Date.now()}-${Math.random()}`,
         minute: minuteFormatted,
         speaker: 'Enrique Macaya Márquez',
         type: 'injury',
-        text: `Ojo Marcelo, se tocó el posterior ${pName}. Está sentido físicamente y pide atención médica.`
+        grade,
+        text: injuryText
       })
       stateTracker.lastCommentTick = matchDetails.iterationCount
       return messages

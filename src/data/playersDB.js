@@ -1,4 +1,4 @@
-// Base de Datos Maestra de los 100 Jugadores (Calibración RPG: Leyendas, Ídolos, Plantilla y Relleno)
+// Base de Datos Maestra de los 200 Jugadores (Calibración RPG: Leyendas, Ídolos, Plantilla y Relleno)
 // Compatible con el motor físico footballSimulationEngine + extensiones (freekick, perception, control, traits)
 
 // ---------------------------------------------------------------------------
@@ -86,6 +86,7 @@ export const TRAIT_DEFINITIONS = {
 
 // Mapa de posiciones secundarias / polifuncionalidad real para cada jugador
 const EXTRA_POSITIONS_BY_ID = {
+  // --- JUGADORES ORIGINALES (1 al 100) ---
   1: ['CAM', 'CM', 'ST'],          // Diego Maradona: Enganche, Mediocampista, Segunda punta
   2: ['ST', 'RM', 'CAM', 'CM'],    // Lionel Messi: Delantero, Extremo Derecho, Enganche
   3: ['ST', 'CAM', 'CM'],          // Pelé: Delantero, Enganche, Todocampista
@@ -142,13 +143,81 @@ const EXTRA_POSITIONS_BY_ID = {
   93: ['CM', 'RM', 'RB'],          // Gonzalo Escalante: 8, 5 y 4
   95: ['LM', 'CAM'],               // Damián Escudero: Volante izq. y media punta
   97: ['RM', 'ST'],                // Joel Acosta: Win derecho y punta
-  99: ['ST', 'RM']                 // Franco Soldano: 9 y "8" sacrificado
+  99: ['ST', 'RM'],                // Franco Soldano: 9 y "8" sacrificado
+
+  // --- NUEVOS JUGADORES (101 al 200) ---
+  101: ['ST', 'CAM', 'CM'],        // Alfredo Di Stéfano: Jugador total en todo el eje
+  102: ['RM', 'ST'],               // Garrincha: Win derecho y segunda punta
+  103: ['CB'],                     // Franco Baresi: Líbero puro
+  104: ['CAM', 'CM', 'ST'],        // Michel Platini: 10 goleador y organizador
+  106: ['ST', 'CAM'],              // Romário: 9 de área y falso 9
+  107: ['ST', 'CAM', 'LM'],        // Roberto Baggio: Mediapunta, enganche y delantero
+  108: ['CB', 'CM'],               // Ronald Koeman: Líbero y volante central de pegada
+  109: ['ST', 'LM'],               // Thierry Henry: 9 y extremo izquierdo con diagonal
+  110: ['CM', 'CAM'],              // Andrea Pirlo: Regista y enganche
+  111: ['CM', 'CAM', 'RM'],        // Luka Modrić: Interno, organizador y mediapunta
+  112: ['CM', 'LM'],               // Toni Kroos: Organizador e interno izquierdo
+  113: ['RB', 'RM', 'CM'],         // Dani Alves: Lateral, carrilero e interno
+  114: ['LB', 'LM'],               // Marcelo: Lateral y volante izquierdo
+  116: ['CB', 'RB', 'LB'],         // Carles Puyol: Central y lateral de marca
+  119: ['ST', 'LM', 'CAM'],        // Mario Kempes: Delantero entrando desde atrás o izquierda
+  120: ['CAM', 'CM'],              // Ricardo Bochini: Enganche puro
+  121: ['ST', 'CAM'],              // Ángel Clemente Rojas (Rojitas): Segunda punta y 10
+  122: ['CB', 'RB'],               // Rubén Suñé: 4 y marcador central
+  123: ['CB', 'LB'],               // Roberto Mouzo: Segundo central y 3
+  125: ['CAM', 'CM', 'ST', 'LM'],  // Alberto Márcico: Enganche y delantero
+  126: ['ST', 'RM'],               // Sergio "Manteca" Martínez: 9 y punta derecho
+  127: ['LB'],                     // Silvio Marzolini: 3 clásico
+  132: ['CB', 'LB'],               // Gabriel Heinze: Central zurdo y lateral izquierdo
+  133: ['CM', 'CB'],               // Javier Mascherano: 5 tapón y marcador central
+  134: ['CM', 'LM', 'CB'],         // Esteban Cambiasso: 5, interno zurdo y líbero
+  135: ['CM', 'RM', 'CAM'],        // Lucho González: 8, interno y enganche
+  136: ['CAM', 'CM', 'LM'],        // Andrés D'Alessandro: Enganche y volante zurdo
+  137: ['CAM', 'CM', 'RM'],        // Leandro Romagnoli: 10 y mediapunta
+  139: ['ST', 'RM', 'LM'],         // Lisandro López: 9 y punta por afuera
+  140: ['LM', 'ST'],               // Claudio "Piojo" López: Win izquierdo y delantero
+  141: ['LM', 'RM', 'ST'],         // Ezequiel Lavezzi: Extremo por ambas bandas y segunda punta
+  143: ['ST', 'CAM'],              // Diego Forlán: 9 y media punta ambidiestro
+  144: ['CM', 'RM', 'RB'],         // Enzo Pérez: 5, 8 y auxilio en banda
+  151: ['CB', 'LB'],               // Aníbal Matellán: Segundo central y 3 de marca
+  154: ['CB', 'LB'],               // Javier Pinola: Central zurdo y lateral izquierdo
+  155: ['LB', 'LM'],               // Diego Placente: 3 con salida limpia
+  156: ['LB', 'LM'],               // Leonel Vangioni: Lateral y volante izquierdo
+  157: ['LB', 'LM'],               // Frank Fabra: Lateral-extremo izquierdo
+  158: ['RB', 'RM'],               // Iván Pillud: 4 y carrilero derecho
+  159: ['RB', 'RM', 'CM'],         // Julio Buffarini: 4, 8 y volante de contención
+  160: ['RB', 'RM'],               // Marcelo Weigandt: Lateral derecho con llegada
+  164: ['RM', 'CM', 'RB'],         // Pablo Ledesma: 8 con llegada al área y 5
+  165: ['CM', 'LM', 'LB'],         // Pablo Guiñazú: 5, interno zurdo y 3
+  166: ['CM', 'CAM', 'LM', 'RM'],  // Nacho Fernández: Interno, enganche y volante
+  167: ['CAM', 'LM', 'RM'],        // Maxi Moralez: Enganche y extremo liviano
+  168: ['LM', 'RM', 'CAM'],        // Ricardo Centurión: Extremo gambeteador por ambas bandas
+  169: ['LM', 'RM', 'CM'],         // Nicolás Bertolo: Volante de ida y vuelta por las bandas
+  170: ['RM', 'LM', 'ST'],         // Cristian Pavón: Extremo veloz por derecha o izquierda
+  171: ['ST', 'RM'],               // Rodrigo Mora: Segunda punta y extremo derecho
+  172: ['ST', 'LM', 'CAM'],        // Ignacio Scocco: 9 técnico y segunda punta
+  180: ['CB', 'RB'],               // Christian Cellay: Central y lateral derecho
+  182: ['CB', 'LB'],               // Matías Cahais: Central zurdo y 3
+  185: ['RB', 'RM'],               // Leandro Marín: 4 con proyección
+  186: ['RB', 'RM'],               // Gino Peruzzi: 4 con llegada al área
+  187: ['LB', 'LM'],               // Fabián Monzón: 3 con cañón de zurda
+  188: ['LB', 'LM'],               // Fernando Evangelista: Lateral y carrilero zurdo
+  189: ['LB', 'LM'],               // Juan Krupoviesa: 3 áspero
+  190: ['CM', 'RM'],               // Marcelo Meli: 8 y 5 de despliegue
+  191: ['CM', 'CAM', 'RM'],        // Gonzalo Castellani: Volante organizador y enganche
+  192: ['LM', 'RM'],               // Federico "Pachi" Carrizo: Extremo por ambas bandas
+  193: ['LM', 'RM', 'ST'],         // Pablo Mouche: Win por afuera y segunda punta
+  194: ['ST', 'LM', 'RM'],         // Andrés Chávez: Delantero potente por el centro o izquierda
+  195: ['ST', 'CAM'],              // Lucas Viatri: 9 pivot y descargador
+  196: ['ST', 'RM', 'LM'],         // Lucas Boyé: Delantero de choque por todo el frente
+  200: ['RM', 'ST', 'CM']          // Lucas Castromán: Volante derecho, delantero y cañonero
 }
 
 // ---------------------------------------------------------------------------
 // 2. Asignación de Rasgos Individuales por Jugador
 // ---------------------------------------------------------------------------
 const PLAYER_TRAITS_BY_ID = {
+  // --- ORIGINALES (1 al 100) ---
   1: ['playmaker_gambeteador', 'lanzador_canonero'],                     // Maradona
   2: ['playmaker_gambeteador', 'fenomeno_encarador'],                    // Messi
   3: ['fenomeno_encarador', 'artillero_area'],                          // Pelé
@@ -170,7 +239,7 @@ const PLAYER_TRAITS_BY_ID = {
   19: ['muro_reflejos'],                                                 // Buffon
   20: ['caudillo_fisico', 'canonero_media_distancia'],                   // Passarella
 
-  // Ídolos
+  // Ídolos (21-45)
   21: ['artillero_area'],                                                // Palermo
   22: ['playmaker_gambeteador', 'fenomeno_encarador'],                   // Tevez
   23: ['velocista_banda', 'playmaker_gambeteador'],                     // Di María
@@ -197,7 +266,7 @@ const PLAYER_TRAITS_BY_ID = {
   44: ['caudillo_fisico', 'recuperador_pulmon'],                         // Serna ("Chicho")
   45: ['caudillo_fisico'],                                               // Giunta ("Huevo huevo huevo")
 
-  // Plantilla
+  // Plantilla (46-75)
   46: ['muro_reflejos'],                                                 // Romero
   47: ['muro_reflejos'],                                                 // Armani
   48: ['muro_reflejos'],                                                 // Orion
@@ -229,7 +298,7 @@ const PLAYER_TRAITS_BY_ID = {
   74: ['artillero_area', 'canonero_media_distancia'],                   // Benedetto
   75: ['artillero_area', 'caudillo_fisico'],                            // Pratto
 
-  // Relleno (Especialistas Buffeados OVR 74-77)
+  // Relleno (76-100)
   76: ['organizador_mediocampo', 'muro_reflejos'],                       // Javier García (buen pie)
   77: ['muro_reflejos'],                                                 // Josué Ayala (atajador)
   78: ['muro_reflejos'],                                                 // Assmann (reflejos rápidos)
@@ -254,7 +323,115 @@ const PLAYER_TRAITS_BY_ID = {
   97: ['velocista_banda'],                                               // Joel Acosta (velocista)
   98: ['artillero_area'],                                                // Takahara (primer toque)
   99: ['recuperador_pulmon', 'artillero_area'],                         // Soldano (presión total)
-  100: ['artillero_area', 'caudillo_fisico']                            // Gigliotti (9 físico de área)
+  100: ['artillero_area', 'caudillo_fisico'],                           // Gigliotti (9 físico de área)
+
+  // --- NUEVAS LEYENDAS (101 al 120) ---
+  101: ['organizador_mediocampo', 'artillero_area'],                     // Alfredo Di Stéfano
+  102: ['playmaker_gambeteador', 'velocista_banda'],                     // Garrincha
+  103: ['caudillo_fisico', 'organizador_mediocampo'],                    // Franco Baresi
+  104: ['organizador_mediocampo', 'lanzador_canonero'],                  // Michel Platini
+  105: ['artillero_area', 'canonero_media_distancia'],                   // Marco van Basten
+  106: ['artillero_area', 'fenomeno_encarador'],                         // Romário
+  107: ['playmaker_gambeteador', 'artillero_area'],                      // Roberto Baggio
+  108: ['canonero_media_distancia', 'lanzador_canonero'],                // Ronald Koeman
+  109: ['velocista_banda', 'fenomeno_encarador'],                        // Thierry Henry
+  110: ['organizador_mediocampo', 'lanzador_canonero'],                  // Andrea Pirlo
+  111: ['organizador_mediocampo', 'recuperador_pulmon'],                 // Luka Modrić
+  112: ['organizador_mediocampo', 'lanzador_canonero'],                  // Toni Kroos
+  113: ['lateral_ofensivo', 'playmaker_gambeteador'],                    // Dani Alves
+  114: ['lateral_ofensivo', 'playmaker_gambeteador'],                    // Marcelo
+  115: ['caudillo_fisico'],                                              // Alessandro Nesta
+  116: ['caudillo_fisico', 'recuperador_pulmon'],                        // Carles Puyol
+  117: ['muro_reflejos', 'organizador_mediocampo'],                      // Manuel Neuer
+  118: ['muro_reflejos'],                                                // Iker Casillas
+  119: ['fenomeno_encarador', 'artillero_area'],                         // Mario Kempes
+  120: ['organizador_mediocampo', 'playmaker_gambeteador'],              // Ricardo Bochini
+
+  // --- NUEVOS ÍDOLOS (121 al 145) ---
+  121: ['playmaker_gambeteador', 'fenomeno_encarador'],                  // Rojitas
+  122: ['caudillo_fisico', 'recuperador_pulmon'],                        // Rubén Suñé
+  123: ['caudillo_fisico'],                                              // Roberto Mouzo
+  124: ['caudillo_fisico', 'organizador_mediocampo'],                    // Antonio Rattín
+  125: ['playmaker_gambeteador', 'organizador_mediocampo'],              // Beto Márcico
+  126: ['artillero_area'],                                               // Manteca Martínez
+  127: ['lateral_ofensivo', 'organizador_mediocampo'],                   // Silvio Marzolini
+  128: ['muro_reflejos', 'organizador_mediocampo'],                      // Hugo Gatti
+  129: ['muro_reflejos'],                                                // Ubaldo Fillol
+  130: ['muro_reflejos', 'canonero_media_distancia'],                    // José Luis Chilavert
+  131: ['caudillo_fisico'],                                              // Oscar Ruggeri
+  132: ['caudillo_fisico'],                                              // Gabriel Heinze
+  133: ['recuperador_pulmon', 'caudillo_fisico'],                        // Javier Mascherano
+  134: ['organizador_mediocampo', 'recuperador_pulmon'],                 // Esteban Cambiasso
+  135: ['organizador_mediocampo', 'canonero_media_distancia'],           // Lucho González
+  136: ['playmaker_gambeteador', 'lanzador_canonero'],                   // Andrés D'Alessandro
+  137: ['playmaker_gambeteador', 'velocista_banda'],                     // Leandro Romagnoli
+  138: ['artillero_area'],                                               // Diego Milito
+  139: ['artillero_area', 'recuperador_pulmon'],                         // Lisandro López
+  140: ['velocista_banda', 'canonero_media_distancia'],                  // Piojo López
+  141: ['velocista_banda', 'fenomeno_encarador'],                        // Pocho Lavezzi
+  142: ['artillero_area'],                                               // Fernando Cavenaghi
+  143: ['canonero_media_distancia', 'lanzador_canonero'],                // Diego Forlán
+  144: ['recuperador_pulmon', 'organizador_mediocampo'],                 // Enzo Pérez
+  145: ['artillero_area'],                                               // Carlos Bianchi
+
+  // --- NUEVA PLANTILLA (146 al 175) ---
+  146: ['muro_reflejos'],                                                // Luis Islas
+  147: ['muro_reflejos', 'canonero_media_distancia'],                    // Sebastián Saja
+  148: ['muro_reflejos'],                                                // Mauricio Caranta
+  149: ['muro_reflejos'],                                                // Germán Lux
+  150: ['caudillo_fisico'],                                              // Néstor Fabbri
+  151: ['caudillo_fisico'],                                              // Aníbal Matellán
+  152: ['caudillo_fisico'],                                              // Juan Manuel Insaurralde
+  153: ['caudillo_fisico'],                                              // Carlos Izquierdoz
+  154: ['caudillo_fisico', 'recuperador_pulmon'],                        // Javier Pinola
+  155: ['lateral_ofensivo'],                                             // Diego Placente
+  156: ['lateral_ofensivo', 'canonero_media_distancia'],                 // Leonel Vangioni
+  157: ['lateral_ofensivo', 'playmaker_gambeteador'],                    // Frank Fabra
+  158: ['lateral_ofensivo'],                                             // Iván Pillud
+  159: ['recuperador_pulmon', 'lateral_ofensivo'],                       // Julio Buffarini
+  160: ['lateral_ofensivo', 'caudillo_fisico'],                          // Marcelo Weigandt
+  161: ['organizador_mediocampo'],                                       // Iván Marcone
+  162: ['recuperador_pulmon'],                                           // Andrés Cubas
+  163: ['caudillo_fisico', 'recuperador_pulmon'],                        // Leandro Somoza
+  164: ['recuperador_pulmon', 'canonero_media_distancia'],               // Pablo Ledesma
+  165: ['recuperador_pulmon'],                                           // Pablo Guiñazú
+  166: ['organizador_mediocampo', 'playmaker_gambeteador'],              // Nacho Fernández
+  167: ['playmaker_gambeteador'],                                        // Maxi Moralez
+  168: ['playmaker_gambeteador', 'velocista_banda'],                     // Ricardo Centurión
+  169: ['velocista_banda', 'recuperador_pulmon'],                        // Nicolás Bertolo
+  170: ['velocista_banda', 'canonero_media_distancia'],                  // Cristian Pavón
+  171: ['velocista_banda', 'artillero_area'],                            // Rodrigo Mora
+  172: ['playmaker_gambeteador', 'artillero_area'],                      // Ignacio Scocco
+  173: ['artillero_area', 'caudillo_fisico'],                            // Wanchope Ábila
+  174: ['artillero_area'],                                               // Nicolás Blandi
+  175: ['caudillo_fisico', 'organizador_mediocampo'],                    // Fernando Gamboa
+
+  // --- NUEVO RELLENO (176 al 200) ---
+  176: ['muro_reflejos'],                                                // Emanuel Trípodi
+  177: ['muro_reflejos'],                                                // Guillermo Sara
+  178: ['muro_reflejos', 'organizador_mediocampo'],                      // Cristian Lucchetti
+  179: ['muro_reflejos'],                                                // Sebastián Peratta
+  180: ['caudillo_fisico'],                                              // Christian Cellay
+  181: ['caudillo_fisico'],                                              // Gabriel Paletta
+  182: ['caudillo_fisico'],                                              // Matías Cahais
+  183: ['caudillo_fisico'],                                              // Santiago Vergini
+  184: ['caudillo_fisico'],                                              // Lisandro Magallán
+  185: ['lateral_ofensivo'],                                             // Leandro Marín
+  186: ['lateral_ofensivo'],                                             // Gino Peruzzi
+  187: ['canonero_media_distancia', 'lateral_ofensivo'],                 // Fabián Monzón
+  188: ['velocista_banda', 'lateral_ofensivo'],                          // Fernando Evangelista
+  189: ['caudillo_fisico'],                                              // Juan Krupoviesa
+  190: ['recuperador_pulmon'],                                           // Marcelo Meli
+  191: ['organizador_mediocampo'],                                       // Gonzalo Castellani
+  192: ['playmaker_gambeteador', 'velocista_banda'],                     // Pachi Carrizo
+  193: ['velocista_banda'],                                              // Pablo Mouche
+  194: ['canonero_media_distancia', 'fenomeno_encarador'],               // Andrés Chávez
+  195: ['artillero_area', 'organizador_mediocampo'],                     // Lucas Viatri
+  196: ['caudillo_fisico', 'recuperador_pulmon'],                        // Lucas Boyé
+  197: ['velocista_banda', 'caudillo_fisico'],                           // Nicolás Orsini
+  198: ['caudillo_fisico', 'velocista_banda'],                           // Jan Hurtado
+  199: ['artillero_area'],                                               // Claudio Riaño
+  200: ['canonero_media_distancia']                                      // Lucas Castromán
 }
 
 function inferDefaultTraits(position, skill) {
@@ -360,7 +537,7 @@ export const CATEGORY_INFO = {
 
 export const PLAYERS_DB = [
   // =========================================================================
-  // 1. LEYENDAS (20 Jugadores | Precio: $35M a $45M | Media 93-99)
+  // 1. LEYENDAS ORIGINALES (IDs 1-20 | Precio: $35M a $45M | Media 93-99)
   // =========================================================================
   createPlayer(1, 'Diego Maradona', 'legend', 'CM', 99, 45.0, 165, 99, 96, 45, 10, 99, 88, 96, 99, 75, 99, 99, 'Total / D10S: Gamba, visión, pegada y liderazgo absoluto'),
   createPlayer(2, 'Lionel Messi', 'legend', 'ST', 99, 45.0, 170, 99, 98, 40, 10, 99, 80, 92, 98, 70, 99, 99, 'Total / Genio ofensivo: Control pegado al pie y definición letal'),
@@ -384,7 +561,7 @@ export const PLAYERS_DB = [
   createPlayer(20, 'Daniel Passarella', 'legend', 'CB', 93, 35.0, 173, 82, 88, 95, 15, 85, 94, 93, 88, 99, 94, 85, 'El Gran Capitán: Caudillo defensivo, salto de 99 y gol de pelota parada'),
 
   // =========================================================================
-  // 2. ÍDOLOS (25 Jugadores | Precio: $16M a $26M | Media 82-89)
+  // 2. ÍDOLOS ORIGINALES (IDs 21-45 | Precio: $16M a $26M | Media 82-89)
   // =========================================================================
   createPlayer(21, 'Martín Palermo', 'idol', 'ST', 88, 25.0, 188, 64, 95, 45, 15, 66, 95, 88, 60, 99, 97, 72, 'Optimista del Gol: Cabezazo letal (JUM 99) y olfato único en el área'),
   createPlayer(22, 'Carlos Tevez', 'idol', 'ST', 89, 26.0, 171, 84, 92, 62, 10, 92, 94, 88, 84, 76, 88, 91, 'El Apache: Guerrero imparable de potencia, gambeta y remate'),
@@ -413,7 +590,7 @@ export const PLAYERS_DB = [
   createPlayer(45, 'Blas Giunta', 'idol', 'CM', 82, 16.0, 178, 68, 60, 94, 10, 76, 97, 70, 45, 88, 87, 70, 'Blas Armando: Huevo, huevo, huevo (STR 97, TAC 94), intimida al medio rival'),
 
   // =========================================================================
-  // 3. JUGADORES DE PLANTILLA (30 Jugadores | Precio: $6M a $14M | Media 72-79)
+  // 3. JUGADORES DE PLANTILLA ORIGINALES (IDs 46-75 | Precio: $6M a $14M | Media 72-79)
   // =========================================================================
   createPlayer(46, 'Sergio Romero', 'squad', 'GK', 78, 11.0, 192, 62, 15, 25, 86, 75, 78, 45, 35, 84, 84, 65, 'Chiquito: Fuerte en SAV (86), JUM (84) y PER (84)'),
   createPlayer(47, 'Franco Armani', 'squad', 'GK', 78, 11.0, 189, 55, 15, 25, 88, 82, 78, 40, 30, 83, 78, 58, 'El Pulpo: Achique rápido y reflejos (SAV 88), flojo con los pies'),
@@ -447,8 +624,7 @@ export const PLAYERS_DB = [
   createPlayer(75, 'Lucas Pratto', 'squad', 'ST', 76, 9.0, 185, 72, 82, 55, 10, 66, 90, 76, 62, 84, 76, 72, 'El Oso: Aguanta a los dos centrales y saca el remate (STR 90, JUM 84, SHO 82)'),
 
   // =========================================================================
-  // 4. RELLENO (25 Jugadores | Precio: $1.8M a $2.5M | Media Competitiva 74-77)
-  // Rebalanceados: gangas y suplentes cumplidores de Primera División con un atributo pico de élite (82-90)
+  // 4. RELLENO ORIGINAL (IDs 76-100 | Precio: $1.8M a $2.5M | Media 74-77)
   // =========================================================================
   createPlayer(76, 'Javier García', 'filler', 'GK', 75, 2.5, 181, 84, 20, 25, 78, 72, 68, 48, 40, 65, 76, 82, 'Especialista en salir jugando con los pies (PAS 84, CON 82, SAV 78)'),
   createPlayer(77, 'Josué Ayala', 'filler', 'GK', 74, 1.8, 188, 52, 18, 20, 84, 72, 76, 40, 30, 72, 74, 52, 'Atajador puro bajo los tres palos y achique (SAV 84, STR 76)'),
@@ -474,7 +650,124 @@ export const PLAYERS_DB = [
   createPlayer(97, 'Joel Acosta', 'filler', 'RM', 75, 2.0, 173, 70, 68, 50, 10, 89, 66, 58, 45, 64, 68, 78, 'Velocidad de extremo puro para ganar la línea de fondo (AGI 89, CON 78)'),
   createPlayer(98, 'Naohiro Takahara', 'filler', 'ST', 75, 2.2, 181, 64, 84, 42, 10, 74, 74, 70, 52, 76, 80, 76, 'Definidor al primer toque y lectura dentro del área (SHO 84, PER 80, CON 76)'),
   createPlayer(99, 'Franco Soldano', 'filler', 'ST', 76, 2.2, 186, 66, 68, 74, 10, 86, 86, 62, 45, 88, 76, 68, 'Presión incansable a defensores y potencia en el salto (AGI 86, STR 86, JUM 88)'),
-  createPlayer(100, 'Emmanuel Gigliotti', 'filler', 'ST', 77, 2.5, 187, 65, 87, 46, 10, 66, 88, 78, 60, 84, 76, 74, 'Nueve de área implacable, potencia de remate y choque físico (SHO 87, STR 88, JUM 84)')
+  createPlayer(100, 'Emmanuel Gigliotti', 'filler', 'ST', 77, 2.5, 187, 65, 87, 46, 10, 66, 88, 78, 60, 84, 76, 74, 'Nueve de área implacable, potencia de remate y choque físico (SHO 87, STR 88, JUM 84)'),
+
+  // =========================================================================
+  // 5. NUEVAS LEYENDAS (IDs 101-120 | Precio: $35M a $43M | Media 93-97)
+  // =========================================================================
+  createPlayer(101, 'Alfredo Di Stéfano', 'legend', 'ST', 97, 43.0, 178, 95, 96, 72, 15, 93, 88, 94, 88, 86, 99, 97, 'La Saeta Rubia: Todocampista ofensivo, defiende, crea y define'),
+  createPlayer(102, 'Garrincha', 'legend', 'RM', 96, 41.0, 169, 92, 90, 35, 10, 99, 78, 86, 90, 72, 94, 99, 'El Ángel de las Piernas Torcidas: Gambeta indescifrable por derecha (AGI 99, CON 99)'),
+  createPlayer(103, 'Franco Baresi', 'legend', 'CB', 95, 39.0, 176, 88, 60, 98, 15, 86, 88, 82, 70, 92, 99, 89, 'Cierre magistral: Anticipación perfecta y lectura defensiva (PER 99, TAC 98)'),
+  createPlayer(104, 'Michel Platini', 'legend', 'CM', 95, 40.0, 179, 98, 94, 58, 10, 89, 80, 96, 98, 78, 98, 97, 'El Rey Michel: Enganche con alma de 9, pase largo y tiro libre quirúrgico'),
+  createPlayer(105, 'Marco van Basten', 'legend', 'ST', 96, 41.0, 188, 84, 99, 40, 10, 89, 90, 95, 84, 94, 97, 95, 'El Cisne de Utrecht: Voleas imposibles, juego aéreo y definición clínica'),
+  createPlayer(106, 'Romário', 'legend', 'ST', 95, 40.0, 167, 85, 98, 32, 10, 98, 82, 93, 82, 78, 98, 98, 'O Baixinho: Rey del área chica, puntinazo letal y giro en una baldosa'),
+  createPlayer(107, 'Roberto Baggio', 'legend', 'ST', 94, 38.0, 174, 95, 93, 38, 10, 95, 75, 90, 96, 74, 96, 98, 'Il Divin Codino: Fantasía italiana, control de seda y pelota parada'),
+  createPlayer(108, 'Ronald Koeman', 'legend', 'CB', 93, 36.0, 181, 93, 95, 91, 15, 78, 92, 96, 98, 86, 92, 88, 'Tintín: El defensor más goleador de la historia con un cañón en el pie (FK 98)'),
+  createPlayer(109, 'Thierry Henry', 'legend', 'ST', 95, 40.0, 188, 89, 96, 42, 10, 98, 86, 92, 88, 83, 95, 96, 'Tití: Zancada imparable abriendo el pie al segundo palo'),
+  createPlayer(110, 'Andrea Pirlo', 'legend', 'CM', 94, 38.0, 177, 99, 86, 66, 10, 84, 74, 94, 98, 68, 99, 98, 'Il Maestro: Pases teledirigidos de 60 metros y tiros libres con folha seca'),
+  createPlayer(111, 'Luka Modrić', 'legend', 'CM', 94, 38.0, 172, 98, 84, 78, 10, 94, 76, 88, 85, 70, 99, 98, 'Motor eterno: Tres dedos mágico, giro bajo presión y despliegue total'),
+  createPlayer(112, 'Toni Kroos', 'legend', 'CM', 93, 36.0, 183, 99, 88, 74, 10, 82, 82, 88, 92, 74, 98, 97, 'Francotirador alemán: Cambios de frente milimétricos y remate rasante al rincón'),
+  createPlayer(113, 'Dani Alves', 'legend', 'RB', 93, 36.0, 172, 92, 84, 88, 10, 95, 80, 82, 88, 82, 93, 94, 'Socio de oro por derecha: Asociación de 10, llegada y centro perfecto'),
+  createPlayer(114, 'Marcelo', 'legend', 'LB', 93, 35.0, 174, 92, 83, 84, 10, 95, 82, 84, 84, 78, 91, 98, 'Malabarista del lateral: Control de pelota irreal (CON 98) y ataque constante'),
+  createPlayer(115, 'Alessandro Nesta', 'legend', 'CB', 94, 37.0, 187, 82, 55, 98, 15, 88, 91, 70, 60, 93, 98, 86, 'Elegancia romana: Barridas limpias y perfección posicional en la cueva'),
+  createPlayer(116, 'Carles Puyol', 'legend', 'CB', 93, 36.0, 178, 76, 62, 96, 15, 86, 97, 70, 55, 97, 96, 78, 'Tiburón: Corazón, fuerza bruta, cierres al límite y cabezazo ganador'),
+  createPlayer(117, 'Manuel Neuer', 'legend', 'GK', 95, 37.0, 193, 90, 30, 52, 98, 91, 93, 65, 55, 94, 98, 88, 'Arquero-líbero revolucionario: Achica fuera del área y sale jugando como un 5'),
+  createPlayer(118, 'Iker Casillas', 'legend', 'GK', 94, 35.0, 182, 74, 20, 38, 98, 96, 85, 55, 45, 93, 97, 78, 'San Iker: Milagros en el mano a mano con reflejos felinos (SAV 98, AGI 96)'),
+  createPlayer(119, 'Mario Kempes', 'legend', 'ST', 94, 38.0, 184, 85, 96, 50, 10, 92, 94, 90, 86, 90, 94, 93, 'El Matador: Potencia arrolladora entrando en diagonal desde tres cuartos'),
+  createPlayer(120, 'Ricardo Bochini', 'legend', 'CM', 94, 38.0, 168, 99, 80, 42, 10, 93, 74, 85, 82, 65, 99, 98, 'El Bocha: El maestro de la pausa y el pase bochinesco que deja solo al 9'),
+
+  // =========================================================================
+  // 6. NUEVOS ÍDOLOS (IDs 121-145 | Precio: $16M a $26M | Media 82-89)
+  // =========================================================================
+  createPlayer(121, 'Ángel Clemente Rojas', 'idol', 'ST', 88, 24.0, 169, 86, 86, 38, 10, 98, 74, 85, 80, 72, 90, 98, 'Rojitas: Cintura mágica y quiebre de cadera inolvidable (AGI 98, CON 98)'),
+  createPlayer(122, 'Rubén Suñé', 'idol', 'CB', 86, 21.0, 175, 76, 74, 92, 12, 82, 93, 84, 82, 86, 91, 78, 'El Chapa: Caudillo implacable y autor del tiro libre más famoso'),
+  createPlayer(123, 'Roberto Mouzo', 'idol', 'CB', 87, 22.0, 179, 74, 68, 93, 15, 78, 94, 88, 75, 91, 92, 76, 'Símbolo eterno en la zaga: Firmeza, temperamento y jerarquía'),
+  createPlayer(124, 'Antonio Rattín', 'idol', 'CM', 87, 22.0, 189, 84, 70, 92, 12, 74, 96, 80, 65, 92, 94, 82, 'El Rata: El 5 dueño de la mitad de la cancha, voz de mando y presencia física'),
+  createPlayer(125, 'Alberto Márcico', 'idol', 'CM', 88, 24.0, 176, 93, 86, 48, 10, 84, 90, 88, 86, 74, 94, 96, 'El Beto: Talento puro, aguante con el cuerpo y toque de distinción en el área'),
+  createPlayer(126, 'Sergio Martínez', 'idol', 'ST', 86, 21.0, 178, 74, 92, 42, 10, 88, 86, 88, 70, 88, 93, 84, 'El Manteca: Goleador de clásicos, siempre colgado del alambrado'),
+  createPlayer(127, 'Silvio Marzolini', 'idol', 'LB', 89, 25.0, 179, 88, 74, 92, 10, 89, 85, 78, 72, 84, 93, 91, 'El mejor 3 de la historia: Salida elegante con la frente alta y marca limpia'),
+  createPlayer(128, 'Hugo Gatti', 'idol', 'GK', 87, 21.0, 182, 88, 30, 55, 90, 92, 82, 60, 55, 86, 94, 86, 'El Loco: Achique con los pies ("La de Dios") y showman adelantado a su época'),
+  createPlayer(129, 'Ubaldo Fillol', 'idol', 'GK', 89, 25.0, 181, 76, 20, 40, 96, 95, 88, 60, 50, 93, 94, 78, 'El Pato: Reflejos felinos de otro planeta y atajador de penales (SAV 96, AGI 95)'),
+  createPlayer(130, 'José Luis Chilavert', 'idol', 'GK', 88, 24.0, 188, 82, 88, 42, 92, 84, 94, 96, 97, 88, 91, 80, 'Chila: Arquero caudillo y especialista letal en tiros libres y penales (FK 97, PEN 96)'),
+  createPlayer(131, 'Oscar Ruggeri', 'idol', 'CB', 87, 23.0, 184, 68, 66, 93, 15, 76, 95, 75, 55, 97, 92, 70, 'El Cabezón: Guapo en las dos áreas, gana siempre de arriba (JUM 97, STR 95)'),
+  createPlayer(132, 'Gabriel Heinze', 'idol', 'CB', 85, 19.0, 178, 75, 65, 91, 12, 82, 92, 74, 65, 90, 90, 76, 'El Gringo: Fiereza defensiva, barrida al piso y liderazgo'),
+  createPlayer(133, 'Javier Mascherano', 'idol', 'CM', 88, 24.0, 174, 84, 62, 95, 12, 86, 91, 74, 60, 84, 96, 83, 'El Jefecito: Cruces salvadores al límite y lectura táctica suprema (PER 96, TAC 95)'),
+  createPlayer(134, 'Esteban Cambiasso', 'idol', 'CM', 87, 23.0, 177, 89, 82, 88, 10, 82, 84, 80, 74, 82, 95, 89, 'El Cuchu: Cerebro táctico, relevo exacto y llegada por sorpresa al gol'),
+  createPlayer(135, 'Lucho González', 'idol', 'CM', 85, 19.0, 185, 88, 86, 78, 10, 80, 85, 84, 80, 82, 89, 88, 'El Comandante: Volante mixto de tranco largo y remate de media distancia'),
+  createPlayer(136, 'Andrés D\'Alessandro', 'idol', 'CM', 86, 21.0, 174, 93, 82, 42, 10, 92, 70, 88, 89, 64, 90, 95, 'El Cabezón: La Boba, pisada zurda y pases punzantes entre líneas'),
+  createPlayer(137, 'Leandro Romagnoli', 'idol', 'CM', 85, 19.0, 172, 91, 80, 40, 10, 93, 68, 84, 86, 65, 89, 94, 'El Pipi: Enganche atrevido de cambio de ritmo y asistencia'),
+  createPlayer(138, 'Diego Milito', 'idol', 'ST', 88, 24.0, 183, 82, 94, 42, 10, 85, 86, 91, 74, 86, 95, 90, 'El Príncipe: Enganche hacia adentro y definición cruzada infalible en finales'),
+  createPlayer(139, 'Lisandro López', 'idol', 'ST', 86, 20.0, 174, 82, 90, 52, 10, 87, 84, 88, 75, 88, 91, 87, 'Licha: Movilidad por todo el frente de ataque, cabezazo y sacrificio'),
+  createPlayer(140, 'Claudio López', 'idol', 'LM', 86, 21.0, 178, 80, 89, 42, 10, 95, 78, 82, 78, 80, 88, 86, 'El Piojo: Contraataque supersónico por izquierda y zurdazo violento'),
+  createPlayer(141, 'Ezequiel Lavezzi', 'idol', 'LM', 84, 18.0, 173, 80, 83, 48, 10, 95, 86, 78, 72, 76, 84, 88, 'El Pocho: Potencia corta, desborde furioso y diagonales picantes'),
+  createPlayer(142, 'Fernando Cavenaghi', 'idol', 'ST', 85, 19.0, 181, 78, 91, 38, 10, 80, 85, 89, 78, 84, 91, 86, 'El Torito: Goleador de raza con mil recursos adentro del área'),
+  createPlayer(143, 'Diego Forlán', 'idol', 'ST', 89, 25.0, 180, 86, 96, 45, 10, 88, 85, 92, 92, 82, 92, 91, 'Cachavacha: Bombazos ambidiestros desde 35 metros (SHO 96, FK 92)'),
+  createPlayer(144, 'Enzo Pérez', 'idol', 'CM', 85, 19.0, 178, 87, 74, 86, 35, 83, 84, 78, 70, 78, 91, 87, 'Motor de mitad de cancha, primer pase limpio y hasta se pone el buzo de arquero'),
+  createPlayer(145, 'Carlos Bianchi', 'idol', 'ST', 88, 24.0, 179, 80, 95, 40, 10, 85, 86, 92, 78, 88, 96, 88, 'El Virrey Goleador: Artillero letal en Argentina y Francia (PER 96, SHO 95)'),
+
+  // =========================================================================
+  // 7. NUEVOS JUGADORES DE PLANTILLA (IDs 146-175 | Precio: $6M a $14M | Media 72-79)
+  // =========================================================================
+  createPlayer(146, 'Luis Islas', 'squad', 'GK', 78, 11.0, 181, 74, 20, 35, 85, 86, 76, 55, 45, 80, 84, 72, 'El Loco: Rápido para salir a cortar y puro reflejo bajo los palos (AGI 86, SAV 85)'),
+  createPlayer(147, 'Sebastián Saja', 'squad', 'GK', 78, 11.0, 189, 72, 75, 30, 85, 78, 84, 92, 80, 82, 83, 68, 'El Chino: Arquero seguro y especialista en patear penales (PEN 92, SAV 85)'),
+  createPlayer(148, 'Mauricio Caranta', 'squad', 'GK', 76, 9.0, 186, 65, 20, 30, 84, 82, 78, 45, 40, 81, 78, 62, 'Voladas elásticas en noches de Copa (SAV 84, AGI 82)'),
+  createPlayer(149, 'Germán Lux', 'squad', 'GK', 75, 8.0, 186, 68, 18, 28, 83, 79, 76, 45, 38, 78, 80, 65, 'Poroto: Sobrio en el arco y rápido de reflejos (SAV 83, PER 80)'),
+  createPlayer(150, 'Néstor Fabbri', 'squad', 'CB', 78, 12.0, 186, 62, 60, 86, 12, 65, 90, 70, 50, 89, 82, 62, 'La Tota: Impasable de arriba en las dos áreas (STR 90, JUM 89, TAC 86)'),
+  createPlayer(151, 'Aníbal Matellán', 'squad', 'CB', 76, 9.0, 184, 60, 48, 86, 12, 68, 88, 58, 40, 84, 78, 60, 'Especialista en marcar hombre a hombre en partidos bravos (STR 88, TAC 86)'),
+  createPlayer(152, 'Juan Manuel Insaurralde', 'squad', 'CB', 76, 9.0, 188, 56, 58, 84, 12, 58, 92, 65, 45, 87, 72, 55, 'El Chaco: Fuerte y áspero en cada dividida (STR 92, JUM 87, TAC 84)'),
+  createPlayer(153, 'Carlos Izquierdoz', 'squad', 'CB', 78, 12.0, 186, 65, 62, 85, 12, 66, 89, 68, 45, 91, 80, 64, 'El Cali: Cabezazo imponente y voz de mando (JUM 91, STR 89, TAC 85)'),
+  createPlayer(154, 'Javier Pinola', 'squad', 'CB', 78, 12.0, 181, 74, 58, 85, 12, 76, 85, 65, 55, 84, 83, 72, 'Central zurdo rápido para anticipar en mitad de cancha (TAC 85, STR 85, PER 83)'),
+  createPlayer(155, 'Diego Placente', 'squad', 'LB', 77, 10.0, 177, 82, 62, 79, 10, 80, 74, 68, 60, 72, 82, 84, 'Salida limpia y elegante por el sector izquierdo (CON 84, PAS 82, PER 82)'),
+  createPlayer(156, 'Leonel Vangioni', 'squad', 'LB', 77, 10.0, 176, 78, 81, 80, 10, 85, 78, 70, 74, 74, 76, 79, 'El Piri: Proyección constante, marca intensa y remate de zurda (AGI 85, SHO 81)'),
+  createPlayer(157, 'Frank Fabra', 'squad', 'LB', 77, 10.0, 174, 82, 79, 66, 10, 88, 78, 72, 68, 70, 68, 89, 'Talento ofensivo de enganche jugando de 3 (CON 89, AGI 88), sufre a su espalda'),
+  createPlayer(158, 'Iván Pillud', 'squad', 'RB', 75, 8.0, 179, 78, 64, 76, 10, 83, 78, 68, 60, 74, 74, 76, 'Ida y vuelta cumplidor y centros a la carrera (AGI 83, PAS 78)'),
+  createPlayer(159, 'Julio Buffarini', 'squad', 'RB', 75, 8.0, 172, 70, 65, 80, 10, 86, 84, 72, 58, 75, 74, 68, 'Buffa: Entrega total, pulmón y despliegue físico (AGI 86, STR 84, TAC 80)'),
+  createPlayer(160, 'Marcelo Weigandt', 'squad', 'RB', 73, 6.5, 176, 68, 66, 79, 10, 80, 84, 62, 50, 78, 72, 66, 'El Chelo: Puro empuje, barrida y llegada al segundo palo (STR 84, TAC 79)'),
+  createPlayer(161, 'Iván Marcone', 'squad', 'CM', 76, 9.0, 183, 86, 60, 80, 10, 64, 84, 72, 60, 78, 84, 82, 'El Capo: Eje posicional de primer pase y ubicación (PAS 86, PER 84, STR 84)'),
+  createPlayer(162, 'Andrés Cubas', 'squad', 'CM', 75, 8.0, 166, 74, 55, 88, 10, 85, 72, 60, 50, 68, 83, 76, 'Cubitas: Máquina de quitar pelotas limpias al ras del piso (TAC 88, AGI 85)'),
+  createPlayer(163, 'Leandro Somoza', 'squad', 'CM', 76, 9.0, 185, 74, 70, 85, 10, 65, 88, 74, 62, 82, 82, 70, 'Cinco clásico de presencia física y orden táctico (STR 88, TAC 85, PER 82)'),
+  createPlayer(164, 'Pablo Ledesma', 'squad', 'CM', 76, 9.0, 178, 78, 81, 78, 10, 78, 80, 76, 68, 76, 82, 78, 'Ocho todoterreno con gran llegada al gol desde segunda línea (PER 82, SHO 81)'),
+  createPlayer(165, 'Pablo Guiñazú', 'squad', 'CM', 78, 11.0, 172, 76, 64, 87, 10, 88, 86, 68, 58, 74, 85, 76, 'El Cholo: Tres pulmones para presionar los 90 minutos (AGI 88, TAC 87, STR 86)'),
+  createPlayer(166, 'Ignacio Fernández', 'squad', 'CM', 79, 14.0, 182, 88, 79, 70, 10, 80, 72, 78, 80, 72, 89, 87, 'Nacho: Cerebro zurdo de pases filtrados y lectura de espacios (PER 89, PAS 88)'),
+  createPlayer(167, 'Maxi Moralez', 'squad', 'CM', 76, 9.0, 160, 84, 75, 45, 10, 91, 55, 76, 78, 55, 82, 88, 'Frasquito: Bajito escurridizo imposible de agarrar en corto (AGI 91, CON 88)'),
+  createPlayer(168, 'Ricardo Centurión', 'squad', 'LM', 77, 10.0, 174, 76, 76, 40, 10, 92, 66, 72, 68, 66, 72, 92, 'Ricky: Bicicleta y gambeta endiablada en el 1 contra 1 (AGI 92, CON 92)'),
+  createPlayer(169, 'Nicolás Bertolo', 'squad', 'LM', 74, 7.0, 179, 75, 72, 68, 10, 83, 76, 68, 62, 74, 74, 78, 'Carrilero de ida y vuelta y diagonal al área (AGI 83, CON 78)'),
+  createPlayer(170, 'Cristian Pavón', 'squad', 'RM', 78, 12.0, 169, 78, 82, 48, 10, 94, 78, 72, 74, 72, 74, 82, 'Kichán: Balazo por la banda, centro atrás y remate de media distancia (AGI 94, SHO 82)'),
+  createPlayer(171, 'Rodrigo Mora', 'squad', 'ST', 77, 10.0, 171, 76, 82, 48, 10, 88, 72, 78, 76, 78, 80, 82, 'El Uruguayo: Movilidad constante, definición por arriba y despliegue (AGI 88, SHO 82)'),
+  createPlayer(172, 'Ignacio Scocco', 'squad', 'ST', 79, 14.0, 176, 80, 88, 40, 10, 86, 74, 86, 84, 74, 84, 89, 'Nacho: Golazos de autor, eludiendo rivales o de tiro libre (CON 89, SHO 88)'),
+  createPlayer(173, 'Ramón Ábila', 'squad', 'ST', 77, 10.0, 179, 68, 86, 40, 10, 72, 91, 80, 60, 80, 70, 76, 'Wanchope: Potencia bruta para girar con el central colgado y fusilar (STR 91, SHO 86)'),
+  createPlayer(174, 'Nicolás Blandi', 'squad', 'ST', 75, 8.0, 181, 64, 85, 36, 10, 72, 78, 78, 55, 84, 84, 72, 'Nueve silencioso de área chica: Toca pocas y las manda a guardar (SHO 85, PER 84)'),
+  createPlayer(175, 'Fernando Gamboa', 'squad', 'CB', 77, 10.0, 180, 78, 58, 85, 12, 76, 84, 72, 62, 83, 84, 76, 'El Negro: Segundo central rápido y con buena salida desde el fondo (TAC 85, PER 84)'),
+
+  // =========================================================================
+  // 8. NUEVO RELLENO (IDs 176-200 | Precio: $1.8M a $2.5M | Media 74-77)
+  // Especialistas de bajo presupuesto con 1 atributo pico marcado (84-92)
+  // =========================================================================
+  createPlayer(176, 'Emanuel Trípodi', 'filler', 'GK', 74, 1.8, 185, 58, 18, 22, 83, 76, 74, 42, 35, 70, 74, 58, 'Especialista en reflejos cortos sobre la línea de cal (SAV 83, AGI 76)'),
+  createPlayer(177, 'Guillermo Sara', 'filler', 'GK', 75, 2.0, 187, 64, 18, 25, 84, 78, 74, 45, 38, 74, 75, 62, 'Rápido para achicar en el mano a mano (SAV 84, AGI 78)'),
+  createPlayer(178, 'Cristian Lucchetti', 'filler', 'GK', 76, 2.5, 182, 82, 72, 28, 79, 76, 72, 89, 76, 70, 78, 78, 'El Laucha: Arquero pateador de penales y gran juego de pies (PEN 89, PAS 82)'),
+  createPlayer(179, 'Sebastián Peratta', 'filler', 'GK', 75, 2.1, 189, 56, 18, 22, 85, 68, 82, 42, 35, 78, 80, 55, 'El Flaco: Largo de brazos y excelente ubicación bajo el travesaño (SAV 85, STR 82)'),
+  createPlayer(180, 'Christian Cellay', 'filler', 'CB', 75, 2.1, 180, 62, 50, 84, 10, 78, 80, 58, 45, 82, 74, 62, 'El Samurai: Cruces veloces a los costados y salto (TAC 84, JUM 82, AGI 78)'),
+  createPlayer(181, 'Gabriel Paletta', 'filler', 'CB', 76, 2.4, 190, 56, 48, 84, 12, 55, 91, 60, 40, 88, 74, 56, 'Torre defensiva impasable en el choque cuerpo a cuerpo (STR 91, JUM 88, TAC 84)'),
+  createPlayer(182, 'Matías Cahais', 'filler', 'CB', 74, 1.8, 184, 64, 52, 84, 10, 64, 82, 58, 45, 80, 76, 62, 'Central zurdo firme en el anticipo corto (TAC 84, STR 82)'),
+  createPlayer(183, 'Santiago Vergini', 'filler', 'CB', 75, 2.0, 191, 70, 54, 80, 10, 58, 84, 64, 48, 88, 74, 66, 'Altura máxima para despejar centros frontales (JUM 88, STR 84)'),
+  createPlayer(184, 'Lisandro Magallán', 'filler', 'CB', 75, 2.0, 185, 60, 48, 82, 10, 76, 84, 55, 40, 86, 70, 58, 'Central rápido para correr hacia atrás y fuerte de arriba (JUM 86, STR 84, TAC 82)'),
+  createPlayer(185, 'Leandro Marín', 'filler', 'RB', 75, 2.0, 177, 74, 72, 74, 10, 84, 74, 64, 60, 70, 70, 76, 'Proyección ofensiva sorpresiva y diagonal al área (AGI 84, CON 76)'),
+  createPlayer(186, 'Gino Peruzzi', 'filler', 'RB', 76, 2.3, 178, 72, 74, 76, 10, 82, 82, 62, 52, 85, 72, 72, 'Lateral potente que gana siempre en el segundo palo de cabeza (JUM 85, STR 82, AGI 82)'),
+  createPlayer(187, 'Fabián Monzón', 'filler', 'LB', 76, 2.3, 179, 70, 86, 74, 10, 78, 84, 74, 84, 78, 68, 70, 'Cañón zurdo de media distancia y potencia física (SHO 86, FK 84, STR 84)'),
+  createPlayer(188, 'Fernando Evangelista', 'filler', 'LB', 74, 1.8, 179, 72, 56, 74, 10, 86, 68, 55, 50, 68, 68, 74, 'Carrilero liviano de gran velocidad en largo (AGI 86, CON 74)'),
+  createPlayer(189, 'Juan Krupoviesa', 'filler', 'LB', 76, 2.4, 176, 66, 78, 85, 10, 68, 90, 72, 82, 76, 68, 62, 'El Tucumano: Marca feroz y zurdazo potente de tiro libre (STR 90, TAC 85, FK 82)'),
+  createPlayer(190, 'Marcelo Meli', 'filler', 'CM', 76, 2.3, 176, 70, 68, 80, 10, 88, 82, 62, 50, 74, 74, 70, 'Cesarini: Despliegue incansable de área a área (AGI 88, STR 82, TAC 80)'),
+  createPlayer(191, 'Gonzalo Castellani', 'filler', 'CM', 75, 2.0, 182, 86, 68, 62, 10, 68, 72, 70, 74, 68, 80, 84, 'Buen pie para tener la pelota y filtrar pases (PAS 86, CON 84, PER 80)'),
+  createPlayer(192, 'Federico Carrizo', 'filler', 'LM', 76, 2.3, 170, 74, 70, 50, 10, 88, 62, 66, 65, 62, 72, 86, 'El Pachi: Gambeta encaradora en velocidad por la raya (AGI 88, CON 86)'),
+  createPlayer(193, 'Pablo Mouche', 'filler', 'LM', 76, 2.4, 177, 78, 74, 42, 10, 89, 68, 70, 72, 66, 72, 82, 'Desborde zurdo explosivo para asistir al 9 (AGI 89, CON 82, PAS 78)'),
+  createPlayer(194, 'Andrés Chávez', 'filler', 'ST', 76, 2.3, 184, 64, 85, 45, 10, 80, 88, 72, 65, 76, 70, 72, 'El Comandante: Topadora zurda de remate violento a la carrera (STR 88, SHO 85)'),
+  createPlayer(195, 'Lucas Viatri', 'filler', 'ST', 76, 2.4, 186, 78, 80, 48, 10, 66, 84, 76, 68, 86, 78, 80, 'Nueve técnico de buen cabezazo y descarga de espaldas (JUM 86, STR 84, CON 80)'),
+  createPlayer(196, 'Lucas Boyé', 'filler', 'ST', 75, 2.0, 184, 66, 68, 62, 10, 78, 90, 62, 50, 82, 72, 74, 'Tanque para chocar centrales y aguantar la pelota (STR 90, JUM 82)'),
+  createPlayer(197, 'Nicolás Orsini', 'filler', 'ST', 74, 1.8, 187, 62, 68, 48, 10, 85, 86, 62, 45, 80, 68, 66, 'Potencia física para picar al vacío a espaldas de la defensa (STR 86, AGI 85)'),
+  createPlayer(198, 'Jan Hurtado', 'filler', 'ST', 74, 1.8, 183, 58, 68, 45, 10, 86, 88, 60, 45, 84, 66, 66, 'Atleta puro: Fuerza, salto y velocidad para el contraataque (STR 88, AGI 86, JUM 84)'),
+  createPlayer(199, 'Claudio Riaño', 'filler', 'ST', 75, 2.0, 179, 64, 84, 38, 10, 76, 74, 72, 55, 76, 78, 74, 'Definidor oportuno dentro del área rival (SHO 84, PER 78)'),
+  createPlayer(200, 'Lucas Castromán', 'filler', 'RM', 77, 2.5, 177, 72, 88, 66, 10, 80, 82, 78, 80, 74, 74, 76, 'Fierrazo demoledor de media distancia y despliegue (SHO 88, STR 82, AGI 80)')
 ]
 
 export function getPlayerById(id) {

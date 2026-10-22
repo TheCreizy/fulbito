@@ -113,19 +113,42 @@ export default function TacticsBoard({
       const idxB = index
       const pA = team.players[idxA]
       const pB = team.players[idxB]
-      if (pA.sentOff || pB.sentOff) {
-        setErrorMsg('No se puede mover de puesto a un jugador expulsado con tarjeta roja.')
-        setSelectedSlot(null)
-        return
-      }
       const nextPlayers = [...team.players]
       nextPlayers[idxA] = { ...pB }
       nextPlayers[idxB] = { ...pA }
-      // En partido en vivo, intercambiar también sus posiciones actuales en el campo
+
+      // En partido en vivo, reasignar posiciones y roles respetando a los jugadores activos y expulsados
       if (isLiveMatch) {
-        const tempPos = pA.currentPOS.slice()
-        nextPlayers[idxA].currentPOS = tempPos
-        nextPlayers[idxB].currentPOS = pB.currentPOS.slice()
+        const currentSide = (team.players[0]?.originPOS?.[1] > 525) ? 'bottom' : 'top'
+        const coords = getFormationCoordinates(team.formation, team.mentality, currentSide)
+        const slotA = coords[idxA] || coords[0]
+        const slotB = coords[idxB] || coords[0]
+
+        // Jugador que va al slot A:
+        if (nextPlayers[idxA].sentOff || nextPlayers[idxA].currentPOS?.[0] === 'NP') {
+          nextPlayers[idxA].currentPOS = ['NP', 'NP']
+          nextPlayers[idxA].intentPOS = ['NP', 'NP']
+          nextPlayers[idxA].originPOS = slotA.coords.slice()
+          nextPlayers[idxA].tacticalRole = slotA.role
+        } else {
+          nextPlayers[idxA].originPOS = slotA.coords.slice()
+          nextPlayers[idxA].intentPOS = slotA.coords.slice()
+          nextPlayers[idxA].currentPOS = slotA.coords.slice()
+          nextPlayers[idxA].tacticalRole = slotA.role
+        }
+
+        // Jugador que va al slot B:
+        if (nextPlayers[idxB].sentOff || nextPlayers[idxB].currentPOS?.[0] === 'NP') {
+          nextPlayers[idxB].currentPOS = ['NP', 'NP']
+          nextPlayers[idxB].intentPOS = ['NP', 'NP']
+          nextPlayers[idxB].originPOS = slotB.coords.slice()
+          nextPlayers[idxB].tacticalRole = slotB.role
+        } else {
+          nextPlayers[idxB].originPOS = slotB.coords.slice()
+          nextPlayers[idxB].intentPOS = slotB.coords.slice()
+          nextPlayers[idxB].currentPOS = slotB.coords.slice()
+          nextPlayers[idxB].tacticalRole = slotB.role
+        }
       }
       const nextTeam = recomputeCoordsAndSkills({ ...team, players: nextPlayers })
       onUpdateTeam(nextTeam)
@@ -350,6 +373,48 @@ export default function TacticsBoard({
                           C
                         </span>
                       )}
+                      {player.stats?.cards?.yellow > 0 && (
+                        <span
+                          title="Tarjeta Amarilla"
+                          style={{
+                            position: 'absolute',
+                            bottom: -4,
+                            left: -4,
+                            fontSize: '0.62rem',
+                            lineHeight: 1
+                          }}
+                        >
+                          🟨
+                        </span>
+                      )}
+                      {(player.injuryStatus?.grade === 'knock' || player.injuryStatus?.grade === 'hurt') && (
+                        <span
+                          title={`Lesión menor (${player.injuryStatus.name || 'Molestia'})`}
+                          style={{
+                            position: 'absolute',
+                            top: -5,
+                            left: -5,
+                            fontSize: '0.62rem',
+                            lineHeight: 1
+                          }}
+                        >
+                          🩹
+                        </span>
+                      )}
+                      {player.sentOff && (
+                        <span
+                          title="Expulsado (Roja)"
+                          style={{
+                            position: 'absolute',
+                            bottom: -4,
+                            right: -4,
+                            fontSize: '0.62rem',
+                            lineHeight: 1
+                          }}
+                        >
+                          🟥
+                        </span>
+                      )}
                     </div>
                     <div className="node-name-tag">
                       {slot.label}: {player.name.split(' ').slice(-1)[0]}
@@ -569,6 +634,11 @@ export default function TacticsBoard({
                           </span>
                         )}
                         {player.stats?.cards?.yellow > 0 && <span title="Tarjeta Amarilla">🟨</span>}
+                        {(player.injuryStatus?.grade === 'knock' || player.injuryStatus?.grade === 'hurt') && (
+                          <span title={`Molestia física: ${player.injuryStatus.name || 'Disminuido'}`} style={{ color: '#fb923c' }}>
+                            🩹 {player.injuryStatus.name || 'Molestia'}
+                          </span>
+                        )}
                         {player.sentOff && <span title="Expulsado (Roja)">🟥 EXPULSADO</span>}
                       </div>
                       <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
@@ -691,7 +761,16 @@ export default function TacticsBoard({
                     </div>
 
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>{sub.name}</div>
+                      <div style={{ fontWeight: 700, fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span>{sub.name}</span>
+                        {sub.stats?.cards?.yellow > 0 && <span title="Tarjeta Amarilla">🟨</span>}
+                        {(sub.injuryStatus?.grade === 'knock' || sub.injuryStatus?.grade === 'hurt') && (
+                          <span title={`Molestia física: ${sub.injuryStatus.name || 'Disminuido'}`} style={{ color: '#fb923c' }}>
+                            🩹 {sub.injuryStatus.name || 'Molestia'}
+                          </span>
+                        )}
+                        {sub.sentOff && <span title="Expulsado (Roja)">🟥 EXPULSADO</span>}
+                      </div>
                       <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
                         {sub.specialty} • PAS {sub.skill.passing} • TIR {sub.skill.shooting} • ENT {sub.skill.tackling}
                       </div>

@@ -115,7 +115,15 @@ export function updatePlayerEffectiveSkills(player, team) {
   if (fitness < 70) {
     fatigueFactor = Math.max(0.74, 0.74 + ((fitness - 20) / 50) * 0.26)
   }
-  if (player.injured) {
+  if (player.injuryStatus) {
+    if (player.injuryStatus.grade === 'knock') {
+      fatigueFactor *= 0.95
+    } else if (player.injuryStatus.grade === 'hurt') {
+      fatigueFactor *= 0.80
+    } else if (player.injuryStatus.grade === 'serious') {
+      fatigueFactor *= 0.40
+    }
+  } else if (player.injured) {
     fatigueFactor *= 0.82
   }
 

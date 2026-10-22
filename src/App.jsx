@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import MainMenu from './components/MainMenu.jsx'
 import DraftScreen from './components/DraftScreen.jsx'
+import FutDraftScreen from './components/FutDraftScreen.jsx'
 import TacticsBoard from './components/TacticsBoard.jsx'
 import MatchSimulator from './components/MatchSimulator.jsx'
 import {
@@ -37,6 +38,22 @@ export default function App() {
     setTeam1Config(cfg1)
     setTeam2Config(cfg2)
     setScreen('draft')
+  }
+
+  // Iniciar el nuevo FUT Draft Táctico estilo FIFA Ultimate Team
+  const handleStartFutDraft = (mode, cfg1, cfg2) => {
+    setGameMode(mode)
+    setTeam1Config(cfg1)
+    setTeam2Config(cfg2)
+    setScreen('fut-draft')
+  }
+
+  // Al terminar el FUT Draft Táctico
+  const handleFutDraftComplete = (t1, t2) => {
+    setTeam1Obj(t1)
+    setTeam2Obj(t2)
+    setActiveTacticsTab(1)
+    setScreen('tactics')
   }
 
   // Iniciar Partido Rápido (genera automáticamente ambos planteles de 16 jugadores respetando los $250M y pasa a Pizarra Táctica)
@@ -118,7 +135,7 @@ export default function App() {
           <div>
             <div className="brand-title">PC FÚTBOL DE PRIMERA • MANAGER & SIMULADOR 2D</div>
             <div className="brand-subtitle">
-              100 Jugadores Polifuncionales • Presupuesto $250M • Relatos de Marcelo Araujo & Enrique Macaya Márquez
+              200 Jugadores Polifuncionales • FUT Draft Táctico • Relatos de Marcelo Araujo & Enrique Macaya Márquez
             </div>
           </div>
         </div>
@@ -139,7 +156,18 @@ export default function App() {
       {screen === 'menu' && (
         <MainMenu
           onStartDraft={handleStartDraft}
+          onStartFutDraft={handleStartFutDraft}
           onStartQuickMatch={handleStartQuickMatch}
+        />
+      )}
+
+      {screen === 'fut-draft' && (
+        <FutDraftScreen
+          gameMode={gameMode}
+          team1Config={team1Config}
+          team2Config={team2Config}
+          onDraftComplete={handleFutDraftComplete}
+          onCancel={() => setScreen('menu')}
         />
       )}
 

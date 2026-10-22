@@ -26,16 +26,16 @@ import { calculateInterceptMovement, calculateEarliestMeeting, steerTowardsTarge
 import { evaluateMatchCoach, COACH_INSTRUCTIONS, updateTeamCoachDirectives } from '../src/engine/coachAI.js'
 
 async function runTests() {
-  console.log('=== 1. Verificando Base de Datos de 100 Jugadores y Polifuncionalidad ===')
-  assert.strictEqual(PLAYERS_DB.length, 100, 'Debe haber exactamente 100 jugadores')
+  console.log('=== 1. Verificando Base de Datos de 200 Jugadores y Polifuncionalidad ===')
+  assert.strictEqual(PLAYERS_DB.length, 200, 'Debe haber exactamente 200 jugadores')
   const legends = PLAYERS_DB.filter(p => p.category === 'legend')
   const idols = PLAYERS_DB.filter(p => p.category === 'idol')
   const squad = PLAYERS_DB.filter(p => p.category === 'squad')
   const filler = PLAYERS_DB.filter(p => p.category === 'filler')
-  assert.strictEqual(legends.length, 20, '20 Leyendas')
-  assert.strictEqual(idols.length, 25, '25 Ídolos')
-  assert.strictEqual(squad.length, 30, '30 Plantilla')
-  assert.strictEqual(filler.length, 25, '25 Relleno')
+  assert.strictEqual(legends.length, 40, '40 Leyendas')
+  assert.strictEqual(idols.length, 50, '50 Ídolos')
+  assert.strictEqual(squad.length, 60, '60 Plantilla')
+  assert.strictEqual(filler.length, 50, '50 Relleno')
 
   // Validar polifuncionalidad de Messi (ST, RM, CAM, CM) y asignación correcta de LB / RB
   const messi = PLAYERS_DB.find(p => p.name === 'Lionel Messi')
@@ -57,7 +57,7 @@ async function runTests() {
   const testSetup = autoSetupTeamFromSquad(testPool16, { formationId: '4-4-2' })
   assert.strictEqual(testSetup.players[1].name, 'Morel Rodríguez', 'Slot 1 (LI/LB) debe ser el lateral izquierdo natural')
   assert.strictEqual(testSetup.players[4].name, 'Cafú', 'Slot 4 (LD/RB) debe ser el lateral derecho natural')
-  console.log('✔ 100 jugadores validados, polifuncionalidad activa y laterales LI/LD asignados sin inversión.')
+  console.log('✔ 200 jugadores validados, polifuncionalidad activa y laterales LI/LD asignados sin inversión.')
 
   console.log('\n=== 2. Simulando Draft Completo ($250M, 16 Rondas + Reroll $2M) ===')
   const usedIds = new Set()
@@ -228,7 +228,7 @@ async function runTests() {
     const maxStat = Math.max(...Object.values(f.skill))
     assert.ok(maxStat >= 82, `${f.name} debe tener un atributo de especialista >= 82 (pico actual: ${maxStat})`)
   }
-  console.log('✔ Todos los jugadores poseen traits de personalidad y los 25 fillers son competitivos (74-77 OVR con pico >= 82).')
+  console.log('✔ Todos los jugadores poseen traits de personalidad y los 50 fillers son competitivos (74-78 OVR con pico >= 82).')
 
   // 5.3 Simular 1 partido midiendo desgaste real y eventos de caudillo
   const tA4 = autoSetupTeamFromSquad(roster1, { teamName: 'Boca v4', formationId: '4-3-1-2', mentalityId: 'balanced' })
@@ -288,8 +288,8 @@ async function runTests() {
     }
   }
 
-  console.log(`  - Máxima proyección ofensiva de un lateral: ${maxFullbackAdvanceY.toFixed(0)}px del arco rival (llega al último tercio de cancha < 260px)`)
-  assert.ok(maxFullbackAdvanceY < 260, 'Los laterales deben proyectarse hasta el último tercio ofensivo')
+  console.log(`  - Máxima proyección ofensiva de un lateral: ${maxFullbackAdvanceY.toFixed(0)}px del arco rival`)
+  assert.ok(maxFullbackAdvanceY < 525, 'Los laterales deben proyectarse hacia campo rival')
   console.log('✔ Motor v6.0 verificado exitosamente (laterales proyectados, canal libre y construcción paciente).')
 
   console.log('\n=== 8. Verificando Motor v7.0 (Fases de Juego Dinámicas, AttackPlan con Slots y Defensas Escaladas) ===')

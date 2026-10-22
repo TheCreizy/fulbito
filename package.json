@@ -8,7 +8,13 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:engine": "node tests/verifyEngineAndDraft.js"
+    "test:engine": "node tests/verifyEngineAndDraft.js",
+    "test:fut": "node tests/verifyFutDraft.js",
+    "test:tactics": "node tests/verifyTacticalAndSetPieces.js",
+    "test:rebalance": "node tests/verifyGameplayRebalance.js",
+    "test:offside": "node tests/verifyOffsideAndTacticalStoppages.js",
+    "test:corners-penalties": "node tests/verifyCornersPenaltiesThroughBallsCrosses.js",
+    "test": "node tests/verifyEngineAndDraft.js && node tests/verifyFutDraft.js && node tests/verifyTacticalAndSetPieces.js && node tests/verifyGameplayRebalance.js && node tests/verifyOffsideAndTacticalStoppages.js && node tests/verifyCornersPenaltiesThroughBallsCrosses.js"
   },
   "dependencies": {
     "react": "^18.3.1",

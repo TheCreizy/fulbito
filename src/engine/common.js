@@ -165,6 +165,84 @@ export function removeBallFromAllPlayers(matchDetails) {
   }
 }
 
+export const INJURY_GRADES = {
+  KNOCK: 'knock',
+  HURT: 'hurt',
+  SERIOUS: 'serious'
+}
+
+export const INJURY_CATALOG = {
+  knock: [
+    { name: 'Contusión en el tobillo', fitnessLoss: 12, canContinue: true },
+    { name: 'Golpe intercostal', fitnessLoss: 10, canContinue: true },
+    { name: 'Pisotón doloroso', fitnessLoss: 14, canContinue: true },
+    { name: 'Choque de rodillas', fitnessLoss: 12, canContinue: true }
+  ],
+  hurt: [
+    { name: 'Sobrecarga en el isquiotibial', fitnessLoss: 32, canContinue: true },
+    { name: 'Calambre agudo', fitnessLoss: 36, canContinue: true },
+    { name: 'Contractura en el gemelo', fitnessLoss: 30, canContinue: true },
+    { name: 'Distensión leve', fitnessLoss: 38, canContinue: true }
+  ],
+  serious: [
+    { name: 'Desgarro fibrilar', fitnessLoss: 65, canContinue: false },
+    { name: 'Esguince severo de rodilla', fitnessLoss: 75, canContinue: false },
+    { name: 'Tirón agudo incapacitante', fitnessLoss: 60, canContinue: false },
+    { name: 'Fisura ósea', fitnessLoss: 80, canContinue: false }
+  ]
+}
+
+export function applyInjury(player, cause = 'contact', gradeOverride = null, matchDetails = null, team = null) {
+  if (!player || player.injuryStatus?.grade === 'serious') return null
+
+  let grade = gradeOverride
+  if (!grade) {
+    // Open football distribution: Knock ~60%, Hurt ~28%, Serious ~12%
+    const roll = getRandomNumber(1, 100)
+    if (roll <= 60) grade = 'knock'
+    else if (roll <= 88) grade = 'hurt'
+    else grade = 'serious'
+  }
+
+  const options = INJURY_CATALOG[grade] || INJURY_CATALOG.knock
+  const chosen = options[getRandomNumber(0, options.length - 1)]
+
+  player.injured = true
+  player.injuryStatus = {
+    grade,
+    cause, // 'contact' | 'load'
+    name: chosen.name,
+    fitnessLoss: chosen.fitnessLoss,
+    canContinue: chosen.canContinue,
+    occurredIter: matchDetails?.iterationCount || 0
+  }
+
+  // Descontar fitness
+  player.fitness = Math.max(12, (Number(player.fitness ?? 100)) - chosen.fitnessLoss)
+
+  if (matchDetails) {
+    const statusLabel = chosen.canContinue ? 'Continúa disminuido' : 'No puede continuar'
+    const logMsg = `Player Injured [${grade.toUpperCase()}] - ${player.name}: ${chosen.name} (${statusLabel})`
+    matchDetails.iterationLog.push(logMsg)
+    if (Array.isArray(matchDetails.events)) {
+      matchDetails.events.push({
+        type: 'injury',
+        grade,
+        cause,
+        injuryName: chosen.name,
+        canContinue: chosen.canContinue,
+        teamID: team?.teamID || player.teamID,
+        teamName: team?.name || '',
+        playerName: player.name,
+        iteration: matchDetails.iterationCount || 0,
+        half: matchDetails.half
+      })
+    }
+  }
+
+  return player.injuryStatus
+}
+
 export function isInjured(x) {
   if (x === 23) return true
   return getRandomNumber(0, x) === 23
@@ -174,11 +252,14 @@ export function matchInjury(matchDetails, team) {
   const activePlayers = team.players.filter(isOnPitch)
   if (activePlayers.length === 0) return
   const player = activePlayers[getRandomNumber(0, activePlayers.length - 1)]
-  // Mayor cansancio incrementa levemente el riesgo de lesión
-  const fatigueRisk = player.fitness < 45 ? 22000 : 40000
-  if (isInjured(fatigueRisk)) {
-    player.injured = true
-    matchDetails.iterationLog.push(`Player Injured - ${player.name}`)
+  // Chequeo de fatiga / carga física acumulada (Load injury)
+  // Se activa principalmente en jugadores con cansancio severo (fitness < 50)
+  if (player.fitness < 50 && !player.injuryStatus) {
+    // Probabilidad calibrada por tick para acumular fatiga
+    const fatigueRisk = player.fitness < 35 ? 1200 : 2600
+    if (getRandomNumber(1, fatigueRisk) === 23) {
+      applyInjury(player, 'load', null, matchDetails, team)
+    }
   }
 }
 
