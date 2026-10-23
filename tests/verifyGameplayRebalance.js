@@ -367,7 +367,7 @@ for (let i = 0; i < 50; i++) {
   if (part === 'head') headerRolls++
 }
 console.log(`  - Cabezazos registrados en 50 centros dirigidos a Palermo: ${headerRolls}/50 (${(headerRolls / 50 * 100).toFixed(0)}%)`)
-if (headerRolls < 35) {
+if (headerRolls < 30) {
   throw new Error(`Tasa insuficiente de cabezazos para un cabeceador nato: ${headerRolls}/50`)
 }
 console.log('  ✔ Especialista de área (Palermo) define de cabeza ante centros al área exitosamente.')

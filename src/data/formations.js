@@ -22,8 +22,8 @@ export const FORMATIONS = {
       { index: 3, role: 'CB', label: 'DFC', pos: [430, 145] },
       { index: 4, role: 'RB', label: 'LD', pos: [585, 165] },
       { index: 5, role: 'LM', label: 'MI', pos: [105, 330] },
-      { index: 6, role: 'CM', label: 'MC', pos: [255, 310] },
-      { index: 7, role: 'CM', label: 'MC', pos: [425, 310] },
+      { index: 6, role: 'CDM', label: '5 REC', pos: [255, 310] },
+      { index: 7, role: 'CM', label: '8 MIX', pos: [425, 310] },
       { index: 8, role: 'RM', label: 'MD', pos: [575, 330] },
       { index: 9, role: 'ST', label: 'DC', pos: [260, 480] },
       { index: 10, role: 'ST', label: 'DC', pos: [420, 480] }
@@ -41,7 +41,7 @@ export const FORMATIONS = {
       { index: 3, role: 'CB', label: 'DFC', pos: [430, 145] },
       { index: 4, role: 'RB', label: 'LD', pos: [585, 175] },
       { index: 5, role: 'CM', label: 'VOL I', pos: [175, 295] },
-      { index: 6, role: 'CM', label: '5 TAPÓN', pos: [340, 260] },
+      { index: 6, role: 'CDM', label: '5 TAPÓN', pos: [340, 260] },
       { index: 7, role: 'CM', label: 'VOL D', pos: [505, 295] },
       { index: 8, role: 'CAM', label: 'ENG (10)', pos: [340, 395] },
       { index: 9, role: 'ST', label: 'DC', pos: [250, 485] },
@@ -60,11 +60,11 @@ export const FORMATIONS = {
       { index: 3, role: 'CB', label: 'DFC', pos: [430, 145] },
       { index: 4, role: 'RB', label: 'LD', pos: [605, 170] },
       { index: 5, role: 'CM', label: 'MC I', pos: [195, 315] },
-      { index: 6, role: 'CM', label: 'MC C', pos: [340, 285] },
+      { index: 6, role: 'CDM', label: '5 TAPÓN', pos: [340, 285] },
       { index: 7, role: 'CM', label: 'MC D', pos: [485, 315] },
-      { index: 8, role: 'LM', label: 'EXT I', pos: [48, 465] },
+      { index: 8, role: 'EXT', label: 'EXT I', pos: [48, 465] },
       { index: 9, role: 'ST', label: '9 ÁREA', pos: [340, 495] },
-      { index: 10, role: 'RM', label: 'EXT D', pos: [632, 465] }
+      { index: 10, role: 'EXT', label: 'EXT D', pos: [632, 465] }
     ]
   },
   '5-3-2': {
@@ -80,7 +80,7 @@ export const FORMATIONS = {
       { index: 4, role: 'CB', label: 'DFC D', pos: [470, 140] },
       { index: 5, role: 'RB', label: 'CAR D', pos: [595, 200] },
       { index: 6, role: 'CM', label: 'MC I', pos: [210, 310] },
-      { index: 7, role: 'CM', label: 'MC C', pos: [340, 290] },
+      { index: 7, role: 'CDM', label: '5 TAPÓN', pos: [340, 290] },
       { index: 8, role: 'CM', label: 'MC D', pos: [470, 310] },
       { index: 9, role: 'ST', label: 'DC', pos: [260, 475] },
       { index: 10, role: 'ST', label: 'DC', pos: [420, 475] }
@@ -97,7 +97,7 @@ export const FORMATIONS = {
       { index: 2, role: 'CB', label: 'LÍBERO', pos: [340, 130] },
       { index: 3, role: 'CB', label: 'STOP D', pos: [490, 145] },
       { index: 4, role: 'LM', label: 'CAR I', pos: [95, 315] },
-      { index: 5, role: 'CM', label: '5 REC', pos: [250, 285] },
+      { index: 5, role: 'CDM', label: '5 REC', pos: [250, 285] },
       { index: 6, role: 'CM', label: '5 MIX', pos: [430, 285] },
       { index: 7, role: 'RM', label: 'CAR D', pos: [585, 315] },
       { index: 8, role: 'CAM', label: 'ENG (10)', pos: [340, 390] },
@@ -116,11 +116,11 @@ export const FORMATIONS = {
       { index: 2, role: 'CB', label: 'DFC', pos: [250, 145] },
       { index: 3, role: 'CB', label: 'DFC', pos: [430, 145] },
       { index: 4, role: 'RB', label: 'LD', pos: [585, 165] },
-      { index: 5, role: 'CM', label: 'PIV I', pos: [250, 275] },
-      { index: 6, role: 'CM', label: 'PIV D', pos: [430, 275] },
-      { index: 7, role: 'LM', label: 'MP I', pos: [125, 395] },
+      { index: 5, role: 'CDM', label: 'PIV DEF', pos: [250, 275] },
+      { index: 6, role: 'CM', label: 'PIV MIX', pos: [430, 275] },
+      { index: 7, role: 'EXT', label: 'EXT I', pos: [125, 395] },
       { index: 8, role: 'CAM', label: 'MP C', pos: [340, 390] },
-      { index: 9, role: 'RM', label: 'MP D', pos: [555, 395] },
+      { index: 9, role: 'EXT', label: 'EXT D', pos: [555, 395] },
       { index: 10, role: 'ST', label: '9 ÁREA', pos: [340, 495] }
     ]
   }

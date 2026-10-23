@@ -23,14 +23,17 @@ export default function PlayerCard({
   const s = player.skill || {}
   const isGK = player.position === 'GK'
 
-  const mainStats = isGK
+  const cardStats = isGK
     ? [
         { k: 'ATA', v: s.saving },
         { k: 'AGI', v: s.agility },
         { k: 'SAL', v: s.jumping },
         { k: 'PER', v: s.perception },
         { k: 'PAS', v: s.passing },
-        { k: 'FUE', v: s.strength }
+        { k: 'FUE', v: s.strength },
+        { k: 'TL', v: s.freekick },
+        { k: 'PEN', v: s.penalty_taking },
+        { k: 'ALT', v: `${player.height}cm`, isAlt: true }
       ]
     : [
         { k: 'PAS', v: s.passing },
@@ -38,21 +41,26 @@ export default function PlayerCard({
         { k: 'ENT', v: s.tackling },
         { k: 'AGI', v: s.agility },
         { k: 'FUE', v: s.strength },
-        { k: 'CON', v: s.control }
+        { k: 'CON', v: s.control },
+        { k: 'TL', v: s.freekick },
+        { k: 'PEN', v: s.penalty_taking },
+        { k: 'ALT', v: `${player.height}cm`, isAlt: true }
       ]
 
-  const all11Stats = [
+  const allStats = [
     { k: 'Pase (PAS)', v: s.passing },
     { k: 'Tiro (TIR)', v: s.shooting },
     { k: 'Entrada (ENT)', v: s.tackling },
     { k: 'Atajada (ATA)', v: s.saving },
     { k: 'Agilidad (AGI)', v: s.agility },
     { k: 'Fuerza (FUE)', v: s.strength },
-    { k: 'Penales (PEN)', v: s.penalty_taking },
-    { k: 'Tiro Libre (TL)', v: s.freekick },
+    { k: 'Resistencia (RES)', v: s.stamina ?? s.resistencia },
+    { k: 'Cabeza (CAB)', v: s.heading ?? s.cabeza },
     { k: 'Salto (SAL)', v: s.jumping },
     { k: 'Percepción (PER)', v: s.perception },
-    { k: 'Control (CON)', v: s.control }
+    { k: 'Control (CON)', v: s.control },
+    { k: 'Penales (PEN)', v: s.penalty_taking },
+    { k: 'Tiro Libre (TL)', v: s.freekick }
   ]
 
   const getStatClass = (val) => {
@@ -108,18 +116,14 @@ export default function PlayerCard({
         {!compact && (
           <>
             <div className="card-stats-grid">
-              {mainStats.map((st) => (
+              {cardStats.map((st) => (
                 <div key={st.k} className="card-stat-item">
                   <span className="card-stat-label">{st.k}</span>
-                  <span className={getStatClass(st.v)}>{st.v}</span>
+                  <span className={st.isAlt ? 'card-stat-val' : getStatClass(st.v)} style={st.isAlt ? { fontSize: '0.64rem', color: '#f1f5f9' } : undefined}>
+                    {st.v}
+                  </span>
                 </div>
               ))}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.66rem', color: '#cbd5e1', marginBottom: '0.45rem' }}>
-              <span>TL: <b style={{ color: s.freekick >= 85 ? '#facc15' : '#fff' }}>{s.freekick}</b></span>
-              <span>PEN: <b style={{ color: s.penalty_taking >= 85 ? '#facc15' : '#fff' }}>{s.penalty_taking}</b></span>
-              <span>ALT: <b>{player.height}cm</b></span>
             </div>
 
             {showAllStats && (
@@ -133,7 +137,7 @@ export default function PlayerCard({
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
-                {all11Stats.map((item) => (
+                {allStats.map((item) => (
                   <div key={item.k} style={{ display: 'flex', justifyContent: 'space-between', padding: '1px 0' }}>
                     <span style={{ color: '#94a3b8' }}>{item.k}</span>
                     <span className={getStatClass(item.v)}>{item.v}</span>

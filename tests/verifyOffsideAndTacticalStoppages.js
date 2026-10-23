@@ -156,6 +156,41 @@ assert.strictEqual(team1.players[9].currentPOS[0], 'NP', 'applyLiveTactics debe 
 assert.strictEqual(team1.players[9].sentOff, true, 'applyLiveTactics debe preservar sentOff')
 console.log('  ✔ applyLiveTactics preserva al jugador expulsado fuera de cancha.')
 
-console.log('\n======================================================================')
-console.log('=== ¡TODAS LAS VERIFICACIONES DE OFFSIDE Y TÁCTICA SUPERADAS AL 100%! ===')
-console.log('======================================================================')
+// === TEST 4: PERSISTENCIA DEL SNAPSHOT A TRAVÉS DE MÚLTIPLES TICKS Y keepInBoundaries ===
+console.log('\n=== TEST 4: PERSISTENCIA DEL SNAPSHOT A TRAVÉS DE MÚLTIPLES TICKS Y keepInBoundaries ===')
+import('../src/engine/setPositions.js').then(async ({ keepInBoundaries }) => {
+  const { setClosePlayerTakesBall } = await import('../src/engine/playerMovement.js')
+
+  // Reiniciamos un delantero en offside
+  const attacker = team1.players[10]
+  attacker.offside = true
+  attacker.offsideSnapshot = snapOffside
+  matchDetails.pendingOffsideSnapshot = snapOffside
+  matchDetails.lastOffsideSnapshot = snapOffside
+
+  // Simulamos 5 ticks de vuelo de la pelota dentro de los límites
+  for (let tick = 1; tick <= 5; tick++) {
+    const ballPosInFlight = [340, 500 - tick * 40, 5]
+    keepInBoundaries(matchDetails, team1.teamID, ballPosInFlight)
+    assert(matchDetails.pendingOffsideSnapshot != null, `El snapshot no debe ser borrado en el tick ${tick} por keepInBoundaries`)
+    assert(attacker.offsideSnapshot != null, `El snapshot del jugador no debe ser borrado en el tick ${tick}`)
+  }
+  console.log('  ✔ Snapshot de VAR persistió íntegro a través de 5 ticks de vuelo del balón.')
+
+  // Ahora el delantero toma el balón en la jugada
+  matchDetails.events = []
+  setClosePlayerTakesBall(matchDetails, attacker, team1, team2)
+
+  const varEvent = matchDetails.events.find(e => e.type === 'offside')
+  assert(varEvent != null, 'Debe emitirse el evento de offside')
+  assert(varEvent.varData != null, 'varData debe existir en el evento')
+  assert.strictEqual(varEvent.varData.defendingLineY, snapOffside.defendingLineY, 'defendingLineY debe ser la real del defensor y no 525')
+  assert(varEvent.varData.playersSnapshot != null, 'playersSnapshot debe contener los 22 jugadores')
+  assert.strictEqual(varEvent.varData.playersSnapshot.attacking.length, 11, 'Snapshot atacante con 11 jugadores')
+  assert.strictEqual(varEvent.varData.playersSnapshot.defending.length, 11, 'Snapshot defensor con 11 jugadores')
+  console.log('  ✔ Offside sancionado con éxito: varData incluye jugadores congelados y línea defensiva real (no 525).')
+
+  console.log('\n======================================================================')
+  console.log('=== ¡TODAS LAS VERIFICACIONES DE OFFSIDE Y TÁCTICA SUPERADAS AL 100%! ===')
+  console.log('======================================================================')
+})

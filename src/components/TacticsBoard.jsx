@@ -4,11 +4,51 @@ import { getPositionCompatibility, updateTeamEffectiveSkills } from '../engine/m
 import { autoSetupTeamFromSquad } from '../draft/draftEngine.js'
 import { TRAIT_DEFINITIONS } from '../data/playersDB.js'
 
+function getStatColor(val) {
+  if (val >= 90) return '#facc15'
+  if (val >= 80) return '#4ade80'
+  if (val >= 70) return '#38bdf8'
+  return '#cbd5e1'
+}
+
+function getTacticalMiniStats(player) {
+  const s = player.skill || {}
+  const isGK = player.position === 'GK'
+  if (isGK) {
+    return [
+      { label: 'ATA', val: s.saving },
+      { label: 'AGI', val: s.agility },
+      { label: 'SAL', val: s.jumping },
+      { label: 'PER', val: s.perception },
+      { label: 'PAS', val: s.passing },
+      { label: 'FUE', val: s.strength },
+      { label: 'TL', val: s.freekick },
+      { label: 'PEN', val: s.penalty_taking },
+      { label: 'ALT', val: `${player.height || 185}cm`, isText: true }
+    ]
+  }
+  return [
+    { label: 'PAS', val: s.passing },
+    { label: 'TIR', val: s.shooting },
+    { label: 'ENT', val: s.tackling },
+    { label: 'AGI', val: s.agility },
+    { label: 'FUE', val: s.strength },
+    { label: 'CON', val: s.control },
+    { label: 'TL', val: s.freekick },
+    { label: 'PEN', val: s.penalty_taking },
+    { label: 'ALT', val: `${player.height || 178}cm`, isText: true }
+  ]
+}
+
 export default function TacticsBoard({
   team,
   onUpdateTeam,
   isLiveMatch = false,
   onMakeLiveSubstitution,
+  onUndoLiveSubstitution = null,
+  canUndoLiveSubstitution = false,
+  pendingSubstitutionsCount = 0,
+  isPlayStopped = true,
   onConfirm,
   confirmLabel = 'Confirmar Pizarra e Ir a la Cancha ⚽',
   secondaryTeamTab = null // { activeTeamIndex, onSwitchTeam, team1Name, team2Name }
@@ -250,13 +290,35 @@ export default function TacticsBoard({
             </h2>
             <p style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
               {isLiveMatch
-                ? `Cambios realizados: ${team.substitutionsUsed || 0} / ${team.maxSubstitutions || 5} • Hacé clic en un titular y luego en un suplente para hacer un cambio.`
+                ? `Cambios realizados: ${team.substitutionsUsed || 0} / ${team.maxSubstitutions || 5}${pendingSubstitutionsCount > 0 ? ` (${pendingSubstitutionsCount} en espera)` : ''} • Hacé clic en un titular y luego en un suplente para hacer un cambio.`
                 : 'Hacé clic en cualquier jugador titular y luego en otro titular o suplente para intercambiar su puesto.'}
             </p>
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+          {isLiveMatch && canUndoLiveSubstitution && (
+            <button
+              type="button"
+              className="btn btn-outline"
+              style={{
+                borderColor: '#f59e0b',
+                color: '#fbbf24',
+                background: 'rgba(245, 158, 11, 0.14)',
+                fontWeight: 700,
+                fontSize: '0.88rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem'
+              }}
+              onClick={() => {
+                if (onUndoLiveSubstitution) onUndoLiveSubstitution()
+                setErrorMsg('')
+              }}
+            >
+              ↩️ Deshacer cambios {pendingSubstitutionsCount > 1 ? `(${pendingSubstitutionsCount})` : ''}
+            </button>
+          )}
           {!isLiveMatch && (
             <button type="button" className="btn btn-outline" onClick={handleAutoOptimize}>
               ✨ Auto-Ordenar Puestos Óptimos
@@ -269,6 +331,50 @@ export default function TacticsBoard({
           )}
         </div>
       </div>
+
+      {isLiveMatch && pendingSubstitutionsCount > 0 && (
+        <div
+          style={{
+            background: 'rgba(14, 165, 233, 0.16)',
+            border: '1px solid #0ea5e9',
+            color: '#e0f2fe',
+            padding: '0.65rem 1rem',
+            borderRadius: '6px',
+            marginBottom: '1rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '0.75rem',
+            fontSize: '0.85rem'
+          }}
+        >
+          <div>
+            <span style={{ fontWeight: 800, color: '#38bdf8' }}>🔄 CAMBIO(S) SOLICITADO(S): </span>
+            {!isPlayStopped
+              ? 'El partido está en juego. Los cambios se aplicarán automáticamente cuando la pelota se detenga (falta, lateral, córner, saque de arco, gol, offside o entretiempo).'
+              : 'Las sustituciones se aplicarán al reanudar el partido.'}
+          </div>
+          {canUndoLiveSubstitution && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              style={{
+                borderColor: '#f59e0b',
+                color: '#fbbf24',
+                background: 'rgba(245, 158, 11, 0.22)',
+                whiteSpace: 'nowrap',
+                fontWeight: 700
+              }}
+              onClick={() => {
+                if (onUndoLiveSubstitution) onUndoLiveSubstitution()
+                setErrorMsg('')
+              }}
+            >
+              ↩️ Deshacer cambios
+            </button>
+          )}
+        </div>
+      )}
 
       {errorMsg && (
         <div
@@ -387,6 +493,20 @@ export default function TacticsBoard({
                           🟨
                         </span>
                       )}
+                      {(player.isPendingSubOut || player.isPendingSubIn) && (
+                        <span
+                          title={player.isPendingSubOut ? `Cambio pendiente: Sale por ${player.replacingBenchName || 'suplente'}` : `Cambio pendiente: Reemplaza a ${player.replacedName || 'titular'}`}
+                          style={{
+                            position: 'absolute',
+                            top: -6,
+                            left: -6,
+                            fontSize: '0.72rem',
+                            lineHeight: 1
+                          }}
+                        >
+                          🔄
+                        </span>
+                      )}
                       {(player.injuryStatus?.grade === 'knock' || player.injuryStatus?.grade === 'hurt') && (
                         <span
                           title={`Lesión menor (${player.injuryStatus.name || 'Molestia'})`}
@@ -418,6 +538,11 @@ export default function TacticsBoard({
                     </div>
                     <div className="node-name-tag">
                       {slot.label}: {player.name.split(' ').slice(-1)[0]}
+                      {player.isPendingSubOut && (
+                        <span style={{ color: '#f59e0b', fontSize: '0.64rem', marginLeft: '3px', fontWeight: 800 }}>
+                          ➔ {player.replacingBenchName?.split(' ').slice(-1)[0]}
+                        </span>
+                      )}
                     </div>
                   </div>
                 )
@@ -601,8 +726,8 @@ export default function TacticsBoard({
                       gridTemplateColumns: '84px 1fr auto auto',
                       alignItems: 'center',
                       gap: '0.65rem',
-                      padding: '0.48rem 0.7rem',
-                      borderRadius: '2px',
+                      padding: '0.62rem 0.8rem',
+                      borderRadius: '4px',
                       background: isSelected ? 'rgba(250, 204, 21, 0.22)' : (idx % 2 === 0 ? '#0a1936' : '#0d2147'),
                       border: isSelected ? '2px solid #facc15' : '1px solid #284678',
                       cursor: 'pointer'
@@ -642,7 +767,7 @@ export default function TacticsBoard({
                         {player.sentOff && <span title="Expulsado (Roja)">🟥 EXPULSADO</span>}
                       </div>
                       <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                        Puestos: <b style={{ color: '#fde047' }}>{allNaturalPos}</b> • {player.specialty} • TL {player.skill.freekick} / PEN {player.skill.penalty_taking}
+                        Puestos: <b style={{ color: '#fde047' }}>{allNaturalPos}</b> • {player.specialty}
                       </div>
                       {Array.isArray(player.traits) && player.traits.length > 0 && (
                         <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.22rem' }}>
@@ -669,6 +794,25 @@ export default function TacticsBoard({
                           })}
                         </div>
                       )}
+                      {/* Mini grilla de 2 filas de atributos */}
+                      <div
+                        style={{
+                          display: 'inline-flex',
+                          gap: '0.35rem',
+                          marginTop: '0.3rem',
+                          background: 'rgba(2, 6, 23, 0.75)',
+                          padding: '0.2rem 0.45rem',
+                          borderRadius: '4px',
+                          border: '1px solid rgba(255, 255, 255, 0.08)'
+                        }}
+                      >
+                        {getTacticalMiniStats(player).map((st) => (
+                          <div key={st.label} style={{ textAlign: 'center', minWidth: '24px' }}>
+                            <div style={{ fontSize: '0.58rem', color: '#94a3b8', fontWeight: 800, lineHeight: 1 }}>{st.label}</div>
+                            <div style={{ fontSize: '0.68rem', fontWeight: 900, color: st.isText ? '#f1f5f9' : getStatColor(st.val), lineHeight: 1.1 }}>{st.val}</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
                     <div style={{ textAlign: 'right' }}>
@@ -708,13 +852,36 @@ export default function TacticsBoard({
           <div className="panel">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
               <h3 style={{ color: '#38bdf8', fontSize: '1rem' }}>
-                🪑 BANCO DE SUPLENTES (5 JUGADORES)
+                🪑 BANCO DE SUPLENTES ({(team.bench || []).length} JUGADORES)
               </h3>
-              <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                {isLiveMatch
-                  ? `Cambios restantes: ${(team.maxSubstitutions || 5) - (team.substitutionsUsed || 0)}`
-                  : 'Seleccioná un suplente y un titular para rotar el once inicial'}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                {isLiveMatch && canUndoLiveSubstitution && (
+                  <button
+                    type="button"
+                    style={{
+                      background: 'rgba(245, 158, 11, 0.2)',
+                      border: '1px solid #f59e0b',
+                      color: '#fbbf24',
+                      borderRadius: '4px',
+                      padding: '0.2rem 0.55rem',
+                      fontSize: '0.74rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => {
+                      if (onUndoLiveSubstitution) onUndoLiveSubstitution()
+                      setErrorMsg('')
+                    }}
+                  >
+                    ↩️ Deshacer cambios
+                  </button>
+                )}
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                  {isLiveMatch
+                    ? `Cambios restantes: ${Math.max(0, (team.maxSubstitutions || 5) - (team.substitutionsUsed || 0) - (pendingSubstitutionsCount || 0))}`
+                    : 'Seleccioná un suplente y un titular para rotar el once inicial'}
+                </span>
+              </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
@@ -736,8 +903,8 @@ export default function TacticsBoard({
                       gridTemplateColumns: '84px 1fr auto auto',
                       alignItems: 'center',
                       gap: '0.65rem',
-                      padding: '0.48rem 0.7rem',
-                      borderRadius: '2px',
+                      padding: '0.62rem 0.8rem',
+                      borderRadius: '4px',
                       background: isSelected ? 'rgba(56, 189, 248, 0.22)' : '#071226',
                       border: isSelected ? '2px solid #38bdf8' : '1px solid #284678',
                       cursor: 'pointer'
@@ -761,8 +928,13 @@ export default function TacticsBoard({
                     </div>
 
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
                         <span>{sub.name}</span>
+                        {(sub.isPendingSubIn || sub.isPendingSubOut) && (
+                          <span style={{ color: '#f59e0b', fontSize: '0.74rem', fontWeight: 800 }}>
+                            🔄 {sub.isPendingSubIn ? `(Entra por ${sub.replacingStarterName || 'titular'})` : `(Sale por ${sub.replacingName || 'suplente'})`}
+                          </span>
+                        )}
                         {sub.stats?.cards?.yellow > 0 && <span title="Tarjeta Amarilla">🟨</span>}
                         {(sub.injuryStatus?.grade === 'knock' || sub.injuryStatus?.grade === 'hurt') && (
                           <span title={`Molestia física: ${sub.injuryStatus.name || 'Disminuido'}`} style={{ color: '#fb923c' }}>
@@ -772,7 +944,7 @@ export default function TacticsBoard({
                         {sub.sentOff && <span title="Expulsado (Roja)">🟥 EXPULSADO</span>}
                       </div>
                       <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-                        {sub.specialty} • PAS {sub.skill.passing} • TIR {sub.skill.shooting} • ENT {sub.skill.tackling}
+                        {sub.specialty}
                       </div>
                       {Array.isArray(sub.traits) && sub.traits.length > 0 && (
                         <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.2rem' }}>
@@ -799,6 +971,25 @@ export default function TacticsBoard({
                           })}
                         </div>
                       )}
+                      {/* Mini grilla de 2 filas de atributos */}
+                      <div
+                        style={{
+                          display: 'inline-flex',
+                          gap: '0.35rem',
+                          marginTop: '0.3rem',
+                          background: 'rgba(2, 6, 23, 0.75)',
+                          padding: '0.2rem 0.45rem',
+                          borderRadius: '4px',
+                          border: '1px solid rgba(255, 255, 255, 0.08)'
+                        }}
+                      >
+                        {getTacticalMiniStats(sub).map((st) => (
+                          <div key={st.label} style={{ textAlign: 'center', minWidth: '24px' }}>
+                            <div style={{ fontSize: '0.58rem', color: '#94a3b8', fontWeight: 800, lineHeight: 1 }}>{st.label}</div>
+                            <div style={{ fontSize: '0.68rem', fontWeight: 900, color: st.isText ? '#f1f5f9' : getStatColor(st.val), lineHeight: 1.1 }}>{st.val}</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
                     <div>

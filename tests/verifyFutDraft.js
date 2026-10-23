@@ -67,9 +67,9 @@ async function runFutDraftTests() {
   assert.ok(sampleCounts.filler > 140 && sampleCounts.filler < 300, 'Tiradas de relleno en rango esperado ~22%')
   console.log('✔ Sistema de probabilidades de sobre validado.')
 
-  console.log('\n=== 4. Verificando Capacidad de 12 Suplentes (Total 23 por Equipo = 46 sin Romper al Rival) ===')
-  assert.strictEqual(TOTAL_BENCH_COUNT, 12, 'Deben ser exactamente 12 puestos de banco (5 suplentes + 7 reservas)')
-  assert.strictEqual(BENCH_SLOTS.length, 12, '12 definiciones de slots en BENCH_SLOTS')
+  console.log('\n=== 4. Verificando Capacidad de 7 Suplentes (Total 18 por Equipo = 36 sin Romper al Rival) ===')
+  assert.strictEqual(TOTAL_BENCH_COUNT, 7, 'Deben ser exactamente 7 puestos de banco')
+  assert.strictEqual(BENCH_SLOTS.length, 7, '7 definiciones de slots en BENCH_SLOTS')
 
   const f1Id = '4-3-1-2'
   const f2Id = '4-3-3'
@@ -94,7 +94,7 @@ async function runFutDraftTests() {
   const sIdx2 = placeCaptainInFormation(cap2, fSlots2, t2Starters)
   t2Starters[sIdx2] = { ...cap2, isCaptain: true }
 
-  // Simular el resto de picks (titulares restantes y 12 suplentes por equipo)
+  // Simular el resto de picks (titulares restantes y 7 suplentes por equipo)
   for (let i = 0; i < 11; i++) {
     if (!t1Starters[i]) {
       const tier = rollCategoryByProbability()
@@ -112,31 +112,31 @@ async function runFutDraftTests() {
     }
   }
 
-  // 12 suplentes por equipo
+  // 7 suplentes por equipo
   for (let b = 0; b < TOTAL_BENCH_COUNT; b++) {
-    const role = BENCH_SLOTS[b].role
+    const roleOrRoles = BENCH_SLOTS[b].allowedRoles || BENCH_SLOTS[b].role
 
     const tier1 = rollCategoryByProbability()
-    const cands1 = getCandidatesForPositionAndCategory(role, tier1, usedMatchIds)
+    const cands1 = getCandidatesForPositionAndCategory(roleOrRoles, tier1, usedMatchIds)
     const pick1 = cands1[0]
     usedMatchIds.add(pick1.id)
     t1Bench[b] = pick1
 
     const tier2 = rollCategoryByProbability()
-    const cands2 = getCandidatesForPositionAndCategory(role, tier2, usedMatchIds)
-    const pick2 = selectAIFutDraftCard(cands2, role)
+    const cands2 = getCandidatesForPositionAndCategory(roleOrRoles, tier2, usedMatchIds)
+    const pick2 = selectAIFutDraftCard(cands2, roleOrRoles)
     usedMatchIds.add(pick2.id)
     t2Bench[b] = pick2
   }
 
   assert.strictEqual(t1Starters.filter(Boolean).length, 11, 'Equipo 1 tiene 11 titulares')
-  assert.strictEqual(t1Bench.filter(Boolean).length, 12, 'Equipo 1 tiene 12 suplentes')
+  assert.strictEqual(t1Bench.filter(Boolean).length, 7, 'Equipo 1 tiene 7 suplentes')
   assert.strictEqual(t2Starters.filter(Boolean).length, 11, 'Equipo 2 tiene 11 titulares')
-  assert.strictEqual(t2Bench.filter(Boolean).length, 12, 'Equipo 2 tiene 12 suplentes')
-  assert.strictEqual(usedMatchIds.size, 46, 'Exactamente 46 cartas únicas fichadas (23 por bando)')
+  assert.strictEqual(t2Bench.filter(Boolean).length, 7, 'Equipo 2 tiene 7 suplentes')
+  assert.strictEqual(usedMatchIds.size, 36, 'Exactamente 36 cartas únicas fichadas (18 por bando)')
 
   const freeRemaining = 200 - usedMatchIds.size
-  console.log(`✔ Draft completo de 23 jugadores por equipo (46 fichados). Jugadores restantes libres en DB: ${freeRemaining} (¡el rival nunca se queda sin opciones!).`)
+  console.log(`✔ Draft completo de 18 jugadores por equipo (36 fichados). Jugadores restantes libres en DB: ${freeRemaining} (¡el rival nunca se queda sin opciones!).`)
 
   console.log('\n=== 5. Verificando Construcción de Equipos y Simulación de Partido ===')
   const team1 = buildTeamFromFutDraft(f1Id, t1Starters, t1Bench, {
@@ -151,7 +151,7 @@ async function runFutDraftTests() {
   }, cap2.id)
 
   assert.strictEqual(team1.players.length, 11, 'Team 1: 11 en cancha')
-  assert.strictEqual(team1.bench.length, 12, 'Team 1: 12 en banco')
+  assert.strictEqual(team1.bench.length, 7, 'Team 1: 7 en banco')
   assert.strictEqual(team1.setPieces.captainID, cap1.id, 'Capitán oficial asignado a Team 1')
   assert.strictEqual(team2.setPieces.captainID, cap2.id, 'Capitán oficial asignado a Team 2')
 
@@ -162,7 +162,7 @@ async function runFutDraftTests() {
 
   console.log(`✔ Partido jugado (1000 ticks): ${match.kickOffTeam.name} ${match.kickOffTeamStatistics.goals} - ${match.secondTeamStatistics.goals} ${match.secondTeam.name}`)
   console.log(`  Tiros: ${match.kickOffTeamStatistics.shots.total} vs ${match.secondTeamStatistics.shots.total}`)
-  console.log('✔ ¡Todos los tests de FUT Draft con Capitán, Probabilidades, Reroll y 12 Suplentes superados!')
+  console.log('✔ ¡Todos los tests de FUT Draft con Capitán, Probabilidades, Reroll y 7 Suplentes superados!')
 }
 
 runFutDraftTests().catch(err => {

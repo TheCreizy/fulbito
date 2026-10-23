@@ -1,11 +1,11 @@
-// Motor de Draft por Presupuesto ($250M, 16 Rondas, Sobres de 7 Cartas, Reroll $2M e IA Competitiva)
+// Motor de Draft por Presupuesto ($280M, 18 Rondas, Sobres de 7 Cartas, Reroll $2M e IA Competitiva)
 
 import { PLAYERS_DB, clonePlayerForTeam } from '../data/playersDB.js'
 import { FORMATIONS, getFormationCoordinates } from '../data/formations.js'
 import { getPositionCompatibility, updateTeamEffectiveSkills } from '../engine/modifiers.js'
 
-export const INITIAL_BUDGET = 250.0
-export const TOTAL_ROUNDS = 16
+export const INITIAL_BUDGET = 280.0
+export const TOTAL_ROUNDS = 18
 export const PACK_SIZE = 7
 export const REROLL_COST = 2.0
 export const MIN_RESERVE_PER_SLOT = 1.8
@@ -51,8 +51,8 @@ export function getPositionalCounts(squad) {
   for (const p of squad) {
     if (p.position === 'GK') counts.GK++
     else if (['CB', 'LB', 'RB'].includes(p.position)) counts.DEF++
-    else if (['CM', 'CAM', 'LM', 'RM'].includes(p.position)) counts.MID++
-    else if (p.position === 'ST') counts.ATT++
+    else if (['CDM', 'CM', 'CAM', 'LM', 'RM'].includes(p.position)) counts.MID++
+    else if (['EXT', 'ST'].includes(p.position)) counts.ATT++
   }
   return counts
 }
@@ -241,7 +241,7 @@ export function autoSetupTeamFromSquad(squad16, {
 
   // 2A. Primera pasada: Asignar especialistas naturales (100% compatibilidad), priorizando laterales y bandas
   const slotPriorityOrder = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].sort((a, b) => {
-    const rolePriority = { LB: 1, RB: 1, CAM: 2, LM: 3, RM: 3, ST: 4, CB: 5, CM: 6 }
+    const rolePriority = { LB: 1, RB: 1, CAM: 2, EXT: 3, LM: 3, RM: 3, CDM: 4, ST: 5, CB: 6, CM: 7 }
     return (rolePriority[slots[a].role] || 9) - (rolePriority[slots[b].role] || 9)
   })
 

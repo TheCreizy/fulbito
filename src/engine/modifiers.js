@@ -6,15 +6,17 @@
 import { isOnPitch } from './common.js'
 
 const COMPATIBILITY_MATRIX = {
-  GK:  { GK: 1.00, CB: 0.45, LB: 0.45, RB: 0.45, CM: 0.45, CAM: 0.45, LM: 0.45, RM: 0.45, ST: 0.45 },
-  CB:  { GK: 0.45, CB: 1.00, LB: 0.85, RB: 0.85, CM: 0.78, CAM: 0.62, LM: 0.65, RM: 0.65, ST: 0.55 },
-  LB:  { GK: 0.45, CB: 0.86, LB: 1.00, RB: 0.80, CM: 0.82, CAM: 0.72, LM: 0.90, RM: 0.74, ST: 0.58 },
-  RB:  { GK: 0.45, CB: 0.86, LB: 0.80, RB: 1.00, CM: 0.82, CAM: 0.72, LM: 0.74, RM: 0.90, ST: 0.58 },
-  CM:  { GK: 0.45, CB: 0.78, LB: 0.80, RB: 0.80, CM: 1.00, CAM: 0.92, LM: 0.88, RM: 0.88, ST: 0.78 },
-  CAM: { GK: 0.45, CB: 0.58, LB: 0.68, RB: 0.68, CM: 0.92, CAM: 1.00, LM: 0.90, RM: 0.90, ST: 0.90 },
-  LM:  { GK: 0.45, CB: 0.62, LB: 0.86, RB: 0.72, CM: 0.88, CAM: 0.90, LM: 1.00, RM: 0.85, ST: 0.88 },
-  RM:  { GK: 0.45, CB: 0.62, LB: 0.72, RB: 0.86, CM: 0.88, CAM: 0.90, LM: 0.85, RM: 1.00, ST: 0.88 },
-  ST:  { GK: 0.45, CB: 0.55, LB: 0.58, RB: 0.58, CM: 0.78, CAM: 0.88, LM: 0.88, RM: 0.88, ST: 1.00 }
+  GK:  { GK: 1.00, CB: 0.45, LB: 0.45, RB: 0.45, CDM: 0.45, CM: 0.45, CAM: 0.45, LM: 0.45, RM: 0.45, EXT: 0.45, ST: 0.45 },
+  CB:  { GK: 0.45, CB: 1.00, LB: 0.85, RB: 0.85, CDM: 0.86, CM: 0.78, CAM: 0.62, LM: 0.65, RM: 0.65, EXT: 0.45, ST: 0.55 },
+  LB:  { GK: 0.45, CB: 0.86, LB: 1.00, RB: 0.80, CDM: 0.80, CM: 0.82, CAM: 0.72, LM: 0.90, RM: 0.74, EXT: 0.72, ST: 0.58 },
+  RB:  { GK: 0.45, CB: 0.86, LB: 0.80, RB: 1.00, CDM: 0.80, CM: 0.82, CAM: 0.72, LM: 0.74, RM: 0.90, EXT: 0.72, ST: 0.58 },
+  CDM: { GK: 0.45, CB: 0.86, LB: 0.80, RB: 0.80, CDM: 1.00, CM: 0.92, CAM: 0.65, LM: 0.70, RM: 0.70, EXT: 0.45, ST: 0.45 },
+  CM:  { GK: 0.45, CB: 0.78, LB: 0.80, RB: 0.80, CDM: 0.92, CM: 1.00, CAM: 0.92, LM: 0.88, RM: 0.88, EXT: 0.70, ST: 0.78 },
+  CAM: { GK: 0.45, CB: 0.58, LB: 0.68, RB: 0.68, CDM: 0.65, CM: 0.92, CAM: 1.00, LM: 0.90, RM: 0.90, EXT: 0.90, ST: 0.90 },
+  LM:  { GK: 0.45, CB: 0.62, LB: 0.86, RB: 0.72, CDM: 0.70, CM: 0.88, CAM: 0.90, LM: 1.00, RM: 0.85, EXT: 0.92, ST: 0.88 },
+  RM:  { GK: 0.45, CB: 0.62, LB: 0.72, RB: 0.86, CDM: 0.70, CM: 0.88, CAM: 0.90, LM: 0.85, RM: 1.00, EXT: 0.92, ST: 0.88 },
+  EXT: { GK: 0.45, CB: 0.45, LB: 0.72, RB: 0.72, CDM: 0.45, CM: 0.70, CAM: 0.90, LM: 0.92, RM: 0.92, EXT: 1.00, ST: 0.90 },
+  ST:  { GK: 0.45, CB: 0.55, LB: 0.58, RB: 0.58, CDM: 0.45, CM: 0.78, CAM: 0.88, LM: 0.88, RM: 0.88, EXT: 0.90, ST: 1.00 }
 }
 
 /**
@@ -141,7 +143,11 @@ export function updatePlayerEffectiveSkills(player, team) {
     'freekick',
     'jumping',
     'perception',
-    'control'
+    'control',
+    'heading',
+    'cabeza',
+    'stamina',
+    'resistencia'
   ]
 
   for (const key of physicalAndTechKeys) {

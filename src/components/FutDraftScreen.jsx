@@ -344,7 +344,7 @@ export default function FutDraftScreen({
 
       for (let i = 0; i < TOTAL_BENCH_COUNT; i++) {
         if (!nextBench[i]) {
-          const role = BENCH_SLOTS[i].role
+          const role = BENCH_SLOTS[i].allowedRoles || BENCH_SLOTS[i].role
           const tier = rollCategoryByProbability()
           const cands = getCandidatesForPositionAndCategory(role, tier, currentUsed)
           const pick = selectAIFutDraftCard(cands, role)
@@ -568,9 +568,10 @@ export default function FutDraftScreen({
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '1rem' }}>
             {(captainPicks || []).map((card) => {
               const nick = getPlayerNickname(card.name)
+              const isGK = card.position === 'GK'
 
               return (
                 <div
@@ -645,18 +646,34 @@ export default function FutDraftScreen({
                     <div style={{ fontSize: '1rem', fontWeight: 900, color: '#fff', lineHeight: 1.2, minHeight: '2.4rem' }}>
                       {card.name}
                     </div>
-                    <div style={{ fontSize: '0.7rem', color: '#facc15', fontStyle: 'italic', marginBottom: '0.6rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <div style={{ fontSize: '0.68rem', color: '#facc15', fontStyle: 'italic', marginBottom: '0.6rem', whiteSpace: 'normal', wordBreak: 'break-word', minHeight: '2.1rem', lineHeight: 1.25 }}>
                       {nick ? `"${nick}"` : card.specialty}
                     </div>
 
-                    {/* Atributos clave */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.3rem', fontSize: '0.72rem', background: '#020617', padding: '0.45rem', borderRadius: '4px', marginBottom: '0.75rem' }}>
-                      <div>PAS: <strong>{card.skill.passing}</strong></div>
-                      <div>TIR: <strong>{card.skill.shooting}</strong></div>
-                      <div>ENT: <strong>{card.skill.tackling}</strong></div>
-                      <div>AGI: <strong>{card.skill.agility}</strong></div>
-                      <div>FUE: <strong>{card.skill.strength}</strong></div>
-                      <div>CON: <strong>{card.skill.control}</strong></div>
+                    {/* Atributos clave dentro del recuadro */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.22rem', fontSize: '0.67rem', background: '#020617', padding: '0.42rem 0.35rem', borderRadius: '4px', marginBottom: '0.75rem', border: '1px solid #1e293b' }}>
+                      {isGK ? (
+                        <>
+                          <div>ATA: <strong>{card.skill?.saving}</strong></div>
+                          <div>AGI: <strong>{card.skill?.agility}</strong></div>
+                          <div>SAL: <strong>{card.skill?.jumping}</strong></div>
+                          <div>PER: <strong>{card.skill?.perception}</strong></div>
+                          <div>PAS: <strong>{card.skill?.passing}</strong></div>
+                          <div>FUE: <strong>{card.skill?.strength}</strong></div>
+                        </>
+                      ) : (
+                        <>
+                          <div>PAS: <strong>{card.skill?.passing}</strong></div>
+                          <div>TIR: <strong>{card.skill?.shooting}</strong></div>
+                          <div>ENT: <strong>{card.skill?.tackling}</strong></div>
+                          <div>AGI: <strong>{card.skill?.agility}</strong></div>
+                          <div>FUE: <strong>{card.skill?.strength}</strong></div>
+                          <div>CON: <strong>{card.skill?.control}</strong></div>
+                        </>
+                      )}
+                      <div>TL: <strong>{card.skill?.freekick}</strong></div>
+                      <div>PEN: <strong>{card.skill?.penalty_taking}</strong></div>
+                      <div>ALT: <strong>{card.height}cm</strong></div>
                     </div>
                     {/* Rasgo distintivo */}
                     {Array.isArray(card.traits) && card.traits.length > 0 && (
@@ -1074,59 +1091,29 @@ export default function FutDraftScreen({
           })}
         </div>
 
-        {/* 12 PUESTOS DE BANCO: TABS ENTRE SUPLENTES (5) Y RESERVAS (7) */}
+        {/* 7 PUESTOS DE BANCO DE SUPLENTES (SIN RESERVAS) */}
         <div style={{ marginTop: '1.2rem', background: '#071226', border: '1px solid #1e293b', borderRadius: '8px', padding: '0.8rem 1rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <button
-                type="button"
-                onClick={() => setActiveBenchTab('sub')}
-                style={{
-                  background: activeBenchTab === 'sub' ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' : '#0b162a',
-                  color: activeBenchTab === 'sub' ? '#fff' : '#94a3b8',
-                  border: activeBenchTab === 'sub' ? '1.5px solid #38bdf8' : '1px solid #1e293b',
-                  borderRadius: '4px',
-                  padding: '0.3rem 0.8rem',
-                  fontSize: '0.78rem',
-                  fontWeight: 800,
-                  cursor: 'pointer'
-                }}
-              >
-                🪑 SUPLENTES (5)
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveBenchTab('res')}
-                style={{
-                  background: activeBenchTab === 'res' ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' : '#0b162a',
-                  color: activeBenchTab === 'res' ? '#fff' : '#94a3b8',
-                  border: activeBenchTab === 'res' ? '1.5px solid #38bdf8' : '1px solid #1e293b',
-                  borderRadius: '4px',
-                  padding: '0.3rem 0.8rem',
-                  fontSize: '0.78rem',
-                  fontWeight: 800,
-                  cursor: 'pointer'
-                }}
-              >
-                📦 RESERVAS (7)
-              </button>
+              <span style={{ fontSize: '0.85rem', fontWeight: 900, color: '#38bdf8' }}>
+                🪑 BANCO DE SUPLENTES (7 SOBRES)
+              </span>
             </div>
 
             <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
-              Total en banco: 12 futbolistas disponibles para las 5 sustituciones oficiales
+              7 futbolistas para las 5 sustituciones oficiales en partido
             </div>
           </div>
 
-          {/* Grilla dinámica de slots según tab activo */}
+          {/* Grilla dinámica de los 7 sobres de suplentes */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: activeBenchTab === 'sub' ? 'repeat(5, 1fr)' : 'repeat(auto-fit, minmax(100px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))',
               gap: '0.6rem'
             }}
           >
-            {BENCH_SLOTS.filter(s => s.section === activeBenchTab).map((bSlot) => {
+            {BENCH_SLOTS.map((bSlot) => {
               const sub = currentBench[bSlot.index]
               const isTurnForThisTeam = activeViewTeam === activeTurnTeam
 
@@ -1141,6 +1128,7 @@ export default function FutDraftScreen({
                         padding: '0.35rem 0.5rem',
                         textAlign: 'center'
                       }}
+                      title={bSlot.desc}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: '0.85rem', fontWeight: 900, color: '#facc15', fontFamily: 'Chakra Petch' }}>
@@ -1160,8 +1148,9 @@ export default function FutDraftScreen({
                   ) : (
                     <button
                       type="button"
-                      onClick={() => handleOpenSlotModal('bench', bSlot.index, bSlot.role, bSlot.label)}
+                      onClick={() => handleOpenSlotModal('bench', bSlot.index, bSlot.allowedRoles || bSlot.role, bSlot.label)}
                       disabled={!isTurnForThisTeam}
+                      title={bSlot.desc}
                       style={{
                         width: '100%',
                         background: isTurnForThisTeam ? 'rgba(56, 189, 248, 0.15)' : 'rgba(15, 23, 42, 0.7)',
@@ -1220,7 +1209,7 @@ export default function FutDraftScreen({
                       {tierInfo.badge} ({tierInfo.range})
                     </span>
                     <h2 style={{ fontSize: '1.4rem', color: '#fff', margin: 0 }}>
-                      SOBRE PARA: {packModal.label} ({packModal.role})
+                      SOBRE PARA: {packModal.label} ({Array.isArray(packModal.role) ? packModal.role.join('/') : packModal.role})
                     </h2>
                   </div>
                   <p style={{ fontSize: '0.82rem', color: '#cbd5e1', margin: '0.35rem 0 0' }}>
@@ -1259,9 +1248,10 @@ export default function FutDraftScreen({
               </div>
 
               {/* Grid de 5 Cartas de la categoría sorteada */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.85rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '0.85rem' }}>
                 {packModal.candidates.map((card) => {
                   const nick = getPlayerNickname(card.name)
+                  const isGK = card.position === 'GK'
 
                   return (
                     <div
@@ -1320,7 +1310,7 @@ export default function FutDraftScreen({
                         <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#fff', lineHeight: 1.2, minHeight: '2.2rem' }}>
                           {card.name}
                         </div>
-                        <div style={{ fontSize: '0.68rem', color: '#facc15', fontStyle: 'italic', marginBottom: '0.5rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div style={{ fontSize: '0.66rem', color: '#facc15', fontStyle: 'italic', marginBottom: '0.5rem', whiteSpace: 'normal', wordBreak: 'break-word', minHeight: '1.9rem', lineHeight: 1.25 }}>
                           {nick ? `"${nick}"` : card.specialty}
                         </div>
 
@@ -1343,14 +1333,30 @@ export default function FutDraftScreen({
                           ))}
                         </div>
 
-                        {/* Atributos clave */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.25rem', fontSize: '0.68rem', background: '#020617', padding: '0.4rem', borderRadius: '4px', marginBottom: '0.6rem' }}>
-                          <div>PAS: <strong>{card.skill.passing}</strong></div>
-                          <div>TIR: <strong>{card.skill.shooting}</strong></div>
-                          <div>ENT: <strong>{card.skill.tackling}</strong></div>
-                          <div>AGI: <strong>{card.skill.agility}</strong></div>
-                          <div>FUE: <strong>{card.skill.strength}</strong></div>
-                          <div>CON: <strong>{card.skill.control}</strong></div>
+                        {/* Atributos clave dentro del recuadro */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.2rem', fontSize: '0.64rem', background: '#020617', padding: '0.38rem 0.3rem', borderRadius: '4px', marginBottom: '0.6rem', border: '1px solid #1e293b' }}>
+                          {isGK ? (
+                            <>
+                              <div>ATA: <strong>{card.skill?.saving}</strong></div>
+                              <div>AGI: <strong>{card.skill?.agility}</strong></div>
+                              <div>SAL: <strong>{card.skill?.jumping}</strong></div>
+                              <div>PER: <strong>{card.skill?.perception}</strong></div>
+                              <div>PAS: <strong>{card.skill?.passing}</strong></div>
+                              <div>FUE: <strong>{card.skill?.strength}</strong></div>
+                            </>
+                          ) : (
+                            <>
+                              <div>PAS: <strong>{card.skill?.passing}</strong></div>
+                              <div>TIR: <strong>{card.skill?.shooting}</strong></div>
+                              <div>ENT: <strong>{card.skill?.tackling}</strong></div>
+                              <div>AGI: <strong>{card.skill?.agility}</strong></div>
+                              <div>FUE: <strong>{card.skill?.strength}</strong></div>
+                              <div>CON: <strong>{card.skill?.control}</strong></div>
+                            </>
+                          )}
+                          <div>TL: <strong>{card.skill?.freekick}</strong></div>
+                          <div>PEN: <strong>{card.skill?.penalty_taking}</strong></div>
+                          <div>ALT: <strong>{card.height}cm</strong></div>
                         </div>
 
                         {/* Rasgo distintivo */}

@@ -79,6 +79,9 @@ export async function playIteration(matchDetails) {
     matchDetails.lastWithTeam = currentTeamWithBall
   }
   matchDetails.turnoverTick = matchDetails.turnoverTick || 0
+  if ((matchDetails.kickoffRetentionTicks || 0) > 0) {
+    matchDetails.kickoffRetentionTicks--
+  }
 
   matchDetails = ballMovement.moveBall(matchDetails)
   if (matchDetails.endIteration === true) {
@@ -101,6 +104,7 @@ export async function playIteration(matchDetails) {
     matchDetails.secondTeam = playerMovement.movePlayers(stAllOtherMoves, secondTeam, kickOffTeam, matchDetails)
     matchDetails.kickOffTeam = playerMovement.movePlayers(koTeamAllOtherMoves, kickOffTeam, secondTeam, matchDetails)
   }
+  playerMovement.resolveMutualPlayerSeparation(matchDetails)
 
   const allBallMoves = [...koTeamMovesBallMoves, ...stMovesBallMoves]
   const validBallMoves = allBallMoves.filter(m => m.player.hasBall === true)
@@ -186,6 +190,27 @@ export function applyLiveTactics(matchDetails, teamKey, { formationId, mentality
 
   const slots = getFormationCoordinates(team.formation || '4-4-2', team.mentality || 'balanced', currentSide)
   team.players.forEach((player, idx) => {
+    player.playerID = player.playerID || player.id || common.getRandomNumber(1000000000000, 99999999999999999)
+    if (!player.stats) {
+      player.stats = {
+        goals: 0,
+        assists: 0,
+        shots: { total: 0, on: 0, off: 0 },
+        cards: { yellow: 0, red: 0 },
+        passes: { total: 0, on: 0, off: 0 },
+        crosses: { total: 0, on: 0 },
+        dribbles: 0,
+        blocks: 0,
+        tackles: { total: 0, on: 0, off: 0, fouls: 0, slides: 0, standing: 0 },
+        saves: 0,
+        distanceCovered: 0
+      }
+    }
+    if (player.action == null) player.action = 'none'
+    if (player.offside == null) player.offside = false
+    if (player.hasBall == null) player.hasBall = false
+    if (player.sentOff == null) player.sentOff = false
+
     const slot = slots[idx] || slots[slots.length - 1]
     player.tacticalRole = slot.role
     player.originPOS = slot.coords.slice()
@@ -298,6 +323,10 @@ export function makeSubstitution(matchDetails, teamKey, fieldIndex, benchIndex) 
   // Intercambiar y marcar al saliente como ya sustituido
   outgoing.substitutedOut = true
   outgoing.hasBall = false
+  incoming.substitutedIn = {
+    minute: Math.max(1, Math.floor((matchDetails.iterationCount || 0) / 22)),
+    replacedName: outgoing.name
+  }
   team.players[fieldIndex] = incoming
   team.bench[benchIndex] = outgoing
   team.substitutionsUsed = (team.substitutionsUsed || 0) + 1

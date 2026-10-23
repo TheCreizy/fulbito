@@ -38,6 +38,7 @@ export function setGameVariables(team) {
     player.sentOff = false
     player.stats = {
       goals: 0,
+      assists: 0,
       shots: {
         total: 0,
         on: 0,
@@ -52,15 +53,55 @@ export function setGameVariables(team) {
         on: 0,
         off: 0
       },
+      crosses: {
+        total: 0,
+        on: 0
+      },
+      dribbles: 0,
+      blocks: 0,
       tackles: {
         total: 0,
         on: 0,
         off: 0,
-        fouls: 0
+        fouls: 0,
+        slides: 0,
+        standing: 0
       },
-      saves: 0
+      saves: 0,
+      distanceCovered: 0
     }
   })
+  if (Array.isArray(team.bench)) {
+    team.bench.forEach((player, idx) => {
+      player.playerID = player.playerID || player.id || common.getRandomNumber(1000000000000, 99999999999999999)
+      player.shirtNumber = player.shirtNumber || (idx + 12)
+      player.baseSkill = { ...player.skill }
+      for (const k of Object.keys(player.skill || {})) {
+        player.skill[k] = Number(player.skill[k])
+        player.baseSkill[k] = Number(player.baseSkill[k])
+      }
+      player.originPOS = ['NP', 'NP']
+      player.intentPOS = ['NP', 'NP']
+      player.currentPOS = ['NP', 'NP']
+      player.action = 'none'
+      player.offside = false
+      player.hasBall = false
+      player.sentOff = false
+      player.stats = player.stats || {
+        goals: 0,
+        assists: 0,
+        shots: { total: 0, on: 0, off: 0 },
+        cards: { yellow: 0, red: 0 },
+        passes: { total: 0, on: 0, off: 0 },
+        crosses: { total: 0, on: 0 },
+        dribbles: 0,
+        blocks: 0,
+        tackles: { total: 0, on: 0, off: 0, fouls: 0, slides: 0, standing: 0 },
+        saves: 0,
+        distanceCovered: 0
+      }
+    })
+  }
   team.intent = 'none'
   team.teamID = team.teamID || common.getRandomNumber(1000000000000, 99999999999999999)
   team.substitutionsUsed = team.substitutionsUsed || 0
@@ -90,6 +131,8 @@ export function koDecider(team1, matchDetails) {
   team1.players[kickOffIdx].hasBall = true
   team1.players[kickOffIdx].action = 'pass'
   team1.players[kickOffIdx].isKickoffPass = true
+  matchDetails.kickoffRetentionTicks = 16
+  matchDetails.turnoverTick = -999
   matchDetails.ball.lastTouch.playerName = team1.players[kickOffIdx].name
   matchDetails.ball.lastTouch.playerID = team1.players[kickOffIdx].playerID
   matchDetails.ball.lastTouch.teamID = team1.teamID

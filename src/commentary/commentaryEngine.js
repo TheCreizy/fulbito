@@ -182,34 +182,99 @@ export function generateCommentaryForIteration(matchDetails, prevScore, minuteFo
   for (const line of logs) {
     // 1. GOL CONVERTIDO
     if (line.startsWith('Goal Scored by - ')) {
-      const parts = line.replace('Goal Scored by - ', '').split(' - ')
-      const scorerName = parts[0]?.trim() || 'el delantero'
+      const afterPrefix = line.replace('Goal Scored by - ', '')
+      const parts = afterPrefix.split(' - ')
+      let rawScorer = parts[0]?.trim() || 'el delantero'
       const teamName = (parts[1] || '').replace(/[()]/g, '').trim()
+      let goalDetail = 'Tiro dentro del área'
+      const detailMatch = rawScorer.match(/^(.+?)\s*\((.+?)\)$/)
+      if (detailMatch) {
+        rawScorer = detailMatch[1].trim()
+        goalDetail = detailMatch[2].trim()
+      }
+      const scorerName = rawScorer
       const alias = getAlias(scorerName)
       const koGoals = matchDetails.kickOffTeamStatistics.goals
       const stGoals = matchDetails.secondTeamStatistics.goals
+
+      let araujoLines = [
+        `¡GOOOOOOL! ¡Sí, sí, sí! ¡De ${teamName}! ¡${alias}, ${alias}, ${alias}! ¡Cantalo, cantalo, cantalo!`,
+        `¡Adentroooo! ¡GOOOOL de ${teamName}! Lo hizo ${alias} (${goalDetail.toLowerCase()}). Ahora están ${kickOffTeam.name} ${koGoals} - ${secondTeam.name} ${stGoals}.`
+      ]
+      let macayaLines = [
+        `Fue toda la jerarquía individual de ${scorerName}. Cuando le dejás medio metro en zona de definición, no te perdona.`,
+        `Desajuste defensivo en el retroceso y una definición impecable de ${scorerName}. Justo premio para ${teamName}.`
+      ]
+
+      const lowerDetail = goalDetail.toLowerCase()
+      if (lowerDetail.includes('cabeza')) {
+        araujoLines = [
+          `¡GOOOOOL de cabeza de ${alias}! ¡Qué frentazo formidable, Macaya, fue a buscarla arriba y no perdonó! ¡Cantalo, cantalo!`,
+          `¡GOOOOOL! ¡Cabezazo letal de ${alias} para ${teamName}! ¡Un martillazo imponente al fondo de la red!`,
+          `¡Adentroooo! ¡Palomita y gol de cabeza de ${alias}! ¡Qué frentazo soberbio!`
+        ]
+        macayaLines = [
+          `Impecable el gesto técnico en el cabezazo de ${scorerName}. Ganó la posición con salto y potencia, inalcanzable para el arquero.`,
+          `Gran lectura de la trayectoria aérea. ${scorerName} anticipó a los centrales y metió un frentazo hacia abajo como marcan los libros.`
+        ]
+      } else if (lowerDetail.includes('potente') || lowerDetail.includes('bomba')) {
+        araujoLines = [
+          `¡GOOOOOL! ¡Fierrazo letal de ${alias} para ${teamName}! ¡Qué bombazo, Macaya, qué digo gol: qué golazo!`,
+          `¡GOOOOOL! ¡Sacó un misil teledirigido ${alias}! ¡Le rompió el arco al arquero!`,
+          `¡Adentroooo! ¡Tiro potente inatajable de ${alias}! ¡Un balazo inatajable!`
+        ]
+        macayaLines = [
+          `Una violencia de disparo descomunal. Cuando ${scorerName} impacta con tanta potencia, es humanamente imposible para cualquier arquero.`,
+          `Se tuvo fe desde media distancia y sacó un remate inapelable. Precisión combinada con pura potencia física.`
+        ]
+      } else if (lowerDetail.includes('colocar')) {
+        araujoLines = [
+          `¡GOOOOOL! ¡Qué categoría! ¡La puso con un guante al palo más lejano ${alias}! ¡Exquisita definición a colocar!`,
+          `¡GOOOOOL de ${teamName}! ¡Definió con clase pura ${alias}, la acarició contra el poste!`
+        ]
+        macayaLines = [
+          `Frialdad absoluta en el mano a mano. Abrió el pie con el manual en la mano y la colocó donde el arquero jamás iba a llegar.`,
+          `La pausa previa y la sutileza para ubicar el balón demuestran la jerarquía de ${scorerName}.`
+        ]
+      } else if (lowerDetail.includes('volea')) {
+        araujoLines = [
+          `¡GOOOOOL! ¡Qué pedazo de golazo de volea de ${alias}! ¡De sobrepique y al ángulo! ¡Para poner en un cuadro!`,
+          `¡GOOOOOL! ¡La empalmó como venía en el aire ${alias}! ¡Un poema de gol!`
+        ]
+        macayaLines = [
+          `Una coordinación motriz perfecta. Calzar la pelota de lleno en el aire requiere técnica de crack, y ${scorerName} la tiene.`
+        ]
+      } else if (lowerDetail.includes('penal')) {
+        araujoLines = [
+          `¡GOOOOOL de penal de ${alias}! ¡Fuerte al medio y a cobrar para ${teamName}!`,
+          `¡GOOOOOL! ¡Engañó al arquero ${alias} desde los doce pasos!`
+        ]
+        macayaLines = [
+          `Gran templanza de ${scorerName} para ejecutar un tiro penal decisivo bajo presión.`
+        ]
+      } else if (lowerDetail.includes('tiro libre')) {
+        araujoLines = [
+          `¡GOOOOOLAZO de tiro libre de ${alias}! ¡Por encima de la barrera y adentro! ¡Una obra de arte!`,
+          `¡GOOOOOL! ¡Qué pegada maravillosa de ${alias} de pelota parada!`
+        ]
+        macayaLines = [
+          `Pegada magistral. La comba que tomó esa pelota superó la barrera y cayó justa pegada al caño.`
+        ]
+      }
 
       messages.push({
         id: `${Date.now()}-${Math.random()}`,
         minute: minuteFormatted,
         speaker: 'Marcelo Araujo',
         type: 'goal',
-        text: pickRandom([
-          `¡GOOOOOOL! ¡Sí, sí, sí! ¡De ${teamName}! ¡${alias}, ${alias}, ${alias}! ¡Cantalo, cantalo, cantalo!`,
-          `¡GOOOOOOL! ¡Fierrazo letal de ${alias} para ${teamName}! ¡Una barbaridad, Macaya, qué digo gol: qué golazo!`,
-          `¡Adentroooo! ¡GOOOOL de ${teamName}! Lo hizo ${alias}. Ahora están ${kickOffTeam.name} ${koGoals} - ${secondTeam.name} ${stGoals}.`
-        ])
+        text: pickRandom(araujoLines)
       })
       messages.push({
         id: `${Date.now()}-${Math.random()}-m`,
         minute: minuteFormatted,
         speaker: 'Enrique Macaya Márquez',
         type: 'analysis',
-        text: pickRandom([
-          `Fue toda la jerarquía individual de ${scorerName}. Cuando le dejás medio metro en zona de definición, no te perdona.`,
-          `Desajuste defensivo en el retroceso y una definición impecable de ${scorerName}. Justo premio para ${teamName}.`,
-          `La jugada pedía resolución rápida y ${scorerName} eligió el lugar exacto donde el arquero no podía llegar.`
-        ])
+        text: pickRandom(macayaLines)
       })
       stateTracker.lastCommentTick = matchDetails.iterationCount
       return messages
@@ -500,15 +565,66 @@ export function generateCommentaryForIteration(matchDetails, prevScore, minuteFo
       return messages
     }
 
-    if (line.startsWith('Successful tackle by: ')) {
-      const tackler = line.replace('Successful tackle by: ', '').trim()
+    if (line.startsWith('Successful tackle by: ') || line.includes('Standing tackle by ')) {
+      const tackler = line.replace('Successful tackle by: ', '').replace(/Standing tackle by (.*) pokes the ball away cleanly!/, '$1').trim()
       const alias = getAlias(tackler)
       messages.push({
         id: `${Date.now()}-${Math.random()}`,
         minute: minuteFormatted,
         speaker: 'Marcelo Araujo',
         type: 'play',
-        text: `¡Qué cruce fenomenal de ${alias}! Limpito abajo para trabar y ganar la dividida.`
+        text: `¡Qué cruce fenomenal de ${alias}! De pie, limpito abajo para trabar y ganar la pelota.`
+      })
+      stateTracker.lastCommentTick = matchDetails.iterationCount
+      return messages
+    }
+
+    if (line.includes('Slide tackle won by: ') || line.includes('Spectacular slide tackle') || line.includes('knocks the ball loose!')) {
+      const tackler = line.replace(/.*slide tackle (won )?by:\s*([^\s!]+(\s+[^\s!]+)*).*/i, '$2').trim()
+      const alias = getAlias(tackler)
+      messages.push({
+        id: `${Date.now()}-${Math.random()}`,
+        minute: minuteFormatted,
+        speaker: 'Marcelo Araujo',
+        type: 'play',
+        text: pickRandom([
+          `¡Se tiró al humo con una barrida monumental ${alias}! ¡Fue al piso con alma y vida para cortar la jugada!`,
+          `¡Qué barrida salvadora de ${alias}! Se arrojó al césped en el último suspiro y barrió la pelota.`
+        ])
+      })
+      stateTracker.lastCommentTick = matchDetails.iterationCount
+      return messages
+    }
+
+    if (line.includes('Missed slide tackle by: ')) {
+      const raw = line.replace(/.*Missed slide tackle by:\s*([^\s(]+(\s+[^\s(]+)*).*/i, '$1').trim()
+      const alias = getAlias(raw)
+      messages.push({
+        id: `${Date.now()}-${Math.random()}`,
+        minute: minuteFormatted,
+        speaker: 'Marcelo Araujo',
+        type: 'play',
+        text: pickRandom([
+          `¡Se tiró a barrer ${alias} y quedó pagando en el suelo! ¡Dejó el camino totalmente libre para el rival!`,
+          `¡A destiempo fue al piso ${alias}! Quedó tendido en el césped y la defensa quedó desprotegida.`
+        ])
+      })
+      stateTracker.lastCommentTick = matchDetails.iterationCount
+      return messages
+    }
+
+    if (line.includes('¡Remate bloqueado con el cuerpo por: ')) {
+      const blocker = line.replace('¡Remate bloqueado con el cuerpo por: ', '').replace('!', '').trim()
+      const alias = getAlias(blocker)
+      messages.push({
+        id: `${Date.now()}-${Math.random()}`,
+        minute: minuteFormatted,
+        speaker: 'Marcelo Araujo',
+        type: 'play',
+        text: pickRandom([
+          `¡Puso el cuerpo ${alias} para tapar el cañonazo! ¡Rebotó en su humanidad y salvó el arco!`,
+          `¡Qué bloqueo heroico de ${alias}! El remate se estrella en su cuerpo y sale desviado.`
+        ])
       })
       stateTracker.lastCommentTick = matchDetails.iterationCount
       return messages
@@ -573,9 +689,16 @@ export function generateCommentaryForIteration(matchDetails, prevScore, minuteFo
       messages.push({
         id: `${Date.now()}-${Math.random()}`,
         minute: minuteFormatted,
+        speaker: 'Marcelo Araujo',
+        type: 'offside',
+        text: `¡Pará, pará, pará! Levantó la bandera el juez de línea. ¡Posición adelantada de ${offPlayer} y el VAR traza las líneas!`
+      })
+      messages.push({
+        id: `${Date.now() + 1}-${Math.random()}`,
+        minute: minuteFormatted,
         speaker: 'Enrique Macaya Márquez',
         type: 'offside',
-        text: `Levantó la bandera el línea: estaba medio paso adelantado ${offPlayer} cuando salió el pase.`
+        text: `Correcta apreciación del asistente. En la repetición con cámara lenta se aprecia la línea defensiva y al atacante adelantado respecto a la pelota.`
       })
       stateTracker.lastCommentTick = matchDetails.iterationCount
       return messages

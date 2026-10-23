@@ -37,6 +37,35 @@ export function validatePlayerObjects(player) {
 }
 
 export function validatePlayerObjectsIteration(player) {
+  if (player.playerID == null) {
+    player.playerID = player.id || common.getRandomNumber(1000000000000, 99999999999999999)
+  }
+  if (!player.stats) {
+    player.stats = {
+      goals: 0,
+      assists: 0,
+      shots: { total: 0, on: 0, off: 0 },
+      cards: { yellow: 0, red: 0 },
+      passes: { total: 0, on: 0, off: 0 },
+      crosses: { total: 0, on: 0 },
+      dribbles: 0,
+      blocks: 0,
+      tackles: { total: 0, on: 0, off: 0, fouls: 0, slides: 0, standing: 0 },
+      saves: 0,
+      distanceCovered: 0
+    }
+  }
+  if (!player.originPOS) {
+    player.originPOS = Array.isArray(player.currentPOS) ? player.currentPOS.slice() : ['NP', 'NP']
+  }
+  if (!player.intentPOS) {
+    player.intentPOS = player.originPOS.slice()
+  }
+  if (player.action == null) player.action = 'none'
+  if (player.offside == null) player.offside = false
+  if (player.hasBall == null) player.hasBall = false
+  if (player.sentOff == null) player.sentOff = false
+
   const playerObjects = [
     'playerID', 'name', 'position', 'rating', 'currentPOS', 'injured', 'fitness', 'height',
     'originPOS', 'intentPOS', 'action', 'offside', 'hasBall', 'stats'
@@ -74,10 +103,16 @@ export function validatePlayerSkills(skills) {
   if (badObjects > 0) {
     throw new Error('Provide skills: passing,shooting,tackling,saving,agility,strength,penalty_taking,jumping')
   }
-  // Asegurar valores por defecto si perception, control o freekick no vinieran definidos
+  // Asegurar valores por defecto si perception, control, freekick, stamina o heading no vinieran definidos
   if (skills.perception === undefined) skills.perception = 70
   if (skills.control === undefined) skills.control = 70
   if (skills.freekick === undefined) skills.freekick = skills.shooting
+  const defaultStamina = skills.stamina ?? skills.resistencia ?? 75
+  skills.stamina = defaultStamina
+  skills.resistencia = defaultStamina
+  const defaultHeading = skills.heading ?? skills.cabeza ?? 70
+  skills.heading = defaultHeading
+  skills.cabeza = defaultHeading
 }
 
 export function validatePitch(pitchDetails) {

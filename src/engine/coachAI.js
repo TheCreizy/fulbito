@@ -100,6 +100,10 @@ export function evaluateMatchCoach(team, oppTeam, matchDetails) {
   const totalFitness = outfielders.reduce((acc, p) => acc + (p.fitness || 100), 0)
   const avgFitness = outfielders.length > 0 ? (totalFitness / outfielders.length) / 100 : 1.0
 
+  const ourRedCards = team.players.filter(p => p.sentOff || (p.stats?.cards?.red || 0) > 0).length
+  const oppRedCards = oppTeam.players.filter(p => p.sentOff || (p.stats?.cards?.red || 0) > 0).length
+  const redCardsDiff = ourRedCards - oppRedCards // > 0: desventaja numérica
+
   const isLateGame = matchProgress > 0.75   // Pasado el minuto 67
   const isVeryLate = matchProgress > 0.88   // Pasado el minuto 80
   const isFirstHalfEnd = matchProgress > 0.42 && matchProgress < 0.52
@@ -145,6 +149,23 @@ export function evaluateMatchCoach(team, oppTeam, matchDetails) {
   } else {
     // Perdiendo por 5+: el partido está sentenciado; preservar el orden para no ser goleados aún peor
     chosenInstruction = 'PushForward'
+  }
+
+  // Modulador por inferioridad o superioridad numérica
+  if (redCardsDiff > 0) {
+    // Equipo con 1 o más expulsados: priorizar equilibrio defensivo y contragolpe
+    if (scoreDiff >= 1) {
+      chosenInstruction = isLateGame ? 'ParkTheBus' : 'SlowDown'
+    } else if (scoreDiff === 0) {
+      chosenInstruction = 'SlowDown'
+    } else if (scoreDiff === -1 && !isVeryLate) {
+      chosenInstruction = 'Normal'
+    }
+  } else if (redCardsDiff < 0) {
+    // Con hombre de más: asediar y adelantar líneas
+    if (scoreDiff <= 0) {
+      chosenInstruction = isLateGame ? 'AllOutAttack' : 'PushForward'
+    }
   }
 
   return chosenInstruction

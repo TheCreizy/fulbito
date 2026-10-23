@@ -168,7 +168,7 @@ export default function DraftScreen({
             />
             <div>
               <div style={{ fontSize: '0.75rem', color: '#facc15', fontWeight: 700, textTransform: 'uppercase' }}>
-                RONDA {round} DE {TOTAL_ROUNDS} • {round <= 11 ? 'ARMANDO 11 TITULAR' : 'BANCO DE SUPLENTES (5)'}
+                RONDA {round} DE {TOTAL_ROUNDS} • {round <= 11 ? 'ARMANDO 11 TITULAR' : 'BANCO DE SUPLENTES (7)'}
               </div>
               <h2 style={{ fontSize: '1.4rem', color: '#fff' }}>
                 TURNO DE: {currentTeamConfig.name} {gameMode === 'pvp' ? `(JUGADOR ${activeTurn})` : ''}

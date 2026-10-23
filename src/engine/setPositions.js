@@ -1,6 +1,7 @@
 import * as common from './common.js'
 import * as setVariables from './setVariables.js'
 import * as setFreekicks from './setFreekicks.js'
+import { resolveMutualPlayerSeparation } from './playerMovement.js'
 import { getPlayStyleConfig } from '../data/formations.js'
 import {
   buildTeamShape,
@@ -257,10 +258,34 @@ function setupCornerPositions(matchDetails, attack, defence, cornerCoords, suppo
   taker.currentPOS = cornerCoords.slice()
   taker.intentPOS = cornerCoords.slice()
   taker.hasBall = true
-  taker.action = 'cross'
+
+  // Jugadas preparadas de córner (Open Football CornerRoutine):
+  // 1. Córner Corto (short_corner): toque al apoyo cerca del banderín.
+  // 2. Pase al Balcón del Área (edge_strike): pase raso a la medialuna para remate de primera.
+  // 3. Centros combados: primer palo (cross_near_post), segundo palo (cross_far_post) o corazón del área (cross_penalty_spot).
+  const rollCorner = common.getRandomNumber(1, 100)
+  if (shortOptionID && rollCorner <= 20) {
+    taker.action = 'pass'
+    matchDetails.ball.cornerRoutine = 'short_corner'
+    matchDetails.ball.targetPlayerID = shortOptionID
+    matchDetails.iterationLog.push(`Short Corner Routine by ${attack.name} - Played short to ${shortOption.name}`)
+  } else if (edgeRunnerID && (edgeRunner.skill?.shooting || 65) >= 76 && rollCorner <= 36) {
+    taker.action = 'pass'
+    matchDetails.ball.cornerRoutine = 'edge_strike'
+    matchDetails.ball.targetPlayerID = edgeRunnerID
+    matchDetails.iterationLog.push(`Edge of Box Corner Routine by ${attack.name} - Cut back to ${edgeRunner.name}!`)
+  } else {
+    taker.action = 'cross'
+    const crossOptions = ['cross_near_post', 'cross_far_post', 'cross_penalty_spot']
+    const chosenRoutine = crossOptions[common.getRandomNumber(0, 2)]
+    matchDetails.ball.cornerRoutine = chosenRoutine
+    matchDetails.iterationLog.push(`Corner Delivery (${chosenRoutine}) by ${attack.name} - Taker: ${taker.name}`)
+  }
 
   matchDetails.ball.position = [cornerCoords[0], cornerCoords[1], 0]
   matchDetails.ball.isCornerKick = true
+  matchDetails.ball.isOffsideExempt = true
+  matchDetails.ball.isRestart = true
   setBallSpecificCornerValue(matchDetails, attack, taker)
   matchDetails.endIteration = true
   return matchDetails
@@ -273,7 +298,9 @@ export function setTopRightCornerPositions(matchDetails) {
   const halfPitchSize = pitchHeight / 2
   const attack = (kickOffTeamKeepYPos > halfPitchSize) ? matchDetails.kickOffTeam : matchDetails.secondTeam
   const defence = (kickOffTeamKeepYPos > halfPitchSize) ? matchDetails.secondTeam : matchDetails.kickOffTeam
-  return setupCornerPositions(matchDetails, attack, defence, [pitchWidth, 0], [pitchWidth - 10, 20], [pitchWidth - 12, 10], true)
+  // El apoyo para pase corto se ubica a ~6m del córner ([pitchWidth - 25, 55])
+  // El marcador rival se posiciona separado del córner y sobre la marca hacia adentro (~9.15m reglamentarios del banderín: [pitchWidth - 45, 80])
+  return setupCornerPositions(matchDetails, attack, defence, [pitchWidth, 0], [pitchWidth - 25, 55], [pitchWidth - 45, 80], true)
 }
 
 export function setTopLeftCornerPositions(matchDetails) {
@@ -283,7 +310,9 @@ export function setTopLeftCornerPositions(matchDetails) {
   const halfPitchSize = pitchHeight / 2
   const attack = (kickOffTeamKeepYPos > halfPitchSize) ? matchDetails.kickOffTeam : matchDetails.secondTeam
   const defence = (kickOffTeamKeepYPos > halfPitchSize) ? matchDetails.secondTeam : matchDetails.kickOffTeam
-  return setupCornerPositions(matchDetails, attack, defence, [0, 0], [10, 20], [12, 10], true)
+  // El apoyo para pase corto se ubica a ~6m del córner ([25, 55])
+  // El marcador rival se posiciona separado del córner y sobre la marca hacia adentro (~9.15m reglamentarios del banderín: [45, 80])
+  return setupCornerPositions(matchDetails, attack, defence, [0, 0], [25, 55], [45, 80], true)
 }
 
 export function setBottomLeftCornerPositions(matchDetails) {
@@ -293,7 +322,9 @@ export function setBottomLeftCornerPositions(matchDetails) {
   const halfPitchSize = pitchHeight / 2
   const attack = (kickOffTeamKeepYPos < halfPitchSize) ? matchDetails.kickOffTeam : matchDetails.secondTeam
   const defence = (kickOffTeamKeepYPos < halfPitchSize) ? matchDetails.secondTeam : matchDetails.kickOffTeam
-  return setupCornerPositions(matchDetails, attack, defence, [0, pitchHeight], [10, pitchHeight - 20], [12, pitchHeight - 10], false)
+  // El apoyo para pase corto se ubica a ~6m del córner ([25, pitchHeight - 55])
+  // El marcador rival se posiciona separado del córner y sobre la marca hacia adentro (~9.15m reglamentarios del banderín: [45, pitchHeight - 80])
+  return setupCornerPositions(matchDetails, attack, defence, [0, pitchHeight], [25, pitchHeight - 55], [45, pitchHeight - 80], false)
 }
 
 export function setBottomRightCornerPositions(matchDetails) {
@@ -303,7 +334,9 @@ export function setBottomRightCornerPositions(matchDetails) {
   const halfPitchSize = pitchHeight / 2
   const attack = (kickOffTeamKeepYPos < halfPitchSize) ? matchDetails.kickOffTeam : matchDetails.secondTeam
   const defence = (kickOffTeamKeepYPos < halfPitchSize) ? matchDetails.secondTeam : matchDetails.kickOffTeam
-  return setupCornerPositions(matchDetails, attack, defence, [pitchWidth, pitchHeight], [pitchWidth - 10, pitchHeight - 20], [pitchWidth - 12, pitchHeight - 10], false)
+  // El apoyo para pase corto se ubica a ~6m del córner ([pitchWidth - 25, pitchHeight - 55])
+  // El marcador rival se posiciona separado del córner y sobre la marca hacia adentro (~9.15m reglamentarios del banderín: [pitchWidth - 45, pitchHeight - 80])
+  return setupCornerPositions(matchDetails, attack, defence, [pitchWidth, pitchHeight], [pitchWidth - 25, pitchHeight - 55], [pitchWidth - 45, pitchHeight - 80], false)
 }
 
 function setBallSpecificCornerValue(matchDetails, attack, taker) {
@@ -360,6 +393,10 @@ function executeThrowInSetup(matchDetails, attack, defence, isLeft, ballIntended
   taker.currentPOS = [throwX, place]
   taker.intentPOS = [throwX, place]
   taker.hasBall = true
+  taker.action = 'pass'
+  matchDetails.ball.isThrowIn = true
+  matchDetails.ball.isOffsideExempt = true
+  matchDetails.ball.isRestart = true
 
   matchDetails.iterationLog.push(`Throw in to - ${attack.name} (Taker: ${taker.name})`)
   if (Array.isArray(matchDetails.events)) {
@@ -438,6 +475,7 @@ function executeThrowInSetup(matchDetails, attack, defence, isLeft, ballIntended
   matchDetails.isThrowIn = true
   matchDetails.throwInTakerID = taker.playerID
   matchDetails.throwInIter = matchDetails.iterationCount || 0
+  resolveMutualPlayerSeparation(matchDetails)
   matchDetails.endIteration = true
   return matchDetails
 }
@@ -489,7 +527,13 @@ export function setTopGoalKick(matchDetails) {
 function setBallSpecificGoalKickValue(matchDetails, attack) {
   const kicker = common.isOnPitch(attack.players[0]) ? attack.players[0] : attack.players.find(common.isOnPitch)
   kicker.currentPOS = [matchDetails.ball.position[0], matchDetails.ball.position[1]]
+  kicker.intentPOS = kicker.currentPOS.slice()
   kicker.hasBall = true
+  const isDirect = attack?.playStyle === 'direct' || attack?.playStyle === 'longBall' || common.getRandomNumber(1, 100) <= 35
+  kicker.action = isDirect ? 'boot' : 'pass'
+  matchDetails.ball.isGoalKick = true
+  matchDetails.ball.isOffsideExempt = true
+  matchDetails.ball.isRestart = true
   matchDetails.ball.lastTouch.playerName = kicker.name
   matchDetails.ball.lastTouch.playerID = kicker.playerID
   matchDetails.ball.lastTouch.teamID = attack.teamID
@@ -548,10 +592,14 @@ export function setSetpieceKickOffTeam(matchDetails) {
   const attackingTowardsTop = matchDetails.kickOffTeam.players[0].originPOS[1] > pitchHeight / 2
   const pushSetpieceEvent = (type) => {
     if (Array.isArray(matchDetails.events)) {
+      const infractor = matchDetails.pendingPenaltyInfractor || matchDetails.pendingFoulPlayer?.name || null
       matchDetails.events.push({
         type,
         teamID: matchDetails.kickOffTeam.teamID,
         teamName: matchDetails.kickOffTeam.name,
+        infractorName: infractor,
+        foulPlayer: matchDetails.pendingFoulPlayer?.name,
+        foulCard: matchDetails.pendingFoulCard,
         iteration: matchDetails.iterationCount || 0,
         half: matchDetails.half,
         deadBall: true
@@ -588,10 +636,14 @@ export function setSetpieceSecondTeam(matchDetails) {
   const attackingTowardsTop = matchDetails.secondTeam.players[0].originPOS[1] > pitchHeight / 2
   const pushSetpieceEvent = (type) => {
     if (Array.isArray(matchDetails.events)) {
+      const infractor = matchDetails.pendingPenaltyInfractor || matchDetails.pendingFoulPlayer?.name || null
       matchDetails.events.push({
         type,
         teamID: matchDetails.secondTeam.teamID,
         teamName: matchDetails.secondTeam.name,
+        infractorName: infractor,
+        foulPlayer: matchDetails.pendingFoulPlayer?.name,
+        foulCard: matchDetails.pendingFoulCard,
         iteration: matchDetails.iterationCount || 0,
         half: matchDetails.half,
         deadBall: true
@@ -722,6 +774,7 @@ function setBallSpecificPenaltyValue(matchDetails, shootArray, attack) {
   taker.intentPOS = shootArray.slice()
   taker.hasBall = true
   taker.action = 'penalty'
+  matchDetails.ball.isRestart = true
   matchDetails.ball.lastTouch.playerName = taker.name
   matchDetails.ball.lastTouch.playerID = taker.playerID
   matchDetails.ball.lastTouch.teamID = attack.teamID
@@ -746,10 +799,22 @@ export function setKickOffTeamGoalScored(matchDetails) {
     matchDetails.kickOffTeam.players[thisIndex].stats.goals++
   }
 
+  // Asistencia de gol
+  const passAssistID1 = matchDetails.ball?.lastPasserPlayerID
+  if (passAssistID1) {
+    const assister = matchDetails.kickOffTeam.players.find(p => p.playerID === passAssistID1)
+    if (assister && assister.name !== scorer) {
+      assister.stats.assists = (assister.stats.assists || 0) + 1
+    }
+  }
+  if (matchDetails.ball) matchDetails.ball.lastPasserPlayerID = null
+
   const bodyPart = matchDetails.ball.lastTouch.bodyPart || 'foot'
   const isHeader = bodyPart === 'head'
+  const shotType = matchDetails.ball.lastTouch.shotType || (isHeader ? 'header' : 'close_range')
+  const goalDetail = matchDetails.ball.lastTouch.goalDetail || (isHeader ? 'Cabezazo' : 'Tiro dentro del área')
 
-  matchDetails.iterationLog.push(`Goal Scored by - ${scorer} (${isHeader ? 'Header' : bodyPart}) - (${matchDetails.kickOffTeam.name})`)
+  matchDetails.iterationLog.push(`Goal Scored by - ${scorer} (${goalDetail}) - (${matchDetails.kickOffTeam.name})`)
   if (Array.isArray(matchDetails.events)) {
     matchDetails.events.push({
       type: 'goal',
@@ -759,7 +824,9 @@ export function setKickOffTeamGoalScored(matchDetails) {
       iteration: matchDetails.iterationCount || 0,
       half: matchDetails.half,
       bodyPart,
-      isHeader
+      isHeader,
+      shotType,
+      goalDetail
     })
   }
 
@@ -788,10 +855,22 @@ export function setSecondTeamGoalScored(matchDetails) {
     matchDetails.secondTeam.players[thisIndex].stats.goals++
   }
 
+  // Asistencia de gol
+  const passAssistID2 = matchDetails.ball?.lastPasserPlayerID
+  if (passAssistID2) {
+    const assister = matchDetails.secondTeam.players.find(p => p.playerID === passAssistID2)
+    if (assister && assister.name !== scorer) {
+      assister.stats.assists = (assister.stats.assists || 0) + 1
+    }
+  }
+  if (matchDetails.ball) matchDetails.ball.lastPasserPlayerID = null
+
   const bodyPart = matchDetails.ball.lastTouch.bodyPart || 'foot'
   const isHeader = bodyPart === 'head'
+  const shotType = matchDetails.ball.lastTouch.shotType || (isHeader ? 'header' : 'close_range')
+  const goalDetail = matchDetails.ball.lastTouch.goalDetail || (isHeader ? 'Cabezazo' : 'Tiro dentro del área')
 
-  matchDetails.iterationLog.push(`Goal Scored by - ${scorer} (${isHeader ? 'Header' : bodyPart}) - (${matchDetails.secondTeam.name})`)
+  matchDetails.iterationLog.push(`Goal Scored by - ${scorer} (${goalDetail}) - (${matchDetails.secondTeam.name})`)
   if (Array.isArray(matchDetails.events)) {
     matchDetails.events.push({
       type: 'goal',
@@ -801,7 +880,9 @@ export function setSecondTeamGoalScored(matchDetails) {
       iteration: matchDetails.iterationCount || 0,
       half: matchDetails.half,
       bodyPart,
-      isHeader
+      isHeader,
+      shotType,
+      goalDetail
     })
   }
 
@@ -826,6 +907,7 @@ export function setBallSpecificGoalScoreValue(matchDetails, concedingTeam) {
   matchDetails.ball.ballOverIterations = []
   matchDetails.ball.withPlayer = true
   matchDetails.ball.withTeam = concedingTeam.teamID
+  matchDetails.ball.isRestart = true
 
   const otherTeam = concedingTeam.teamID === matchDetails.kickOffTeam.teamID ? matchDetails.secondTeam : matchDetails.kickOffTeam
   const isOtherTeamTop = otherTeam.players[0].originPOS[1] < centerY
@@ -851,6 +933,8 @@ export function setBallSpecificGoalScoreValue(matchDetails, concedingTeam) {
   kicker.hasBall = true
   kicker.action = 'pass'
   kicker.isKickoffPass = true
+  matchDetails.kickoffRetentionTicks = 16
+  matchDetails.turnoverTick = -999
   matchDetails.ball.lastTouch.playerName = kicker.name
   matchDetails.ball.lastTouch.playerID = kicker.playerID
   matchDetails.ball.lastTouch.teamID = concedingTeam.teamID
@@ -902,15 +986,26 @@ function tryGoalLineSave(matchDetails, defendingTeam) {
       }
       return true
     } else if (roll <= 75) {
-      const dropY = goalieSide === 'top' ? goalie.currentPOS[1] + 20 : goalie.currentPOS[1] - 20
-      matchDetails.ball.position = [goalie.currentPOS[0], dropY, 0]
-      matchDetails.ball.ballOverIterations = []
+      const dropDistanceX = common.getRandomNumber(-35, 35)
+      const dropDistanceY = goalieSide === 'top' ? common.getRandomNumber(25, 75) : -common.getRandomNumber(25, 75)
+      const reboundX = Math.max(120, Math.min(pitchWidth - 120, goalie.currentPOS[0] + dropDistanceX))
+      const reboundY = goalieSide === 'top'
+        ? Math.max(30, Math.min(160, goalie.currentPOS[1] + dropDistanceY))
+        : Math.min(pitchHeight - 30, Math.max(pitchHeight - 160, goalie.currentPOS[1] + dropDistanceY))
+
+      const traj = common.getBallTrajectory(goalie.currentPOS, [reboundX, reboundY], common.getRandomNumber(50, 85), 'rebound', pitchHeight)
+      matchDetails.ball.ballOverIterations = traj
+      matchDetails.ball.position = traj[0] || [reboundX, reboundY, 0]
       matchDetails.ball.Player = ''
       matchDetails.ball.withPlayer = false
       matchDetails.ball.withTeam = ''
       matchDetails.ball.lastTouch.playerID = goalie.playerID
       matchDetails.ball.lastTouch.playerName = goalie.name
       matchDetails.ball.lastTouch.teamID = defendingTeam.teamID
+      matchDetails.ball.lastTouch.iterations = 0
+      matchDetails.ball.lastTouch.deflection = true
+      matchDetails.ball.lastReboundIter = matchDetails.iterationCount || 0
+      goalie.hasBall = false
       matchDetails.iterationLog.push(`Goal-line save by ${goalie.name}! Ball rebounds into play!`)
       if (Array.isArray(matchDetails.events)) {
         matchDetails.events.push({
@@ -947,7 +1042,6 @@ function tryGoalLineSave(matchDetails, defendingTeam) {
 }
 
 export function keepInBoundaries(matchDetails, kickteamID, ballIntended) {
-  matchDetails.pendingOffsideSnapshot = null
   const { kickOffTeam, secondTeam } = matchDetails
   const KOTid = kickOffTeam.teamID
   const [pitchWidth, pitchHeight, goalWidth] = matchDetails.pitchSize
@@ -957,12 +1051,31 @@ export function keepInBoundaries(matchDetails, kickteamID, ballIntended) {
   const [bXPOS, bYPOS] = ballIntended
   const kickOffTeamSide = (kickOffTeam.players[0].originPOS[1] < (pitchHeight / 2)) ? 'top' : 'bottom'
 
-  if (bXPOS < 0 && kickteamID === KOTid) return setLeftSecondTeamThrowIn(matchDetails, ballIntended)
-  if (bXPOS < 0 && kickteamID !== KOTid) return setLeftKickOffTeamThrowIn(matchDetails, ballIntended)
-  if (bXPOS > pitchWidth && kickteamID === KOTid) return setRightSecondTeamThrowIn(matchDetails, ballIntended)
-  if (bXPOS > pitchWidth && kickteamID !== KOTid) return setRightKickOffTeamThrowIn(matchDetails, ballIntended)
+  const clearOffsideOnOut = () => {
+    matchDetails.pendingOffsideSnapshot = null
+    matchDetails.lastOffsideSnapshot = null
+    if (matchDetails.ball) matchDetails.ball.offsideSnapshot = null
+  }
+
+  if (bXPOS < 0 && kickteamID === KOTid) {
+    clearOffsideOnOut()
+    return setLeftSecondTeamThrowIn(matchDetails, ballIntended)
+  }
+  if (bXPOS < 0 && kickteamID !== KOTid) {
+    clearOffsideOnOut()
+    return setLeftKickOffTeamThrowIn(matchDetails, ballIntended)
+  }
+  if (bXPOS > pitchWidth && kickteamID === KOTid) {
+    clearOffsideOnOut()
+    return setRightSecondTeamThrowIn(matchDetails, ballIntended)
+  }
+  if (bXPOS > pitchWidth && kickteamID !== KOTid) {
+    clearOffsideOnOut()
+    return setRightKickOffTeamThrowIn(matchDetails, ballIntended)
+  }
 
   if (bYPOS < 0) {
+    clearOffsideOnOut()
     if (common.isBetween(bXPOS, leftPost, rightPost)) {
       const topDefendingTeam = (kickOffTeamSide === 'top') ? kickOffTeam : secondTeam
       if (tryGoalLineSave(matchDetails, topDefendingTeam)) return matchDetails
@@ -989,6 +1102,7 @@ export function keepInBoundaries(matchDetails, kickteamID, ballIntended) {
   }
 
   if (bYPOS > pitchHeight) {
+    clearOffsideOnOut()
     if (common.isBetween(bXPOS, leftPost, rightPost)) {
       const bottomDefendingTeam = (kickOffTeamSide === 'bottom') ? kickOffTeam : secondTeam
       if (tryGoalLineSave(matchDetails, bottomDefendingTeam)) return matchDetails
@@ -1068,7 +1182,10 @@ export function computeTeamGamePhase(team, matchDetails, inPossession) {
   const ticksSinceTurnover = currentIter - (matchDetails.turnoverTick || 0)
 
   if (inPossession) {
-    if (ticksSinceTurnover <= 25 && ticksSinceTurnover >= 0) {
+    if ((matchDetails.kickoffRetentionTicks || 0) > 0) {
+      return 'BuildUp'
+    }
+    if (ticksSinceTurnover <= 25 && ticksSinceTurnover >= 0 && (matchDetails.turnoverTick || 0) > 0) {
       return 'AttackingTransition'
     }
     if (distBallToOwnGoalY < pitchHeight * 0.35) {
@@ -1187,8 +1304,10 @@ function setDefenceRelativePos(matchDetails, defendingTeam, closestPlayer, attac
 
     // A. PRESSER: Sale a presionar al portador goal-side
     if (playerDuty.duty === 'Press') {
+      const isKickoffStandoff = (matchDetails.kickoffRetentionTicks || 0) > 6
+      const targetBallY = isKickoffStandoff ? (isTopTeam ? (pitchHeight / 2 - 45) : (pitchHeight / 2 + 45)) : ball.position[1]
       const pressX = ball.position[0] * 0.85 + player.currentPOS[0] * 0.15
-      const pressY = ball.position[1] + goalDirY * 12
+      const pressY = targetBallY + goalDirY * 12
       player.intentPOS = [
         Math.max(25, Math.min(pitchWidth - 25, pressX)),
         isTopTeam ? Math.max(25, pressY) : Math.min(pitchHeight - 25, pressY)
@@ -1244,8 +1363,10 @@ function setDefenceRelativePos(matchDetails, defendingTeam, closestPlayer, attac
       })
 
       if (cuttingAttacker && ['CB', 'DFC', 'LÍBERO', 'STOP I', 'STOP D'].includes(role)) {
-        // Interceptar la diagonal cerrando hacia el centro por delante del arco propio
-        finalX = cuttingAttacker.currentPOS[0] * 0.70 + (pitchWidth / 2) * 0.30
+        // Interceptar cerrando la diagonal hacia el centro, manteniendo la separación de la pareja central
+        const isLeftCB = anchor[0] < (pitchWidth / 2)
+        const sideOffset = isLeftCB ? -14 : 14
+        finalX = (cuttingAttacker.currentPOS[0] * 0.65 + (pitchWidth / 2) * 0.35) + sideOffset
         finalY = cuttingAttacker.currentPOS[1] + goalDirY * 14
       } else {
         // 2. Regla Goal-Side estricta:
@@ -1402,7 +1523,9 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
   const oppositeFullbackRole = onLeftFlank ? 'RB' : 'LB'
   const restDefencePlayers = availableAttackers.filter(p => {
     const role = p.tacticalRole || p.position
-    return role === 'CB' || role === 'DFC' || role === 'LÍBERO' || role === 'STOP I' || role === 'STOP D' || role === oppositeFullbackRole
+    // Solo los centrales hacen RestDefence obligatoria; el lateral opuesto solo si la mentalidad es defensiva
+    const isOppositeFullbackResting = (kickingTeam?.mentality === 'defensive') && (role === oppositeFullbackRole)
+    return role === 'CB' || role === 'DFC' || role === 'LÍBERO' || role === 'STOP I' || role === 'STOP D' || isOppositeFullbackResting
   })
 
   let activeDiagonalRunners = kickingTeam.players.filter(
@@ -1475,15 +1598,16 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
       const isLeft = widePlan.leftHolderID === player.playerID
       const touchlineX = isLeft ? 40 : (pitchWidth - 40)
       // Avanzar con la línea de la jugada manteniendo la línea de cal
-      const holderY = clampOnsideY(anchor[1])
+      const advancedY = isTopTeam ? Math.max(anchor[1], ball.position[1] - 30) : Math.min(anchor[1], ball.position[1] + 30)
+      const holderY = clampOnsideY(isAttackingPhase ? advancedY : anchor[1])
       player.intentPOS = [touchlineX, holderY]
       continue
     }
 
     // C.2 En tácticas abiertas (wingPlay), ambos extremos preservan su pegada a la cal mientras se gesta la jugada
     const isWingPlay = kickingTeam?.playStyle === 'wingPlay'
-    if (isAttackingPhase && isWingPlay && (role === 'LM' || role === 'RM') && distBallToGoalY > 165) {
-      const isLeft = role === 'LM'
+    if (isAttackingPhase && isWingPlay && (role === 'LM' || role === 'RM' || role === 'EXT') && distBallToGoalY > 165) {
+      const isLeft = role === 'LM' || (role === 'EXT' && anchor[0] < pitchWidth / 2)
       const touchlineX = isLeft ? 42 : (pitchWidth - 42)
       const holderY = clampOnsideY(anchor[1])
       player.intentPOS = [touchlineX, holderY]
@@ -1518,10 +1642,25 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
     const overlapChance = isWide ? Math.round(34 * (styleCfg.switchBoost || 1.15)) : Math.round(16 * (styleCfg.switchBoost || 1.1))
     const showChance = styleCfg.id === 'tikiTaka' ? 22 : 13
 
-    if ((role === 'ST' || role === 'LM' || role === 'RM') && activeDiagonalRunners < 2 && roll <= diagonalChance) {
+    const isOffensiveShooterFullback = ['LB', 'RB', 'LWB', 'RWB'].includes(role) && (Number(player.skill?.shooting || 60) >= 70 || hasTrait('canonero_media_distancia') || hasTrait('lanzador_canonero'))
+    if (isOffensiveShooterFullback && roll <= 28 && distBallToGoalY < 420 && distBallToGoalY > 160) {
+      const edgeCutX = anchor[0] < pitchWidth / 2 ? common.getRandomNumber(210, 290) : common.getRandomNumber(pitchWidth - 290, pitchWidth - 210)
+      const edgeDist = dir * common.getRandomNumber(60, 130)
+      const edgeCutY = clampOnsideY(ball.position[1] + edgeDist)
+      player.offBallRun = {
+        type: 'diagonalCutInside',
+        targetX: edgeCutX,
+        targetY: edgeCutY,
+        untilIteration: currentIter + common.getRandomNumber(10, 16)
+      }
+      player.intentPOS = [edgeCutX, edgeCutY]
+      continue
+    }
+
+    if ((role === 'ST' || role === 'EXT' || role === 'LM' || role === 'RM') && activeDiagonalRunners < 2 && roll <= diagonalChance) {
       const rawDeepY = isTopTeam ? Math.max(anchor[1] + 75, onsideLimitY - 4) : Math.min(anchor[1] - 75, onsideLimitY + 4)
       const runTargetY = clampOnsideY(rawDeepY)
-      const preferredX = role === 'ST'
+      const preferredX = (role === 'ST' || role === 'EXT')
         ? findOpenPocketX(anchor[0], defendingTeam, runTargetY, pitchWidth)
         : (anchor[0] < pitchWidth / 2 ? common.getRandomNumber(115, 220) : common.getRandomNumber(pitchWidth - 220, pitchWidth - 115))
       player.offBallRun = {
@@ -1549,7 +1688,7 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
       continue
     }
 
-    if ((role === 'CAM' || role === 'CM') && roll > (diagonalChance + overlapChance) && roll <= (diagonalChance + overlapChance + showChance)) {
+    if ((role === 'CAM' || role === 'CM' || role === 'CDM') && roll > (diagonalChance + overlapChance) && roll <= (diagonalChance + overlapChance + showChance)) {
       const supportY = clampOnsideY(ball.position[1] + dir * common.getRandomNumber(55, 115))
       const pocketX = findOpenPocketX(anchor[0], defendingTeam, supportY, pitchWidth)
       player.offBallRun = {

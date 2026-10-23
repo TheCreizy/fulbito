@@ -74,6 +74,14 @@ export function getBallTrajectory(thisPOS, newPOS, power, type, pitchHeight) {
     speedPerTick = 25 + (powerRatio * 6)
     minSteps = 5
     maxSteps = 22
+  } else if (type === 'deflection') {
+    speedPerTick = 26 + (powerRatio * 8)
+    minSteps = 3
+    maxSteps = 10
+  } else if (type === 'rebound') {
+    speedPerTick = 20 + (powerRatio * 6)
+    minSteps = 3
+    maxSteps = 8
   }
 
   const steps = Math.max(minSteps, Math.min(maxSteps, Math.round(dist / speedPerTick)))
@@ -85,6 +93,8 @@ export function getBallTrajectory(thisPOS, newPOS, power, type, pitchHeight) {
   if (type === 'freekick') maxLoftPercent = 0.055
   if (type === 'cross') maxLoftPercent = 0.075
   if (type === 'kick') maxLoftPercent = 0.11
+  if (type === 'deflection') maxLoftPercent = 0.045
+  if (type === 'rebound') maxLoftPercent = 0.05
   const maxLoftHeight = pitchHeight * maxLoftPercent
   const distRatio = Math.min(1, dist / (pitchHeight * 0.35))
   const maxHeight = maxLoftHeight * Math.max(0.25, distRatio)
@@ -272,7 +282,56 @@ export function isOdd(n) {
 }
 
 export function distance(pos1, pos2) {
+  if (!Array.isArray(pos1) || !Array.isArray(pos2)) return 9999
   const dx = pos1[0] - pos2[0]
   const dy = pos1[1] - pos2[1]
   return Math.sqrt(dx * dx + dy * dy)
+}
+
+/**
+ * Bandas de distancia de tiro libre inspiradas en FreeKickBand de Open Football.
+ */
+export function getFreeKickBand(distToGoal) {
+  if (distToGoal <= 200) return 'Close'
+  if (distToGoal <= 260) return 'Mid'
+  if (distToGoal <= 320) return 'Long'
+  return 'Far'
+}
+
+/**
+ * Cantidad de jugadores en la barrera según distancia y ángulo (Open Football wall_size_for).
+ */
+export function getWallSize(distToGoal, isWideAngle = false) {
+  const band = getFreeKickBand(distToGoal)
+  let base = 2
+  if (band === 'Close') base = 6
+  else if (band === 'Mid') base = 5
+  else if (band === 'Long') base = 4
+  else base = 2
+
+  if (isWideAngle && band !== 'Far') {
+    base = Math.max(2, base - 1)
+  }
+  return base
+}
+
+/**
+ * Probabilidad de que la barrera desvíe o bloquee un tiro libre directo (Open Football wall_block_prob).
+ */
+export function calculateWallBlockProb(wallPlayers = [], takerFkSkill = 75, distToGoal = 220) {
+  const band = getFreeKickBand(distToGoal)
+  let baseProb = 0.20
+  if (band === 'Close') baseProb = 0.26
+  else if (band === 'Mid') baseProb = 0.22
+  else if (band === 'Long') baseProb = 0.15
+  else baseProb = 0.06
+
+  let avgWallQuality = 70
+  if (wallPlayers.length > 0) {
+    const sum = wallPlayers.reduce((acc, p) => acc + ((p.skill?.tackling || 70) + (p.skill?.strength || 70) + (p.skill?.jumping || 70)) / 3, 0)
+    avgWallQuality = sum / wallPlayers.length
+  }
+  const wallMod = (avgWallQuality - 70) * 0.002
+  const takerMod = (75 - takerFkSkill) * 0.0025
+  return Math.max(0.04, Math.min(0.42, baseProb + wallMod + takerMod))
 }

@@ -1415,6 +1415,13 @@ h1, h2, h3, .tv-font {
   color: #ffffff;
 }
 
+.pitch-event-banner.banner-substitution {
+  background: linear-gradient(90deg, #064e3b 0%, #059669 50%, #047857 100%);
+  color: #ffffff;
+  border-top: 2px solid #34d399;
+  box-shadow: 0 4px 18px rgba(5, 150, 105, 0.5);
+}
+
 /* =========================================================
    CABINA DE TRANSMISIÓN CON COLORES POR TIPO DE EVENTO
    ========================================================= */
@@ -1659,6 +1666,180 @@ h1, h2, h3, .tv-font {
   align-items: center;
   justify-content: space-between;
   border: 2px solid #cbd5e1;
+  transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+/* Ticker animaciones y estados dinámicos (Araujo y Macaya) */
+@keyframes tickerGoalFlash {
+  0% {
+    background: #f59e0b;
+    color: #020617;
+    border-color: #fef08a;
+    box-shadow: 0 0 24px rgba(245, 158, 11, 0.95);
+  }
+  50% {
+    background: #022c22;
+    color: #34d399;
+    border-color: #10b981;
+    box-shadow: 0 0 24px rgba(16, 185, 129, 0.95);
+  }
+  100% {
+    background: #f59e0b;
+    color: #020617;
+    border-color: #fef08a;
+    box-shadow: 0 0 24px rgba(245, 158, 11, 0.95);
+  }
+}
+
+.fm-ticker-bar.ticker-goal {
+  animation: tickerGoalFlash 0.75s infinite ease-in-out;
+  font-weight: 800;
+}
+.fm-ticker-bar.ticker-goal .ticker-text {
+  color: inherit !important;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+.fm-ticker-bar.ticker-goal .ticker-min {
+  color: inherit !important;
+}
+
+.fm-ticker-bar.ticker-yellow {
+  background: #fef08a !important;
+  color: #713f12 !important;
+  border-color: #eab308 !important;
+  box-shadow: 0 0 16px rgba(234, 179, 8, 0.65) !important;
+}
+.fm-ticker-bar.ticker-yellow .ticker-text {
+  color: #422006 !important;
+  font-weight: 700;
+}
+.fm-ticker-bar.ticker-yellow .ticker-min {
+  color: #854d0e !important;
+}
+
+.fm-ticker-bar.ticker-red {
+  background: #dc2626 !important;
+  color: #ffffff !important;
+  border-color: #991b1b !important;
+  box-shadow: 0 0 20px rgba(220, 38, 38, 0.8) !important;
+}
+.fm-ticker-bar.ticker-red .ticker-text {
+  color: #ffffff !important;
+  font-weight: 700;
+}
+.fm-ticker-bar.ticker-red .ticker-min {
+  color: #fecaca !important;
+}
+
+.fm-ticker-bar.ticker-injury {
+  background: #09090b !important;
+  color: #ffffff !important;
+  border-color: #3f3f46 !important;
+  box-shadow: 0 0 16px rgba(0, 0, 0, 0.85) !important;
+}
+.fm-ticker-bar.ticker-injury .ticker-text {
+  color: #ffffff !important;
+  font-weight: 700;
+}
+.fm-ticker-bar.ticker-injury .ticker-min {
+  color: #e2e8f0 !important;
+}
+
+/* Fila de Cancha y Paneles de Equipo Laterales */
+.fm-pitch-row {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.fm-team-side-panel {
+  flex: 1 1 0;
+  min-width: 0;
+  background: #020611;
+  border: 1px solid #1e3a6a;
+  border-radius: 8px;
+  padding: 0.35rem 0.45rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.fm-team-side-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #1e293b;
+  padding-bottom: 0.2rem;
+  margin-bottom: 0.2rem;
+}
+
+.fm-player-stat-table {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex: 1;
+}
+
+.fm-player-stat-item {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 1px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.fm-player-stat-row1 {
+  display: grid;
+  grid-template-columns: 112px repeat(10, 1fr);
+  align-items: center;
+  gap: 2px;
+  font-size: 0.59rem;
+  line-height: 1.1;
+}
+
+.fm-player-stat-row2 {
+  display: grid;
+  grid-template-columns: 112px repeat(10, 1fr);
+  align-items: center;
+  gap: 2px;
+  font-size: 0.61rem;
+  line-height: 1.1;
+}
+
+/* Panel Desplegable de Comentarios */
+.fm-comments-full-panel {
+  background: #020611;
+  border: 1px solid #eab308;
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  margin-top: 0.5rem;
+  width: 100%;
+}
+
+.fm-comments-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid #1e293b;
+  padding-bottom: 0.35rem;
+}
+
+.fm-comments-scroll-area {
+  max-height: 250px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  scroll-behavior: smooth;
+  padding-right: 0.35rem;
 }
 
 /* ==========================================================================

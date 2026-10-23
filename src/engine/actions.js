@@ -94,7 +94,7 @@ export function scanCarrierEnvironment(matchDetails, player, team, opposition) {
     if (passDist < 24 || passDist > pitchHeight * 0.52) continue
 
     const forwardGain = (mY - curY) * dir
-    const isMateStriker = mate.role === 'ST' || mate.position === 'ST' || mate.tacticalRole === 'ST'
+    const isMateStriker = ['ST', 'EXT'].includes(mate.role) || ['ST', 'EXT'].includes(mate.position) || ['ST', 'EXT'].includes(mate.tacticalRole)
     const corridorHalfWidth = Math.max(16, Math.min(28, passDist * 0.075))
     let minOppToMate = 999
     let laneBlocked = false
@@ -243,7 +243,7 @@ function computeBaseCarrierDecision(matchDetails, player, team, opposition, env)
   const isOrganizador = hasTrait('organizador_mediocampo')
   const isLanzador = hasTrait('lanzador_canonero') || hasTrait('canonero_media_distancia')
   const isArtillero = hasTrait('artillero_area')
-  const isStriker = role === 'ST' || player.position === 'ST'
+  const isStriker = ['ST', 'EXT'].includes(role) || ['ST', 'EXT'].includes(player.position)
   const isOffensive = team?.mentality === 'offensive'
   const isDefensive = team?.mentality === 'defensive'
 
@@ -253,8 +253,26 @@ function computeBaseCarrierDecision(matchDetails, player, team, opposition, env)
     return [0, 30, 70, 0, 0, 0, 0, 0, 0, 0, 0, 0]
   }
 
+  // 0.5 SAQUE DEL MEDIO (KICKOFF RETENTION & BUILD-UP):
+  // El receptor del saque del medio NO rifa el balón al campo contrario.
+  // Conduce abriendo ángulo, temporiza con pausa y circula en corto hacia defensores o laterales.
+  if ((matchDetails.kickoffRetentionTicks || 0) > 0 && position !== 'GK') {
+    const pauseWeight = carrierTicks <= 2 ? 30 : 10
+    const carryWeight = 30 // Conduce hacia la banda o hacia atrás para perfilarse
+    const circulatePassWeight = 100 - pauseWeight - carryWeight
+    return [0, 0, circulatePassWeight, 0, 0, 0, 0, carryWeight, 0, 0, 0, pauseWeight]
+  }
+
   // 1. Arquero con pelota
   if (position === 'GK') {
+    // Reglas 13 y 16 IFAB: en saque de meta o pelota parada, el arquero NO puede salir conduciendo (0 en run y sprint).
+    // Opciones reglamentarias: salida corta por bajo (pass) o saque largo de volea/despeje (boot / throughBall)
+    if (matchDetails.ball?.isRestart && matchDetails.ball?.Player === player.playerID) {
+      const isDirectStyle = team?.playStyle === 'direct' || team?.playStyle === 'longBall'
+      const bootWeight = isDirectStyle ? 55 : 30
+      const passWeight = isDirectStyle ? 45 : 70
+      return [0, 0, passWeight, 0, 0, 0, 0, 0, 0, 0, bootWeight, 0]
+    }
     if (env.nearestOppDist < 28) return [0, 0, 35, 0, 0, 0, 0, 0, 0, 35, 30, 0]
     return [0, 12, 74, 0, 0, 0, 0, 6, 0, 8, 0, 0]
   }
@@ -382,8 +400,9 @@ function computeBaseCarrierDecision(matchDetails, player, team, opposition, env)
   // 5. Puerta del Área / Medialuna (distToGoalY entre 179px y 260px)
   if (env.distToGoalY > 178 && env.distToGoalY <= 260) {
     let edgeShootPts = 0
-    // Tiros de media distancia de mediocampistas, extremos y delanteros (open-football LongShot model)
-    const isMidfieldShooter = ['CAM', 'CM', 'LM', 'RM'].includes(role) || isLanzador || isStriker
+    // Tiros de media distancia de mediocampistas, extremos, delanteros y laterales ofensivos (open-football LongShot model)
+    const isFullbackShooter = ['LB', 'RB', 'LWB', 'RWB'].includes(role) && (skill.shooting >= 70 || isLanzador)
+    const isMidfieldShooter = ['CAM', 'CM', 'CDM', 'LM', 'RM'].includes(role) || isLanzador || isStriker || isFullbackShooter
     if (inCentralCorridor && !env.shotBlocked && isMidfieldShooter) {
       if (isLanzador || skill.shooting >= 84) {
         edgeShootPts = 78
@@ -522,7 +541,7 @@ function computeBaseCarrierDecision(matchDetails, player, team, opposition, env)
   }
 
   // Duelo 1v1 o presión cercana: Gambeta 1v1, Pase Filtrado o Conducción
-  const isDribblerRole = ['CAM', 'LM', 'RM', 'ST', 'LB', 'RB'].includes(role) || dribbleSkill >= 76 || isEncarador
+  const isDribblerRole = ['CAM', 'LM', 'RM', 'EXT', 'ST', 'LB', 'RB'].includes(role) || dribbleSkill >= 76 || isEncarador
   if (env.nearbyOppsCount <= 1 && isDribblerRole && env.nearestOppDist >= 12) {
     const gambetaWeight = Math.round((dribbleSkill >= 80 || isEncarador ? 58 : 42) * styleCfg.gambetaBoost)
     const throughWeight = (env.hasRunnerInBehind && (!inOwnHalf || allowLongBallFromDeep))
@@ -666,7 +685,7 @@ export function populatePossibleActions(possibleActions, player, matchDetails, a
   let interceptPts = f
   let slidePts = g
   let runPts = h
-  if (role === 'ST' || role === 'CAM' || player.position === 'ST') {
+  if (['ST', 'EXT', 'CAM'].includes(role) || ['ST', 'EXT'].includes(player.position)) {
     const shiftedFromTackle = Math.round(tacklePts * 0.58)
     const shiftedFromSlide = Math.round(slidePts * 0.85)
     tacklePts -= shiftedFromTackle
@@ -674,13 +693,39 @@ export function populatePossibleActions(possibleActions, player, matchDetails, a
     interceptPts += Math.round((shiftedFromTackle + shiftedFromSlide) * 0.6)
     runPts += Math.round((shiftedFromTackle + shiftedFromSlide) * 0.4)
   }
+  // Detección de situación de riesgo / último recurso para la barrida:
+  // Se tiran al piso cuando la jugada es de riesgo manifiesto de gol (cerca del área propia o último hombre)
+  const [, pHeight = 1050] = matchDetails?.pitchSize || [680, 1050]
+  const isTopTeamDef = player.originPOS[1] < (pHeight / 2)
+  const distToOwnGoal = isTopTeamDef ? player.currentPOS[1] : (pHeight - player.currentPOS[1])
+  const isDangerZone = distToOwnGoal < 220
+  const ballY = matchDetails?.ball?.position?.[1]
+  const isBehindCarrier = ballY != null ? (isTopTeamDef ? (ballY < player.currentPOS[1]) : (ballY > player.currentPOS[1])) : false
+  const isHighRiskPlay = isDangerZone || isBehindCarrier
+
+  if (!isHighRiskPlay) {
+    // Si la jugada NO es de riesgo extremo, el defensor prefiere entrar de pie o interceptar sin tirarse al piso
+    const safeReduction = Math.round(slidePts * 0.70)
+    slidePts -= safeReduction
+    tacklePts += Math.round(safeReduction * 0.7)
+    interceptPts += Math.round(safeReduction * 0.3)
+  }
+
   // Jugador amonestado (con amarilla) se cuida muchísimo más al marcar para no hacerse expulsar
   if ((player.stats?.cards?.yellow || 0) > 0) {
-    const cautiousSlide = Math.round(slidePts * 0.85)
+    const cautiousSlide = Math.round(slidePts * 0.88)
     const cautiousTackle = Math.round(tacklePts * 0.40)
     slidePts -= cautiousSlide
     tacklePts -= cautiousTackle
     interceptPts += cautiousSlide + cautiousTackle
+  }
+
+  // Regla IFAB: Ejecutor de pelota parada no puede salir conduciendo
+  const isRestartCarrier = Boolean(
+    matchDetails?.ball?.isRestart && matchDetails?.ball?.Player === player.playerID
+  )
+  if (isRestartCarrier) {
+    runPts = 0
   }
 
   possibleActions[0].points = a
@@ -691,7 +736,7 @@ export function populatePossibleActions(possibleActions, player, matchDetails, a
   possibleActions[5].points = interceptPts
   possibleActions[6].points = slidePts
   possibleActions[7].points = runPts
-  possibleActions[8].points = i
+  possibleActions[8].points = isRestartCarrier ? 0 : i
   possibleActions[9].points = j
   possibleActions[10].points = k
   if (possibleActions[11]) possibleActions[11].points = l
@@ -719,7 +764,7 @@ function populateActionsJSON() {
 
 function calculateFoulProbability(tackler, carrier, isSlide = false) {
   const role = tackler.tacticalRole || tackler.position
-  if (role === 'ST' || tackler.position === 'ST') {
+  if (['ST', 'EXT'].includes(role) || ['ST', 'EXT'].includes(tackler.position)) {
     return isSlide ? 22 : 10
   }
   const tacklerSkill = Number(tackler.skill?.tackling || 60)
@@ -735,6 +780,7 @@ function calculateFoulProbability(tackler, carrier, isSlide = false) {
 }
 
 export function resolveTackle(player, team, opposition, matchDetails) {
+  if (!player || !common.isOnPitch(player) || player.sentOff) return false
   matchDetails.iterationLog.push(`Tackle attempted by: ${player.name}`)
   const tackleDetails = {
     injuryHigh: 1500,
@@ -744,21 +790,59 @@ export function resolveTackle(player, team, opposition, matchDetails) {
   const index = opposition.players.findIndex(thisPlayer => thisPlayer.playerID === matchDetails.ball.Player)
   if (index === -1) return false
   const thatPlayer = opposition.players[index]
+  if (!player.stats.tackles) player.stats.tackles = { total: 0, on: 0, off: 0, fouls: 0, slides: 0, blocks: 0 }
   player.stats.tackles.total++
+  player.slideRecoveryTicks = 0 // Entrada de pie: el jugador NO se tira al piso
+
   const foulProb = calculateFoulProbability(player, thatPlayer, false)
   if (common.getRandomNumber(1, 100) <= foulProb) {
     setFoul(matchDetails, team, player, thatPlayer)
     return true
   }
-  if (calcTackleScore(player.skill, 5, player) > calcRetentionScore(thatPlayer.skill, 5)) {
-    setSuccessTackle(matchDetails, team, opposition, player, thatPlayer, tackleDetails)
+
+  const tackleScore = calcTackleScore(player.skill, 5, player)
+  const retentionScore = calcRetentionScore(thatPlayer.skill, 5)
+
+  if (tackleScore > retentionScore) {
+    // ENTRADA LIMPIA DE PIE:
+    // Modelo open-football KEPT_AT_CONTACT (70% retención limpia en los pies, 30% desvío/punteo)
+    player.stats.tackles.on++
+    player.stats.tackles.standing = (player.stats.tackles.standing || 0) + 1
+    setInjury(matchDetails, thatPlayer, player, false)
+
+    if (common.getRandomNumber(1, 100) <= 70) {
+      setSuccessTackle(matchDetails, team, opposition, player, thatPlayer, tackleDetails)
+    } else {
+      setPostTackleKnockedBall(matchDetails, team, opposition, player, thatPlayer, false)
+      setPostTacklePosition(matchDetails, player, thatPlayer, tackleDetails.increment)
+      matchDetails.iterationLog.push(`Standing tackle by ${player.name} pokes the ball away cleanly!`)
+    }
+
+    if (Array.isArray(matchDetails.events)) {
+      matchDetails.events.push({
+        type: 'standingTackle',
+        outcome: 'won',
+        teamID: team.teamID,
+        teamName: team.name,
+        playerName: player.name,
+        victimName: thatPlayer.name,
+        iteration: matchDetails.iterationCount || 0,
+        half: matchDetails.half
+      })
+    }
     return false
   }
-  setFailedTackle(matchDetails, player, thatPlayer, tackleDetails)
+
+  // Entrada de pie fallida: no roba el balón pero permanece de pie (no queda congelado en el piso)
+  player.stats.tackles.off++
+  setInjury(matchDetails, player, thatPlayer, false)
+  setPostTacklePosition(matchDetails, thatPlayer, player, tackleDetails.increment)
+  matchDetails.iterationLog.push(`Failed standing tackle by: ${player.name} (remains on feet)`)
   return false
 }
 
 export function resolveSlide(player, team, opposition, matchDetails) {
+  if (!player || !common.isOnPitch(player) || player.sentOff) return false
   matchDetails.iterationLog.push(`Slide tackle attempted by: ${player.name}`)
   const tackleDetails = {
     injuryHigh: 1500,
@@ -768,18 +852,113 @@ export function resolveSlide(player, team, opposition, matchDetails) {
   const index = opposition.players.findIndex(thisPlayer => thisPlayer.playerID === matchDetails.ball.Player)
   if (index === -1) return false
   const thatPlayer = opposition.players[index]
+  if (!player.stats.tackles) player.stats.tackles = { total: 0, on: 0, off: 0, fouls: 0, slides: 0, blocks: 0 }
   player.stats.tackles.total++
+  player.stats.tackles.slides = (player.stats.tackles.slides || 0) + 1
+
   const foulProb = calculateFoulProbability(player, thatPlayer, true)
   if (common.getRandomNumber(1, 100) <= foulProb) {
+    // Al cometer falta barriendo queda unos instantes en el piso
+    player.slideRecoveryTicks = 3
+    player.stunnedTicks = 3
     setFoul(matchDetails, team, player, thatPlayer)
     return true
   }
-  if (calcTackleScore(player.skill, 5, player) > calcRetentionScore(thatPlayer.skill, 5)) {
-    setSuccessTackle(matchDetails, team, opposition, player, thatPlayer, tackleDetails)
+
+  const tackleScore = calcTackleScore(player.skill, 6, player)
+  const retentionScore = calcRetentionScore(thatPlayer.skill, 5)
+
+  if (tackleScore > retentionScore) {
+    // BARRIDA EXITOSA:
+    // Corta la jugada barriendo el césped. Se levanta tras 3 ticks de recuperación
+    player.slideRecoveryTicks = 3
+    player.stats.tackles.on++
+    setInjury(matchDetails, thatPlayer, player, true)
+
+    // En barridas al piso: 25% retiene directamente, 75% barre la pelota suelta o al lateral/córner
+    if (common.getRandomNumber(1, 100) <= 25) {
+      setSuccessTackle(matchDetails, team, opposition, player, thatPlayer, tackleDetails)
+      matchDetails.iterationLog.push(`Spectacular slide tackle won by: ${player.name}`)
+    } else {
+      setPostTackleKnockedBall(matchDetails, team, opposition, player, thatPlayer, true)
+      setPostTacklePosition(matchDetails, player, thatPlayer, tackleDetails.increment)
+      matchDetails.iterationLog.push(`Slide tackle by: ${player.name} knocks the ball loose!`)
+    }
+
+    if (Array.isArray(matchDetails.events)) {
+      matchDetails.events.push({
+        type: 'slideTackle',
+        outcome: 'won',
+        teamID: team.teamID,
+        teamName: team.name,
+        playerName: player.name,
+        victimName: thatPlayer.name,
+        iteration: matchDetails.iterationCount || 0,
+        half: matchDetails.half
+      })
+    }
     return false
   }
-  setFailedTackle(matchDetails, player, thatPlayer, tackleDetails)
+
+  // BARRIDA FALLIDA:
+  // Se tiró al piso a destiempo, le erró y queda congelado en el piso 5 ticks (expuesto)
+  player.slideRecoveryTicks = 5
+  player.stunnedTicks = 5
+  player.stats.tackles.off++
+  setInjury(matchDetails, player, thatPlayer, true)
+  setPostTacklePosition(matchDetails, thatPlayer, player, tackleDetails.increment + 2)
+  matchDetails.iterationLog.push(`Missed slide tackle by: ${player.name} (exposed on ground!)`)
+
+  if (Array.isArray(matchDetails.events)) {
+    matchDetails.events.push({
+      type: 'slideTackle',
+      outcome: 'missed',
+      teamID: team.teamID,
+      teamName: team.name,
+      playerName: player.name,
+      victimName: thatPlayer.name,
+      iteration: matchDetails.iterationCount || 0,
+      half: matchDetails.half
+    })
+  }
   return false
+}
+
+export function setPostTackleKnockedBall(matchDetails, team, opposition, player, carrier, isSlide = false) {
+  player.hasBall = false
+  carrier.hasBall = false
+  matchDetails.ball.Player = ''
+  matchDetails.ball.withPlayer = false
+  matchDetails.ball.withTeam = ''
+  matchDetails.ball.lastTouch.playerName = player.name
+  matchDetails.ball.lastTouch.playerID = player.playerID
+  matchDetails.ball.lastTouch.teamID = team.teamID
+  matchDetails.ball.lastTouch.deflection = true
+  matchDetails.ball.lastTouch.iterations = 0
+
+  const dx = carrier.currentPOS[0] - player.currentPOS[0]
+  const dy = carrier.currentPOS[1] - player.currentPOS[1]
+  const dist = Math.sqrt(dx * dx + dy * dy) || 1
+  const normX = dx / dist
+  const normY = dy / dist
+
+  const angleJitter = (common.getRandomNumber(-35, 35) * Math.PI) / 180
+  const knockX = normX * Math.cos(angleJitter) - normY * Math.sin(angleJitter)
+  const knockY = normX * Math.sin(angleJitter) + normY * Math.cos(angleJitter)
+
+  const knockPower = isSlide ? common.getRandomNumber(90, 150) : common.getRandomNumber(40, 85)
+  const targetX = Math.max(10, Math.min(matchDetails.pitchSize[0] - 10, player.currentPOS[0] + knockX * (knockPower * 0.40)))
+  const targetY = Math.max(10, Math.min(matchDetails.pitchSize[1] - 10, player.currentPOS[1] + knockY * (knockPower * 0.40)))
+
+  const traj = common.getBallTrajectory(
+    [player.currentPOS[0], player.currentPOS[1], 0],
+    [targetX, targetY],
+    knockPower,
+    'loose',
+    matchDetails.pitchSize[1]
+  )
+  matchDetails.ball.ballOverIterations = traj
+  matchDetails.ball.position = traj[0] || [targetX, targetY, 0]
 }
 
 function setFailedTackle(matchDetails, player, thatPlayer, tackleDetails) {

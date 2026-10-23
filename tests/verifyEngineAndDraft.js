@@ -37,10 +37,10 @@ async function runTests() {
   assert.strictEqual(squad.length, 60, '60 Plantilla')
   assert.strictEqual(filler.length, 50, '50 Relleno')
 
-  // Validar polifuncionalidad de Messi (ST, RM, CAM, CM) y asignación correcta de LB / RB
+  // Validar polifuncionalidad de Messi (EXT, ST, CAM) y asignación correcta de LB / RB
   const messi = PLAYERS_DB.find(p => p.name === 'Lionel Messi')
+  assert.strictEqual(getPositionCompatibility(messi, 'EXT').factor, 1.0, 'Messi 100% como EXT (Extremo)')
   assert.strictEqual(getPositionCompatibility(messi, 'ST').factor, 1.0, 'Messi 100% como ST')
-  assert.strictEqual(getPositionCompatibility(messi, 'RM').factor, 1.0, 'Messi 100% como RM')
   assert.strictEqual(getPositionCompatibility(messi, 'CAM').factor, 1.0, 'Messi 100% como CAM (Enganche)')
 
   // Validar que Cafú (RB 93) y Morel Rodríguez (LB 76) se ubiquen cada uno en su banda correcta (LD y LI)
@@ -59,7 +59,7 @@ async function runTests() {
   assert.strictEqual(testSetup.players[4].name, 'Cafú', 'Slot 4 (LD/RB) debe ser el lateral derecho natural')
   console.log('✔ 200 jugadores validados, polifuncionalidad activa y laterales LI/LD asignados sin inversión.')
 
-  console.log('\n=== 2. Simulando Draft Completo ($250M, 16 Rondas + Reroll $2M) ===')
+  console.log('\n=== 2. Simulando Draft Completo ($280M, 18 Rondas + Reroll $2M) ===')
   const usedIds = new Set()
   let budget1 = INITIAL_BUDGET
   let budget2 = INITIAL_BUDGET
@@ -92,9 +92,9 @@ async function runTests() {
     usedIds.add(pick2.id)
   }
 
-  assert.strictEqual(roster1.length, 16, 'Equipo 1 completó 16 jugadores')
-  assert.strictEqual(roster2.length, 16, 'Equipo 2 completó 16 jugadores')
-  assert.strictEqual(usedIds.size, 32, '32 jugadores únicos entre ambos planteles sin repetidos')
+  assert.strictEqual(roster1.length, 18, 'Equipo 1 completó 18 jugadores')
+  assert.strictEqual(roster2.length, 18, 'Equipo 2 completó 18 jugadores')
+  assert.strictEqual(usedIds.size, 36, '36 jugadores únicos entre ambos planteles sin repetidos')
   console.log(`✔ Draft completado sin bloqueos. Presupuesto sobrante E1: $${budget1}M | E2: $${budget2}M`)
 
   console.log('\n=== 3. Configurando Pizarra Táctica y Simulando Partido Completo ===')

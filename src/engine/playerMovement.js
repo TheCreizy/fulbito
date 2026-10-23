@@ -58,6 +58,10 @@ export function decideMovement(closestPlayer, team, opp, matchDetails) {
         const isWide = thisPlayer.currentPOS[0] < 210 || thisPlayer.currentPOS[0] > pitchWidth - 210
 
         // Verificar si el jugador tiene canal libre hacia el arco (Breakaway / Mano a mano limpio)
+        // Reglas 13, 15 y 16 IFAB: NUNCA activar Breakaway en el ejecutor de una pelota parada
+        const isRestartTaker = Boolean(
+          matchDetails.ball.isRestart && matchDetails.ball.Player === thisPlayer.playerID
+        )
         let nearestOutfieldAhead = 999
         for (const op of activeOpps) {
           if (op.position === 'GK') continue
@@ -68,7 +72,7 @@ export function decideMovement(closestPlayer, team, opp, matchDetails) {
             if (od < nearestOutfieldAhead) nearestOutfieldAhead = od
           }
         }
-        const isBreakaway = nearestOutfieldAhead > 55
+        const isBreakaway = !isRestartTaker && (nearestOutfieldAhead > 55)
 
         // Rivales que presionan por el frente o costados (los que corren detrás NO deben forzar pase atrás)
         const frontalOpps = activeOpps.filter(op => {
@@ -79,11 +83,18 @@ export function decideMovement(closestPlayer, team, opp, matchDetails) {
 
         // Solo forzar pase o centro si está acorralado de frente o en el fondo de la cal sin salida
         const inCornerEnd = distToGoalY < 75 && isWide
+        const isPlaymaker = (thisPlayer.tacticalRole === 'CAM' || thisPlayer.position === 'CAM' ||
+          (Array.isArray(thisPlayer.traits) && thisPlayer.traits.includes('organizador_mediocampo')) ||
+          Number(thisPlayer.skill?.control || 70) >= 80)
+        const maxPatienceTicks = isPlaymaker ? 32 : 24
+
+        // Si el jugador está congelado en wait por tiempo excesivo o acorralado en el fondo
+        const isProlongedStall = matchDetails.ball.carrierTicks >= 28 && action === 'wait'
         const mustRelease = !isBreakaway && (
-          inCornerEnd ||
-          (frontalOpps >= 2 && matchDetails.ball.carrierTicks >= 8) ||
-          (matchDetails.ball.carrierTicks >= 24 && minOppDist < 25) ||
-          (action === 'wait' && minOppDist < 16)
+          (inCornerEnd && matchDetails.ball.carrierTicks >= 14) ||
+          (frontalOpps >= 2 && matchDetails.ball.carrierTicks >= 18) ||
+          (matchDetails.ball.carrierTicks >= maxPatienceTicks && minOppDist < 25) ||
+          isProlongedStall
         )
 
         if (isBreakaway) {
@@ -91,15 +102,24 @@ export function decideMovement(closestPlayer, team, opp, matchDetails) {
           // Si está más lejos, NO forzar pase atrás: dejar que continúe en sprint hacia el arquero
           if (distToGoalY <= 110 && common.isBetween(thisPlayer.currentPOS[0], 180, pitchWidth - 180)) {
             action = 'shoot'
-          } else if (action === 'pass' && nearestOutfieldAhead > 90) {
-            // Si el motor intentaba pasar hacia atrás sin rivales adelante, mantener el sprint hacia el arco
+          } else if ((action === 'pass' || action === 'run') && nearestOutfieldAhead > 80) {
+            // Si el motor intentaba pasar hacia atrás o trotar sin rivales adelante, meter sprint decidido hacia el arco
             action = 'sprint'
           }
         } else if (mustRelease && (action === 'run' || action === 'sprint' || action === 'wait')) {
           if (distToGoalY <= 140 && isWide) action = 'cross'
           else if (distToGoalY <= 115 && common.isBetween(thisPlayer.currentPOS[0], 180, pitchWidth - 180)) action = 'shoot'
+          else if (isProlongedStall || (inCornerEnd && minOppDist < 16)) action = (distToGoalY < 200 ? 'cleared' : 'pass')
           else action = 'pass'
           matchDetails.ball.carrierTicks = 0
+        }
+
+        // Blindaje estricto de auto-pase / salida conduciendo en pelotas paradas
+        if (isRestartTaker) {
+          const ballActions = ['shoot', 'throughBall', 'pass', 'cross', 'cleared', 'boot', 'penalty', 'freekickShot']
+          if (!ballActions.includes(action)) {
+            action = (thisPlayer.action && ballActions.includes(thisPlayer.action)) ? thisPlayer.action : 'pass'
+          }
         }
       }
 
@@ -119,44 +139,79 @@ export function decideMovement(closestPlayer, team, opp, matchDetails) {
         if (thisPlayer.offBallRun && thisPlayer.offBallRun.untilIteration > (matchDetails.iterationCount || 0)) {
           action = 'sprint'
         }
-      } else if ((!withPlayer || withTeam !== team.teamID) && closestPlayer.name === thisPlayer.name) {
-        // El jugador más cercano de cada equipo busca activamente la pelota suelta o presiona al portador rival
-        if (action !== 'tackle' && action !== 'slide' && action !== 'intercept') action = 'sprint'
-        ballToPlayerX = closestPlayerActionBallX(ballToPlayerX)
-        ballToPlayerY = closestPlayerActionBallY(ballToPlayerY)
-      } else if (
-        team.gamePhase === 'DefensiveTransition' &&
-        (!withPlayer || withTeam !== team.teamID) &&
-        common.distance(thisPlayer.currentPOS, position) < 36 &&
-        thisPlayer.position !== 'GK'
-      ) {
-        // Presión inmediata tras pérdida (Counter-Pressing de open-football)
-        if (action !== 'tackle' && action !== 'slide' && action !== 'intercept') action = 'sprint'
-        ballToPlayerX = closestPlayerActionBallX(ballToPlayerX)
-        ballToPlayerY = closestPlayerActionBallY(ballToPlayerY)
-      } else if (withTeam !== team.teamID && thisPlayer.position !== 'GK') {
-        const defDuty = team.defensivePlan?.duties?.[thisPlayer.playerID]
-        const targetThreatID = defDuty?.duty === 'Mark' ? defDuty.targetID : null
-        const markedOpp = targetThreatID ? opp.players.find(p => p.playerID === targetThreatID) : null
-        const isOppEnteringBox = markedOpp && (markedOpp.offBallRun?.type === 'boxSlotEntry' || markedOpp.offBallRun?.type === 'boxCrash' || markedOpp.isSprinting)
+      } else {
+        const [, pitchHeight = 1050] = matchDetails.pitchSize
+        const isTopTeamDef = thisPlayer.originPOS[1] < (pitchHeight / 2)
+        const myDistToGoalY = isTopTeamDef ? thisPlayer.currentPOS[1] : (pitchHeight - thisPlayer.currentPOS[1])
+        const role = thisPlayer.tacticalRole || thisPlayer.position
+        const isBacklineDefender = ['CB', 'LB', 'RB', 'LWB', 'RWB', 'DFC', 'LÍBERO', 'STOP I', 'STOP D'].includes(role) ||
+          thisPlayer.position === 'CB' || thisPlayer.position === 'LB' || thisPlayer.position === 'RB'
 
-        // Si el atacante al que marca está picando al área, el defensor sprintea para no perder la posición goal-side
-        if (isOppEnteringBox) {
+        // RECOVERY SPRINT / TRACKING BACK (Open Manager DefenderTrackingBackState):
+        // Si el defensor central o lateral fue superado de espaldas y el rival corre hacia el arco,
+        // o la pelota está más cerca del arco propio que el defensor, o el atacante le gana la espalda:
+        // el defensor debe CORRER CON TODO (sprint al 100% de velocidad con urgencia 1.5)
+        let needsRecoverySprint = false
+
+        if (withTeam !== team.teamID && thisPlayer.position !== 'GK' && isBacklineDefender) {
+          const ballDistToGoalY = isTopTeamDef ? position[1] : (pitchHeight - position[1])
+          const ballBehindDefender = (ballDistToGoalY < myDistToGoalY + 18) && myDistToGoalY < (pitchHeight * 0.58)
+
+          const oppBeatingDefender = opp.players.some(op => {
+            if (!common.isOnPitch(op) || op.position === 'GK') return false
+            const opDistToGoalY = isTopTeamDef ? op.currentPOS[1] : (pitchHeight - op.currentPOS[1])
+            const lateralDiff = Math.abs(op.currentPOS[0] - thisPlayer.currentPOS[0])
+            return opDistToGoalY < myDistToGoalY && lateralDiff < 145 && opDistToGoalY < (pitchHeight * 0.55)
+          })
+
+          const distToIntent = Array.isArray(thisPlayer.intentPOS) ? common.distance(thisPlayer.currentPOS, thisPlayer.intentPOS) : 0
+          const urgentRepliegue = distToIntent > 30 && myDistToGoalY < (pitchHeight * 0.55)
+
+          if (ballBehindDefender || oppBeatingDefender || urgentRepliegue) {
+            needsRecoverySprint = true
+          }
+        }
+
+        if (needsRecoverySprint) {
           action = 'sprint'
+        } else if ((!withPlayer || withTeam !== team.teamID) && closestPlayer.name === thisPlayer.name) {
+          // El jugador más cercano de cada equipo busca activamente la pelota suelta o presiona al portador rival
+          if (action !== 'tackle' && action !== 'slide' && action !== 'intercept') action = 'sprint'
+          ballToPlayerX = closestPlayerActionBallX(ballToPlayerX)
+          ballToPlayerY = closestPlayerActionBallY(ballToPlayerY)
         } else if (
-          (matchDetails.ball.isAerialCrossDelivery || matchDetails.ball.kickType === 'cross') &&
-          matchDetails.ball.targetPOS &&
-          common.distance(thisPlayer.currentPOS, matchDetails.ball.targetPOS) < 75
+          team.gamePhase === 'DefensiveTransition' &&
+          (!withPlayer || withTeam !== team.teamID) &&
+          common.distance(thisPlayer.currentPOS, position) < 36 &&
+          thisPlayer.position !== 'GK'
         ) {
-          action = 'sprint'
-        } else if (
-          matchDetails.ball.isPendingPass &&
-          matchDetails.ball.kickType === 'through' &&
-          matchDetails.ball.targetPOS &&
-          ['CB', 'LB', 'RB', 'DFC', 'LÍBERO', 'STOP I', 'STOP D'].includes(thisPlayer.tacticalRole || thisPlayer.position) &&
-          common.distance(thisPlayer.currentPOS, matchDetails.ball.targetPOS) < 110
-        ) {
-          action = 'sprint'
+          // Presión inmediata tras pérdida (Counter-Pressing de open-football)
+          if (action !== 'tackle' && action !== 'slide' && action !== 'intercept') action = 'sprint'
+          ballToPlayerX = closestPlayerActionBallX(ballToPlayerX)
+          ballToPlayerY = closestPlayerActionBallY(ballToPlayerY)
+        } else if (withTeam !== team.teamID && thisPlayer.position !== 'GK') {
+          const defDuty = team.defensivePlan?.duties?.[thisPlayer.playerID]
+          const targetThreatID = defDuty?.duty === 'Mark' ? defDuty.targetID : null
+          const markedOpp = targetThreatID ? opp.players.find(p => p.playerID === targetThreatID) : null
+          const isOppEnteringBox = markedOpp && (markedOpp.offBallRun?.type === 'boxSlotEntry' || markedOpp.offBallRun?.type === 'boxCrash' || markedOpp.isSprinting)
+
+          if (isOppEnteringBox) {
+            action = 'sprint'
+          } else if (
+            (matchDetails.ball.isAerialCrossDelivery || matchDetails.ball.kickType === 'cross') &&
+            matchDetails.ball.targetPOS &&
+            common.distance(thisPlayer.currentPOS, matchDetails.ball.targetPOS) < 75
+          ) {
+            action = 'sprint'
+          } else if (
+            matchDetails.ball.isPendingPass &&
+            matchDetails.ball.kickType === 'through' &&
+            matchDetails.ball.targetPOS &&
+            isBacklineDefender &&
+            common.distance(thisPlayer.currentPOS, matchDetails.ball.targetPOS) < 110
+          ) {
+            action = 'sprint'
+          }
         }
       }
       if (action === 'sprint') {
@@ -264,13 +319,20 @@ function tryCarrierGambeta(matchDetails, carrier, team, opp, move) {
 
 export function movePlayers(moves, team, opp, matchDetails) {
   const controlRadius = 12
-  const challengeRadius = 14
+  const challengeRadius = 22
   for (const thisPlayerMove of moves) {
     const thisPlayer = thisPlayerMove.player
     if (!common.isOnPitch(thisPlayer)) continue
-    if ((thisPlayer.stunnedTicks || 0) > 0) continue
+    if ((thisPlayer.slideRecoveryTicks || 0) > 0) {
+      thisPlayer.slideRecoveryTicks--
+      continue
+    }
+    if ((thisPlayer.stunnedTicks || 0) > 0) {
+      thisPlayer.stunnedTicks--
+      continue
+    }
     const { move, action } = thisPlayerMove
-    thisPlayer.currentPOS = completeMovement(matchDetails, thisPlayer.currentPOS, move)
+    thisPlayer.currentPOS = completeMovement(matchDetails, thisPlayer.currentPOS, move, thisPlayer)
 
     // Si este jugador lleva la pelota (dribbling con run/sprint), evaluar gambeta 1v1 y mover la pelota junto con él
     if (thisPlayer.hasBall === true && matchDetails.ball.Player === thisPlayer.playerID) {
@@ -306,6 +368,10 @@ export function movePlayers(moves, team, opp, matchDetails) {
 
     const closeWithPlayer = !!(xPosition && yPosition && withPlayer === false)
     if (inChallengeZone && withTeam !== team.teamID) {
+      // Regla IFAB: Durante un saque o reanudación reglamentaria (córner, tiro libre, penal, saque de meta o lateral),
+      // ningún rival puede disputar o quitarle el balón al ejecutante antes del tiro.
+      if (matchDetails.ball?.isRestart) continue
+
       const role = thisPlayer.tacticalRole || thisPlayer.position
       const isAttacker = role === 'ST' || role === 'CAM' || thisPlayer.position === 'ST'
       const autoChallengeChance = isAttacker ? 10 : 52
@@ -345,8 +411,13 @@ export function executeBallAction(move, team, opp, matchDetails) {
 export function setClosePlayerTakesBall(matchDetails, thisPlayer, team, opp) {
   if (!common.isOnPitch(thisPlayer)) return
   if (thisPlayer.offside) {
-    const offsideVarData = matchDetails.pendingOffsideSnapshot || null
+    const offsideVarData = thisPlayer.offsideSnapshot ||
+      matchDetails.lastOffsideSnapshot ||
+      matchDetails.pendingOffsideSnapshot ||
+      matchDetails.ball?.offsideSnapshot ||
+      null
     thisPlayer.offside = false
+    thisPlayer.offsideSnapshot = null
     matchDetails.iterationLog.push(`${thisPlayer.name} is offside`)
     if (Array.isArray(matchDetails.events)) {
       matchDetails.events.push({
@@ -362,6 +433,8 @@ export function setClosePlayerTakesBall(matchDetails, thisPlayer, team, opp) {
       })
     }
     matchDetails.pendingOffsideSnapshot = null
+    matchDetails.lastOffsideSnapshot = null
+    if (matchDetails.ball) matchDetails.ball.offsideSnapshot = null
     if (team.name === matchDetails.kickOffTeam.name) setPositions.setSetpieceSecondTeam(matchDetails)
     else setPositions.setSetpieceKickOffTeam(matchDetails)
   } else {
@@ -397,10 +470,12 @@ export function setClosePlayerTakesBall(matchDetails, thisPlayer, team, opp) {
 }
 
 function sendPlayerOff(matchDetails, team, thisPlayer, reason = 'red') {
+  if (!thisPlayer || thisPlayer.sentOff) return
   thisPlayer.stats.cards.red++
   thisPlayer.sentOff = true
   thisPlayer.hasBall = false
   thisPlayer.currentPOS = ['NP', 'NP']
+  thisPlayer.intentPOS = ['NP', 'NP']
   matchDetails.iterationLog.push(`Red Card - ${thisPlayer.name} (${team.name})`)
   if (Array.isArray(matchDetails.events)) {
     matchDetails.events.push({
@@ -416,6 +491,7 @@ function sendPlayerOff(matchDetails, team, thisPlayer, reason = 'red') {
 }
 
 function giveYellowCard(matchDetails, team, thisPlayer) {
+  if (!thisPlayer || thisPlayer.sentOff) return
   thisPlayer.stats.cards.yellow++
   matchDetails.iterationLog.push(`Yellow Card - ${thisPlayer.name} (${team.name})`)
   if (Array.isArray(matchDetails.events)) {
@@ -434,37 +510,67 @@ function giveYellowCard(matchDetails, team, thisPlayer) {
 }
 
 export function completeSlide(matchDetails, thisPlayer, team, opp) {
+  if (!thisPlayer || !common.isOnPitch(thisPlayer) || thisPlayer.sentOff) return matchDetails
+  if (thisPlayer.fitness > 20) {
+    thisPlayer.fitness = common.round(Math.max(20, thisPlayer.fitness - 0.35), 4)
+  }
   const foul = actions.resolveSlide(thisPlayer, team, opp, matchDetails)
   if (!foul) return matchDetails
   const intensity = actions.foulIntensity()
+  matchDetails.pendingFoulPlayer = { name: thisPlayer.name, playerID: thisPlayer.playerID, teamID: team.teamID }
+  matchDetails.pendingFoulCard = null
+  matchDetails.pendingPenaltyInfractor = thisPlayer.name
   if (common.isBetween(intensity, 44, 94)) {
     giveYellowCard(matchDetails, team, thisPlayer)
+    matchDetails.pendingFoulCard = 'yellow'
   } else if (intensity >= 95) {
     sendPlayerOff(matchDetails, team, thisPlayer, 'directRed')
+    matchDetails.pendingFoulCard = 'red'
   }
   if (opp.name === matchDetails.kickOffTeam.name) return setPositions.setSetpieceKickOffTeam(matchDetails)
   return setPositions.setSetpieceSecondTeam(matchDetails)
 }
 
 export function completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, opp) {
+  if (!thisPlayer || !common.isOnPitch(thisPlayer) || thisPlayer.sentOff) return matchDetails
+  if (thisPlayer.fitness > 20) {
+    thisPlayer.fitness = common.round(Math.max(20, thisPlayer.fitness - 0.12), 4)
+  }
   const foul = actions.resolveTackle(thisPlayer, team, opp, matchDetails)
   if (!foul) return matchDetails
+  matchDetails.pendingFoulPlayer = { name: thisPlayer.name, playerID: thisPlayer.playerID, teamID: team.teamID }
+  matchDetails.pendingFoulCard = null
+  matchDetails.pendingPenaltyInfractor = thisPlayer.name
   const intensity = actions.foulIntensity()
   if (common.isBetween(intensity, 58, 96)) {
     giveYellowCard(matchDetails, team, thisPlayer)
+    matchDetails.pendingFoulCard = 'yellow'
   } else if (intensity >= 97) {
     sendPlayerOff(matchDetails, team, thisPlayer, 'directRed')
+    matchDetails.pendingFoulCard = 'red'
   }
   if (opp.name === matchDetails.kickOffTeam.name) return setPositions.setSetpieceKickOffTeam(matchDetails)
   return setPositions.setSetpieceSecondTeam(matchDetails)
 }
 
-function completeMovement(matchDetails, currentPOS, move) {
+function completeMovement(matchDetails, currentPOS, move, player = null) {
   if (currentPOS[0] !== 'NP') {
     const intendedMovementX = currentPOS[0] + move[0]
     const intendedMovementY = currentPOS[1] + move[1]
-    if (intendedMovementX < matchDetails.pitchSize[0] + 1 && intendedMovementX > -1) currentPOS[0] += move[0]
-    if (intendedMovementY < matchDetails.pitchSize[1] + 1 && intendedMovementY > -1) currentPOS[1] += move[1]
+    let actualMoveX = 0
+    let actualMoveY = 0
+    if (intendedMovementX < matchDetails.pitchSize[0] + 1 && intendedMovementX > -1) {
+      currentPOS[0] += move[0]
+      actualMoveX = move[0]
+    }
+    if (intendedMovementY < matchDetails.pitchSize[1] + 1 && intendedMovementY > -1) {
+      currentPOS[1] += move[1]
+      actualMoveY = move[1]
+    }
+    if (player && player.stats) {
+      const stepDistMeters = Math.hypot(actualMoveX, actualMoveY) * 0.1
+      player.stats.distanceCovered = common.round((player.stats.distanceCovered || 0) + stepDistMeters, 2)
+    }
   }
   return currentPOS
 }
@@ -491,6 +597,23 @@ export function checkProvidedAction(matchDetails, thisPlayer, action) {
     'shoot', 'throughBall', 'pass', 'cross', 'tackle', 'intercept', 'slide',
     'run', 'sprint', 'cleared', 'boot', 'penalty', 'freekickShot'
   ]
+
+  // Reglas 13, 15 y 16 IFAB (Open Football TakeRestart):
+  // El ejecutor de una pelota parada NO puede salir conduciendo/gambeteando la pelota (auto-pase prohibido).
+  const isRestartCarrier = Boolean(
+    matchDetails.ball.isRestart && thisPlayer.playerID === matchDetails.ball.Player
+  )
+  if (isRestartCarrier) {
+    const providedAction = thisPlayer.action ? thisPlayer.action : 'unassigned'
+    if (ballActions.includes(providedAction)) {
+      return providedAction
+    }
+    if (!ballActions.includes(action)) {
+      return 'pass'
+    }
+    return action
+  }
+
   const providedAction = thisPlayer.action ? thisPlayer.action : 'unassigned'
   if (providedAction === 'none') return action
   if (allActions.includes(providedAction)) {
@@ -550,6 +673,13 @@ export function ballMoved(matchDetails, thisPlayer, team, opp) {
   opp.intent = 'attack'
   matchDetails.ball.Player = ''
   matchDetails.ball.withTeam = ''
+  matchDetails.ball.isRestart = false
+  matchDetails.ball.isGoalKick = false
+  matchDetails.ball.isThrowIn = false
+  matchDetails.ball.isCornerKick = false
+  matchDetails.ball.isOffsideExempt = false
+  delete matchDetails.isThrowIn
+  delete matchDetails.throwInTakerID
 }
 
 export function updateInformation(matchDetails, newPosition) {
@@ -602,13 +732,16 @@ function getSmartDribbleMove(matchDetails, player, step, opposition, team) {
   const side = (player.originPOS[1] > pitchHeight / 2) ? 'bottom' : 'top'
   const baseAngle = side === 'bottom' ? -Math.PI / 2 : Math.PI / 2
   const anglesInRad = [
-    baseAngle - 1.25, // -72° abrir fuerte la cancha a la izquierda
-    baseAngle - 0.78, // -45° diagonal abierta
-    baseAngle - 0.38, // -22° diagonal suave
-    baseAngle,        // 0° frontal hacia el arco / línea de fondo
-    baseAngle + 0.38, // +22° diagonal suave
-    baseAngle + 0.78, // +45° diagonal abierta
-    baseAngle + 1.25  // +72° abrir fuerte la cancha a la derecha
+    baseAngle - 1.25,   // -72° diagonal abierta izquierda
+    baseAngle - 0.78,   // -45° diagonal suave
+    baseAngle - 0.38,   // -22°
+    baseAngle,          // 0° frontal hacia el arco / línea de fondo
+    baseAngle + 0.38,   // +22°
+    baseAngle + 0.78,   // +45° diagonal suave
+    baseAngle + 1.25,   // +72° diagonal abierta derecha
+    baseAngle - 2.05,   // -118° giro de protección hacia atrás/interior
+    baseAngle + 2.05,   // +118° giro de protección hacia atrás/interior
+    baseAngle + Math.PI // 180° giro total de desahogo hacia campo propio
   ]
 
   const role = player.tacticalRole || player.position
@@ -677,9 +810,15 @@ function getSmartDribbleMove(matchDetails, player, step, opposition, team) {
 
     // Premiar fuertemente ir hacia donde hay espacio libre (esquivar marcas)
     const clearanceScore = Math.min(46, minOppDist) * 1.65
-    // Premiar el avance hacia el arco rival (multiplicado para encaradores)
+    // Premiar el avance hacia el arco rival; si va hacia atrás o adentro y el frente está tapado, premiar el giro protector
     const forwardProgress = side === 'bottom' ? -dy : dy
-    const progressScore = forwardProgress * (isEncarador ? 9.8 : (team?.mentality === 'offensive' ? 8.2 : 6.8))
+    let progressScore = 0
+    if (forwardProgress >= 0) {
+      progressScore = forwardProgress * (isEncarador ? 9.8 : (team?.mentality === 'offensive' ? 8.2 : 6.8))
+    } else {
+      const isFrontBlocked = minOppDist < 20 || distToGoalY < 75
+      progressScore = isFrontBlocked ? Math.abs(forwardProgress) * 4.2 : forwardProgress * 2.2
+    }
     // Afinidad hacia el carril táctico elegido (banda, abrir cancha o encarar al área)
     const xBefore = Math.abs(player.currentPOS[0] - desiredX)
     const xAfter = Math.abs(candX - desiredX)
@@ -700,9 +839,12 @@ export function getRunMovement(matchDetails, player, ballX, ballY, team, opposit
   player.isSprinting = false
   player.sprintMomentum = Math.max(0, (player.sprintMomentum || 0) - 0.25)
   if (player.position !== 'GK' && player.fitness > 20) {
+    const stamina = Number(player.skill?.stamina ?? player.skill?.resistencia ?? 75)
+    const staminaMod = Math.max(0.68, Math.min(1.45, 1.0 - (stamina - 75) * 0.012))
     const captainMultiplier = isCaptainOnPitch(team) ? 0.85 : 1.0
-    const mentalityMultiplier = team?.mentality === 'offensive' ? 1.15 : (team?.mentality === 'defensive' ? 0.85 : 1.0)
-    const drain = 0.015 * captainMultiplier * mentalityMultiplier
+    const mentalityMultiplier = team?.mentality === 'offensive' ? 1.18 : (team?.mentality === 'defensive' ? 0.86 : 1.0)
+    const ballCarrierDrain = player.hasBall ? 0.004 : 0.0
+    const drain = (0.015 + ballCarrierDrain) * staminaMod * captainMultiplier * mentalityMultiplier
     player.fitness = common.round(Math.max(20, player.fitness - drain), 4)
     if (matchDetails.iterationCount % 35 === 0) updatePlayerEffectiveSkills(player, team)
   }
@@ -741,9 +883,12 @@ export function getSprintMovement(matchDetails, player, ballX, ballY, team, oppo
   player.isSprinting = true
   player.sprintMomentum = Math.min(1.0, (player.sprintMomentum || 0) + 0.25)
   if (player.position !== 'GK' && player.fitness > 20) {
+    const stamina = Number(player.skill?.stamina ?? player.skill?.resistencia ?? 75)
+    const staminaMod = Math.max(0.68, Math.min(1.45, 1.0 - (stamina - 75) * 0.012))
     const captainMultiplier = isCaptainOnPitch(team) ? 0.85 : 1.0
-    const mentalityMultiplier = team?.mentality === 'offensive' ? 1.20 : (team?.mentality === 'defensive' ? 0.90 : 1.0)
-    const drain = 0.038 * captainMultiplier * mentalityMultiplier
+    const mentalityMultiplier = team?.mentality === 'offensive' ? 1.22 : (team?.mentality === 'defensive' ? 0.88 : 1.0)
+    const ballCarrierDrain = player.hasBall ? 0.007 : 0.0
+    const drain = (0.038 + ballCarrierDrain) * staminaMod * captainMultiplier * mentalityMultiplier
     player.fitness = common.round(Math.max(20, player.fitness - drain), 4)
     if (matchDetails.iterationCount % 35 === 0) updatePlayerEffectiveSkills(player, team)
   }
@@ -831,8 +976,13 @@ export function closestPlayerToBall(closestPlayer, team, matchDetails) {
 }
 
 export function checkOffside(team1, team2, matchDetails) {
-  if (matchDetails?.ball?.isPendingPass) {
-    // Si la pelota está en viaje tras un pase, la posición reglamentaria ya está fijada en el momento del pase
+  if (
+    matchDetails?.ball?.isPendingPass ||
+    matchDetails?.pendingOffsideSnapshot ||
+    matchDetails?.lastOffsideSnapshot ||
+    (Array.isArray(matchDetails?.ball?.ballOverIterations) && matchDetails.ball.ballOverIterations.length > 0)
+  ) {
+    // Si la pelota está en viaje tras un pase o hay un offside pendiente de resolución, no interferir
     return matchDetails
   }
   const { ball, pitchSize } = matchDetails
@@ -877,6 +1027,7 @@ export function team1atBottom(team1, team2, pitchHeight) {
   const topPlayerOffsidePosition = common.isBetween(topPlayer.currentPOS[1], offT1Ypos.pos1, offT1Ypos.pos2)
   if (topPlayerOffsidePosition && topPlayer.hasBall) return
   for (const thisPlayer of team1.players) {
+    if (thisPlayer.offsideSnapshot) continue
     thisPlayer.offside = false
     if (!common.isOnPitch(thisPlayer)) continue
     if (common.isBetween(thisPlayer.currentPOS[1], offT1Ypos.pos1, offT1Ypos.pos2)) {
@@ -888,6 +1039,7 @@ export function team1atBottom(team1, team2, pitchHeight) {
   const btmPlayerOffsidePosition = common.isBetween(btmPlayer.currentPOS[1], offT2Ypos.pos2, offT2Ypos.pos1)
   if (btmPlayerOffsidePosition && btmPlayer.hasBall) return
   for (const thisPlayer of team2.players) {
+    if (thisPlayer.offsideSnapshot) continue
     thisPlayer.offside = false
     if (!common.isOnPitch(thisPlayer)) continue
     if (common.isBetween(thisPlayer.currentPOS[1], offT2Ypos.pos2, offT2Ypos.pos1)) {
@@ -902,6 +1054,7 @@ export function team1atTop(team1, team2, pitchHeight) {
   const btmPlayerOffsidePosition = common.isBetween(btmPlayer.currentPOS[1], offT1Ypos.pos2, offT1Ypos.pos1)
   if (btmPlayerOffsidePosition && btmPlayer.hasBall) return
   for (const thisPlayer of team1.players) {
+    if (thisPlayer.offsideSnapshot) continue
     thisPlayer.offside = false
     if (!common.isOnPitch(thisPlayer)) continue
     if (common.isBetween(thisPlayer.currentPOS[1], offT1Ypos.pos2, offT1Ypos.pos1)) {
@@ -913,6 +1066,7 @@ export function team1atTop(team1, team2, pitchHeight) {
   const topPlayerOffsidePosition = common.isBetween(topPlayer.currentPOS[1], offT2Ypos.pos1, offT2Ypos.pos2)
   if (topPlayerOffsidePosition && topPlayer.hasBall) return
   for (const thisPlayer of team2.players) {
+    if (thisPlayer.offsideSnapshot) continue
     thisPlayer.offside = false
     if (!common.isOnPitch(thisPlayer)) continue
     if (common.isBetween(thisPlayer.currentPOS[1], offT2Ypos.pos1, offT2Ypos.pos2)) {
@@ -946,4 +1100,79 @@ function offsideYPOS(team, side, pitchHeight) {
     }
   }
   return offsideY
+}
+
+/**
+ * Resuelve la separación física / repulsión mutua entre jugadores para evitar que
+ * los círculos se superpongan o amontonen (especialmente en saques laterales,
+ * pelotas paradas, rechazos y disputas en el centro del campo).
+ */
+export function resolveMutualPlayerSeparation(matchDetails) {
+  if (!matchDetails || !matchDetails.kickOffTeam || !matchDetails.secondTeam) return
+  const [pitchWidth, pitchHeight] = matchDetails.pitchSize
+  const onPitchPlayers = []
+
+  for (const p of matchDetails.kickOffTeam.players) {
+    if (common.isOnPitch(p)) {
+      onPitchPlayers.push({ player: p, teamID: matchDetails.kickOffTeam.teamID, isGK: p.position === 'GK' })
+    }
+  }
+  for (const p of matchDetails.secondTeam.players) {
+    if (common.isOnPitch(p)) {
+      onPitchPlayers.push({ player: p, teamID: matchDetails.secondTeam.teamID, isGK: p.position === 'GK' })
+    }
+  }
+
+  const n = onPitchPlayers.length
+  if (n < 2) return
+
+  // 2 pasadas de relajación elástica para distribución natural y estable
+  for (let iter = 0; iter < 2; iter++) {
+    for (let i = 0; i < n; i++) {
+      const p1Obj = onPitchPlayers[i]
+      const p1 = p1Obj.player
+      for (let j = i + 1; j < n; j++) {
+        const p2Obj = onPitchPlayers[j]
+        const p2 = p2Obj.player
+
+        let dx = p1.currentPOS[0] - p2.currentPOS[0]
+        let dy = p1.currentPOS[1] - p2.currentPOS[1]
+        let dist = Math.hypot(dx, dy)
+
+        // Distancia mínima requerida entre centros de los círculos (dot radius = 15.5px)
+        // Entre compañeros de equipo: 18px (para que se distingan los números y camisetas)
+        // Entre rivales: 13px (permite disputa cuerpo a cuerpo dentro de challengeRadius = 22 sin fusionarse)
+        // Con el arquero: 24px
+        const sameTeam = p1Obj.teamID === p2Obj.teamID
+        const hasGK = p1Obj.isGK || p2Obj.isGK
+        const minDist = hasGK ? 24 : (sameTeam ? 18 : 13)
+
+        if (dist < minDist) {
+          if (dist === 0) {
+            dx = (p1.shirtNumber % 2 === 0 ? 1 : -1) * 3
+            dy = (p2.shirtNumber % 2 === 0 ? 1 : -1) * 3
+            dist = Math.hypot(dx, dy)
+          }
+
+          const overlap = minDist - dist
+          const pushX = (dx / dist) * overlap * 0.5
+          const pushY = (dy / dist) * overlap * 0.5
+
+          p1.currentPOS[0] = Math.max(10, Math.min(pitchWidth - 10, Math.round(p1.currentPOS[0] + pushX)))
+          p1.currentPOS[1] = Math.max(10, Math.min(pitchHeight - 10, Math.round(p1.currentPOS[1] + pushY)))
+
+          p2.currentPOS[0] = Math.max(10, Math.min(pitchWidth - 10, Math.round(p2.currentPOS[0] - pushX)))
+          p2.currentPOS[1] = Math.max(10, Math.min(pitchHeight - 10, Math.round(p2.currentPOS[1] - pushY)))
+
+          if (p1.hasBall && matchDetails.ball?.Player === p1.playerID) {
+            matchDetails.ball.position[0] = p1.currentPOS[0]
+            matchDetails.ball.position[1] = p1.currentPOS[1]
+          } else if (p2.hasBall && matchDetails.ball?.Player === p2.playerID) {
+            matchDetails.ball.position[0] = p2.currentPOS[0]
+            matchDetails.ball.position[1] = p2.currentPOS[1]
+          }
+        }
+      }
+    }
+  }
 }

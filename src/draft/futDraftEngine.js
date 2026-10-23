@@ -60,25 +60,59 @@ export const TIER_CONFIG_INFO = {
   }
 }
 
-// 12 Puestos de Banco en FUT Draft (5 Suplentes Directos + 7 Reservas, total 23 jugadores por equipo)
-export const TOTAL_BENCH_COUNT = 12
+// 7 Puestos de Banco en FUT Draft (Sin reservas, total 18 jugadores por equipo)
+export const TOTAL_BENCH_COUNT = 7
 
 export const BENCH_SLOTS = [
-  // 5 Suplentes Directos
-  { index: 0, label: 'ARQ SUP', role: 'GK', section: 'sub', desc: 'Arquero Suplente' },
-  { index: 1, label: 'DEF SUP', role: 'CB', section: 'sub', desc: 'Defensor Central/Lateral' },
-  { index: 2, label: 'MED SUP', role: 'CM', section: 'sub', desc: 'Volante / Mediocentro' },
-  { index: 3, label: 'DEL SUP', role: 'ST', section: 'sub', desc: 'Delantero / Extremo' },
-  { index: 4, label: 'COMODÍN', role: 'ANY', section: 'sub', desc: 'Relevo Polifuncional' },
-
-  // 7 Reservas
-  { index: 5, label: 'RES DEF 1', role: 'CB', section: 'res', desc: 'Reserva Defensiva' },
-  { index: 6, label: 'RES MED 1', role: 'CM', section: 'res', desc: 'Reserva Mediocampo' },
-  { index: 7, label: 'RES DEL 1', role: 'ST', section: 'res', desc: 'Reserva Delantera' },
-  { index: 8, label: 'RES DEF 2', role: 'LB', section: 'res', desc: 'Reserva Lateral' },
-  { index: 9, label: 'RES MED 2', role: 'CAM', section: 'res', desc: 'Reserva Creativa' },
-  { index: 10, label: 'RES DEL 2', role: 'ST', section: 'res', desc: 'Reserva Ofensiva' },
-  { index: 11, label: 'RES LIBRE', role: 'ANY', section: 'res', desc: 'Reserva Libre' }
+  {
+    index: 0,
+    label: 'ARQ SUP',
+    role: 'GK',
+    allowedRoles: ['GK'],
+    desc: 'Sobre 1: 1 Arquero'
+  },
+  {
+    index: 1,
+    label: 'DEF SUP 1',
+    role: 'DEF',
+    allowedRoles: ['CB', 'LB', 'RB'],
+    desc: 'Sobre 2: Def Central y Def Lateral'
+  },
+  {
+    index: 2,
+    label: 'DEF SUP 2',
+    role: 'DEF',
+    allowedRoles: ['CB', 'LB', 'RB'],
+    desc: 'Sobre 3: Def Central y Def Lateral'
+  },
+  {
+    index: 3,
+    label: 'VOL / MC',
+    role: 'MID_CENTRAL',
+    allowedRoles: ['CDM', 'CM'],
+    desc: 'Sobre 4: Vol Tapón y MC'
+  },
+  {
+    index: 4,
+    label: 'EXT / DEL',
+    role: 'ATT_WIDE',
+    allowedRoles: ['LM', 'RM', 'EXT', 'ST'],
+    desc: 'Sobre 5: MI, MD, Extremos y DEL'
+  },
+  {
+    index: 5,
+    label: 'AZAR 1',
+    role: 'ANY',
+    allowedRoles: 'ANY',
+    desc: 'Sobre 6: Posiciones al Azar (Mix de la clase)'
+  },
+  {
+    index: 6,
+    label: 'AZAR 2',
+    role: 'ANY',
+    allowedRoles: 'ANY',
+    desc: 'Sobre 7: Posiciones al Azar (Mix de la clase)'
+  }
 ]
 
 /**
@@ -96,17 +130,27 @@ export function getFormationChoices(count = 5) {
 export function getLineFromRole(role) {
   if (role === 'GK') return 'GK'
   if (['CB', 'LB', 'RB'].includes(role)) return 'DEF'
-  if (['CM', 'CAM', 'LM', 'RM'].includes(role)) return 'MID'
-  if (['ST'].includes(role)) return 'ATT'
+  if (['CDM', 'CM', 'CAM', 'LM', 'RM'].includes(role)) return 'MID'
+  if (['EXT', 'ST', 'LW', 'RW'].includes(role)) return 'ATT'
   return 'ANY'
 }
 
 /**
  * Verifica si un jugador puede jugar en el rol especificado
- * (como posición principal o secundaria natural).
+ * (como posición principal o secundaria natural, o coincidencia en rol de línea/grupo).
  */
 export function isPlayerCompatibleWithRole(player, targetRole) {
   if (targetRole === 'ANY') return true
+  if (Array.isArray(targetRole)) {
+    return targetRole.some(r => isPlayerCompatibleWithRole(player, r))
+  }
+  if (targetRole === 'MID_CENTRAL') {
+    return isPlayerCompatibleWithRole(player, ['CDM', 'CM'])
+  }
+  if (targetRole === 'ATT_WIDE') {
+    return isPlayerCompatibleWithRole(player, ['LM', 'RM', 'EXT', 'ST'])
+  }
+
   if (player.position === targetRole) return true
   if (Array.isArray(player.positions) && player.positions.includes(targetRole)) return true
 
@@ -153,8 +197,8 @@ export function getCaptainChoices(unavailableIdsSet = new Set()) {
 
   const lines = [
     { label: 'Delantero de Área', exactPositions: ['ST'] },
-    { label: 'Mediocampista Central', exactPositions: ['CM'] },
-    { label: 'Enganche / Extremo', exactPositions: ['LM', 'RM'] },
+    { label: 'Volante Tapón / MC', exactPositions: ['CDM', 'CM'] },
+    { label: 'Extremo / Enganche', exactPositions: ['EXT', 'CAM', 'LM', 'RM'] },
     { label: 'Defensor / Lateral', exactPositions: ['CB', 'LB', 'RB'] },
     { label: 'Arquero Legendario', exactPositions: ['GK'] }
   ]
@@ -212,6 +256,46 @@ export function getCaptainChoices(unavailableIdsSet = new Set()) {
  * Garantiza que las 5 cartas pertenezcan a esa categoría monomarca.
  */
 export function getCandidatesForPositionAndCategory(role, category, unavailableIdsSet = new Set()) {
+  // Manejo especial para 'ANY' (Sobres 6 y 7 de suplentes):
+  // "Los sobres 6 y 7 contienen jugadores de diferentes posiciones.
+  // En un sobre pueden tocar mezclados jugadores de cualquier posición, respetando solamente la clase."
+  if (role === 'ANY') {
+    const available = PLAYERS_DB.filter(p => p.category === category && !unavailableIdsSet.has(p.id))
+    const byLine = {
+      GK: available.filter(p => p.position === 'GK'),
+      DEF: available.filter(p => ['CB', 'LB', 'RB'].includes(p.position)),
+      MID: available.filter(p => ['CDM', 'CM', 'CAM', 'LM', 'RM'].includes(p.position)),
+      EXT: available.filter(p => p.position === 'EXT'),
+      ST: available.filter(p => p.position === 'ST')
+    }
+    const lines = ['GK', 'DEF', 'MID', 'EXT', 'ST'].sort(() => 0.5 - Math.random())
+    const selected = []
+    const pickedIds = new Set()
+    for (const lineKey of lines) {
+      const candidates = byLine[lineKey].filter(p => !pickedIds.has(p.id))
+      if (candidates.length > 0) {
+        const pick = candidates[Math.floor(Math.random() * candidates.length)]
+        selected.push(clonePlayerForTeam(pick))
+        pickedIds.add(pick.id)
+      }
+    }
+    const remaining = available.filter(p => !pickedIds.has(p.id)).sort(() => 0.5 - Math.random())
+    while (selected.length < 5 && remaining.length > 0) {
+      const p = remaining.pop()
+      selected.push(clonePlayerForTeam(p))
+      pickedIds.add(p.id)
+    }
+    if (selected.length < 5) {
+      const fallback = PLAYERS_DB.filter(p => !unavailableIdsSet.has(p.id) && !pickedIds.has(p.id)).sort(() => 0.5 - Math.random())
+      while (selected.length < 5 && fallback.length > 0) {
+        const p = fallback.pop()
+        selected.push(clonePlayerForTeam(p))
+        pickedIds.add(p.id)
+      }
+    }
+    return selected.sort((a, b) => b.rating - a.rating || b.price - a.price)
+  }
+
   // 1. Filtrar jugadores de esa categoría exacta compatibles con el rol
   let pool = PLAYERS_DB.filter(p => {
     if (unavailableIdsSet.has(p.id)) return false
@@ -222,7 +306,7 @@ export function getCandidatesForPositionAndCategory(role, category, unavailableI
   // 2. Si hay menos de 5 disponibles (ej: puestos específicos como GK leyenda o RB leyenda ya elegidos):
   // Ampliar primero a la misma línea dentro de esa categoría
   if (pool.length < 5) {
-    const roleLine = getLineFromRole(role)
+    const roleLine = typeof role === 'string' ? getLineFromRole(role) : 'ANY'
     const linePool = PLAYERS_DB.filter(p => {
       if (unavailableIdsSet.has(p.id)) return false
       if (p.category !== category) return false
@@ -304,7 +388,7 @@ export function getNextEmptyAISlot(formationSlots, starters, bench) {
   // Luego suplentes
   for (let i = 0; i < TOTAL_BENCH_COUNT; i++) {
     if (!bench[i]) {
-      return { type: 'bench', index: i, role: BENCH_SLOTS[i].role, label: BENCH_SLOTS[i].label }
+      return { type: 'bench', index: i, role: BENCH_SLOTS[i].allowedRoles || BENCH_SLOTS[i].role, label: BENCH_SLOTS[i].label }
     }
   }
   return null

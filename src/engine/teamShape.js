@@ -67,12 +67,15 @@ export function buildTeamShape(matchDetails, team, inPossession) {
   const currentIter = matchDetails.iterationCount || 0
 
   // 1. Obtener la caja contenedora (bounding box) de la formación base (Pattern Normalization)
+  // Usar la plantilla completa de jugadores (excluyendo GK) para que el marco táctico
+  // no se encoja ni se deforme si expulsan a un jugador.
   let minDepth = 9999
   let maxDepth = -9999
   let minLat = 9999
   let maxLat = -9999
 
-  for (const p of outfielders) {
+  for (const p of team.players) {
+    if (p.position === 'GK') continue
     const depthProgress = isTopTeam
       ? p.originPOS[1] / pitchHeight
       : (pitchHeight - p.originPOS[1]) / pitchHeight
@@ -343,18 +346,20 @@ export function assignAttackPlanWithIncumbency(kickingTeam, defendingTeam, match
   if (rightCandidates.length > 0) rightHolder = rightCandidates[0]
 
   // ── B. OVERLAP RUNNER (Lateral de la banda del balón licenciado para desdoblar) ──
-  // En open-football: un jugador detrás del portador corre por fuera hacia el fondo
+  // En open-football: un lateral detrás del portador corre por fuera hacia el fondo
   let overlapRunner = null
   const coachInstruction = kickingTeam?.coachState?.instruction || 'Normal'
-  const allowOverlap = kickingTeam?.mentality !== 'defensive' && coachInstruction !== 'ParkTheBus' && distBallToGoalY < 420
+  const allowOverlap = kickingTeam?.mentality !== 'defensive' && coachInstruction !== 'ParkTheBus' && distBallToGoalY < 480
 
   if (allowOverlap) {
     const targetFlankRole = ballFlank === 'left' ? 'LB' : 'RB'
-    const fullback = available.find(p => (p.tacticalRole || p.position) === targetFlankRole)
+    const fullback = available.find(p => {
+      const r = p.tacticalRole || p.position
+      return r === targetFlankRole || (ballFlank === 'left' ? (r === 'LWB') : (r === 'RWB'))
+    })
     if (fullback) {
-      // Verificar que no sea el portador y esté en distancia de desdoble (~300px)
       const distToBall = common.distance(fullback.currentPOS, ball)
-      if (distToBall < 340) {
+      if (distToBall < 380) {
         overlapRunner = fullback
       }
     }
@@ -501,9 +506,23 @@ export function assignDefensivePlanWithIncumbency(defendingTeam, attackingTeam, 
     takenDefenderIDs.add(bestCover.playerID)
   }
 
-  // 3. Marcas personales hombre a hombre (MARK) sobre atacantes peligrosos en área
+  // 3. Marcas personales hombre a hombre (MARK) sobre delanteros y atacantes peligrosos
+  // (Inspirado en Open Manager my_mark y DefenderMarkingState: MARK_RECOVERY_DISTANCE = 150)
   const oppSlots = attackingTeam?.attackPlan?.boxSlots || {}
   const targetThreatIDs = [oppSlots.penaltySpot, oppSlots.nearPost, oppSlots.farPost, oppSlots.cutbackEdge].filter(Boolean)
+
+  // En juego abierto, los centrales deben tomar de forma prioritaria la marca de los delanteros rivales (ST / CF)
+  const opponentAttackers = (attackingTeam?.players || []).filter(p => {
+    if (!common.isOnPitch(p) || p.position === 'GK') return false
+    const r = p.tacticalRole || p.position
+    return r === 'ST' || r === 'CF' || p.position === 'ST'
+  })
+
+  for (const fwd of opponentAttackers) {
+    if (!targetThreatIDs.includes(fwd.playerID)) {
+      targetThreatIDs.push(fwd.playerID)
+    }
+  }
 
   const markerMap = {}
   for (const threatID of targetThreatIDs) {
@@ -517,17 +536,17 @@ export function assignDefensivePlanWithIncumbency(defendingTeam, attackingTeam, 
     for (const p of outfielders) {
       if (takenDefenderIDs.has(p.playerID)) continue
       const role = p.tacticalRole || p.position
-      const roleBonus = (role === 'CB' || role === 'DFC' || role === 'LÍBERO' || role === 'STOP I' || role === 'STOP D') ? -30 : 0
+      const roleBonus = (role === 'CB' || role === 'DFC' || role === 'LÍBERO' || role === 'STOP I' || role === 'STOP D') ? -60 : 0
       const d = common.distance(p.currentPOS, oppPlayer.currentPOS) + roleBonus
-      // Incumbency: si este defensor ya marcaba a este atacante, bono de -35px
-      const effectiveD = d - ((prevMarkerID === p.playerID) ? 35 : 0)
+      // Incumbency: si este defensor ya marcaba a este atacante, fuerte fidelidad de marca (-45px)
+      const effectiveD = d - ((prevMarkerID === p.playerID) ? 45 : 0)
       if (effectiveD < minMarkerDist) {
         minMarkerDist = effectiveD
         bestMarker = p
       }
     }
 
-    if (bestMarker && minMarkerDist < 260) {
+    if (bestMarker && minMarkerDist < 380) {
       duties[bestMarker.playerID] = { duty: 'Mark', targetID: threatID }
       markerMap[threatID] = bestMarker.playerID
       takenDefenderIDs.add(bestMarker.playerID)

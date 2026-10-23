@@ -22,6 +22,17 @@ export function getSecondLastDefender(defendingTeam, attackingTop, pitchHeight) 
 
 export function evaluateOffsideAtKick(matchDetails, attackingTeam, defendingTeam, passer, targetPlayer, ballPos) {
   if (!matchDetails || !targetPlayer || !defendingTeam || !passer) return null
+
+  // Regla 11 IFAB (Open Football PassOriginRestart::is_offside_exempt):
+  // No hay fuera de juego directamente desde un Saque de Esquina, Saque de Banda o Saque de Meta.
+  if (
+    matchDetails.ball.isCornerKick ||
+    matchDetails.ball.isThrowIn ||
+    matchDetails.ball.isGoalKick ||
+    matchDetails.ball.isOffsideExempt
+  ) {
+    return null
+  }
   const [, pitchHeight] = matchDetails.pitchSize
   const halfwayY = pitchHeight / 2
   const attackingTop = passer.originPOS[1] > halfwayY // Si su origen está abajo, ataca hacia arriba (Y=0)
@@ -119,26 +130,94 @@ export function executeGoalkeeperSave(matchDetails, goalie, goalieTeam, currentB
         half: matchDetails.half
       })
     }
-    matchDetails.endIteration = true
-    if (goalieSide === 'top') {
-      return isLeftCorner
-        ? setPositions.setTopLeftCornerPositions(matchDetails)
-        : setPositions.setTopRightCornerPositions(matchDetails)
-    } else {
-      return isLeftCorner
-        ? setPositions.setBottomLeftCornerPositions(matchDetails)
-        : setPositions.setBottomRightCornerPositions(matchDetails)
-    }
-  } else if (roll <= 66) {
-    const dropDistanceX = common.getRandomNumber(-24, 24)
-    const dropDistanceY = goalieSide === 'top' ? common.getRandomNumber(15, 30) : -common.getRandomNumber(15, 30)
-    const reboundX = Math.max(120, Math.min(pitchWidth - 120, goalie.currentPOS[0] + dropDistanceX))
-    const reboundY = goalieSide === 'top'
-      ? Math.max(25, Math.min(160, goalie.currentPOS[1] + dropDistanceY))
-      : Math.min(pitchHeight - 25, Math.max(pitchHeight - 160, goalie.currentPOS[1] + dropDistanceY))
+    // Trayectoria realista de desvío hacia afuera por la línea de fondo / córner
+    const cornerTargetY = goalieSide === 'top' ? common.getRandomNumber(-35, -18) : common.getRandomNumber(pitchHeight + 18, pitchHeight + 35)
+    const centreGoal = pitchWidth / 2
+    const cornerTargetX = isLeftCorner
+      ? common.getRandomNumber(Math.max(-20, ballX - 70), Math.min(ballX - 10, centreGoal - 48))
+      : common.getRandomNumber(Math.max(ballX + 10, centreGoal + 48), Math.min(pitchWidth + 20, ballX + 70))
 
-    matchDetails.ball.position = [reboundX, reboundY, 0]
-    matchDetails.ball.ballOverIterations = []
+    const traj = common.getBallTrajectory(currentBallPos, [cornerTargetX, cornerTargetY], 115, 'deflection', pitchHeight)
+    matchDetails.ball.ballOverIterations = traj
+    matchDetails.ball.position = traj[0] || [currentBallPos[0], currentBallPos[1], 0]
+    matchDetails.ball.lastTouch.playerID = goalie.playerID
+    matchDetails.ball.lastTouch.playerName = goalie.name
+    matchDetails.ball.lastTouch.teamID = goalieTeam.teamID
+    matchDetails.ball.lastTouch.deflection = true
+    matchDetails.ball.lastTouch.iterations = 0
+    matchDetails.ball.Player = ''
+    matchDetails.ball.withPlayer = false
+    matchDetails.ball.withTeam = ''
+    goalie.hasBall = false
+    matchDetails.endIteration = true
+    return matchDetails
+  } else if (roll <= 66) {
+    const reboundTypeRoll = common.getRandomNumber(1, 100)
+    let reboundPower = 40
+    let targetX = goalie.currentPOS[0]
+    let targetY = goalie.currentPOS[1]
+    let reboundDesc = ''
+    let loftHeight = 10
+
+    if (reboundTypeRoll <= 35) {
+      // 1. Rebote corto: pelota suelta viva a pocos metros del arquero en el área chica
+      const dropDistanceX = common.getRandomNumber(-20, 20)
+      const dropDistanceY = goalieSide === 'top' ? common.getRandomNumber(14, 28) : -common.getRandomNumber(14, 28)
+      targetX = Math.max(160, Math.min(pitchWidth - 160, goalie.currentPOS[0] + dropDistanceX))
+      targetY = goalieSide === 'top'
+        ? Math.max(25, Math.min(100, goalie.currentPOS[1] + dropDistanceY))
+        : Math.min(pitchHeight - 25, Math.max(pitchHeight - 100, goalie.currentPOS[1] + dropDistanceY))
+      reboundPower = common.getRandomNumber(30, 50)
+      loftHeight = common.getRandomNumber(4, 9)
+      reboundDesc = '¡Rebote corto en el área chica!'
+    } else if (reboundTypeRoll <= 65) {
+      // 2. Rebote largo: el arquero manotea o despeja fuerte hacia el punto penal o medialuna
+      const dropDistanceX = common.getRandomNumber(-55, 55)
+      const dropDistanceY = goalieSide === 'top' ? common.getRandomNumber(55, 110) : -common.getRandomNumber(55, 110)
+      targetX = Math.max(140, Math.min(pitchWidth - 140, goalie.currentPOS[0] + dropDistanceX))
+      targetY = goalieSide === 'top'
+        ? Math.max(80, Math.min(185, goalie.currentPOS[1] + dropDistanceY))
+        : Math.min(pitchHeight - 80, Math.max(pitchHeight - 185, goalie.currentPOS[1] + dropDistanceY))
+      reboundPower = common.getRandomNumber(70, 105)
+      loftHeight = common.getRandomNumber(10, 18)
+      reboundDesc = '¡Rebote largo hacia la medialuna del área!'
+    } else if (reboundTypeRoll <= 85) {
+      // 3. Rebote con altura: la pelota sale bombeada hacia arriba y cae en parábola
+      const dropDistanceX = common.getRandomNumber(-30, 30)
+      const dropDistanceY = goalieSide === 'top' ? common.getRandomNumber(20, 50) : -common.getRandomNumber(20, 50)
+      targetX = Math.max(150, Math.min(pitchWidth - 150, goalie.currentPOS[0] + dropDistanceX))
+      targetY = goalieSide === 'top'
+        ? Math.max(35, Math.min(130, goalie.currentPOS[1] + dropDistanceY))
+        : Math.min(pitchHeight - 35, Math.max(pitchHeight - 130, goalie.currentPOS[1] + dropDistanceY))
+      reboundPower = common.getRandomNumber(50, 75)
+      loftHeight = common.getRandomNumber(26, 42) // Elevada parábola aérea
+      reboundDesc = '¡Pelota elevada que pica tras la atajada del arquero!'
+    } else {
+      // 4. Rebote lateral / angular: desviada hacia los costados del área
+      const toLeft = common.getRandomNumber(0, 10) > 5
+      const dropDistanceX = toLeft ? -common.getRandomNumber(45, 85) : common.getRandomNumber(45, 85)
+      const dropDistanceY = goalieSide === 'top' ? common.getRandomNumber(25, 60) : -common.getRandomNumber(25, 60)
+      targetX = Math.max(110, Math.min(pitchWidth - 110, goalie.currentPOS[0] + dropDistanceX))
+      targetY = goalieSide === 'top'
+        ? Math.max(40, Math.min(150, goalie.currentPOS[1] + dropDistanceY))
+        : Math.min(pitchHeight - 40, Math.max(pitchHeight - 150, goalie.currentPOS[1] + dropDistanceY))
+      reboundPower = common.getRandomNumber(55, 85)
+      loftHeight = common.getRandomNumber(8, 16)
+      reboundDesc = '¡Desvío esquinado hacia el lateral del área!'
+    }
+
+    const traj = common.getBallTrajectory(currentBallPos, [targetX, targetY], reboundPower, 'rebound', pitchHeight)
+    // Asignar altura z si es un rebote alto
+    if (loftHeight > 20 && Array.isArray(traj) && traj.length > 2) {
+      const len = traj.length
+      for (let k = 0; k < len; k++) {
+        const tStep = k / (len - 1)
+        traj[k][2] = Math.round(4 * loftHeight * tStep * (1 - tStep))
+      }
+    }
+
+    matchDetails.ball.ballOverIterations = traj
+    matchDetails.ball.position = traj[0] || [currentBallPos[0], currentBallPos[1], 0]
     matchDetails.ball.Player = ''
     matchDetails.ball.withPlayer = false
     matchDetails.ball.withTeam = ''
@@ -146,14 +225,16 @@ export function executeGoalkeeperSave(matchDetails, goalie, goalieTeam, currentB
     matchDetails.ball.lastTouch.playerName = goalie.name
     matchDetails.ball.lastTouch.teamID = goalieTeam.teamID
     matchDetails.ball.lastTouch.iterations = 0
+    matchDetails.ball.lastTouch.deflection = true
     matchDetails.ball.lastReboundIter = matchDetails.iterationCount || 0
     goalie.hasBall = false
 
-    matchDetails.iterationLog.push(`Save by ${goalie.name}! The ball spills loose into the penalty area!`)
+    matchDetails.iterationLog.push(`Save by ${goalie.name}! ${reboundDesc}`)
     if (Array.isArray(matchDetails.events)) {
       matchDetails.events.push({
         type: 'save',
         outcome: 'rebound',
+        reboundType: reboundDesc,
         teamID: goalieTeam.teamID,
         teamName: goalieTeam.name,
         playerName: goalie.name,
@@ -201,9 +282,17 @@ export function moveBall(matchDetails) {
       const speed = Math.sqrt(vx * vx + vy * vy)
       if (speed > 0.8) {
         const grassFriction = 0.90
-        const nVx = vx * grassFriction
-        const nVy = vy * grassFriction
+        let nVx = vx * grassFriction
+        let nVy = vy * grassFriction
+        const [pitchWidth] = matchDetails.pitchSize
         const curPos = ball.position
+
+        // Amortiguación de inercia lateral cerca de la línea de cal para evitar que pases completados rueden afuera
+        if ((curPos[0] < 28 && nVx < 0) || (curPos[0] > pitchWidth - 28 && nVx > 0)) {
+          nVx *= 0.2
+          if (Math.abs(nVx) < 0.6) nVx = 0
+        }
+
         const nPos = [
           common.round(curPos[0] + nVx, 2),
           common.round(curPos[1] + nVy, 2),
@@ -384,10 +473,26 @@ export function shotMade(matchDetails, team, player) {
   const distancePenalty = distToGoalLine > 175 ? Math.round((distToGoalLine - 175) * 0.14) : 0
   let shootingRoll = common.getRandomNumber(18, 92) + distancePenalty
   if (isVolley) shootingRoll += 4
+
+  const headingSkill = Number(player.skill?.heading ?? player.skill?.cabeza ?? player.skill?.shooting ?? 70)
+  const jumpingSkill = Number(player.skill?.jumping) || 70
+  const perceptionSkill = Number(player.skill?.perception) || 70
+  const strengthSkill = Number(player.skill?.strength) || 70
+  const rawHeight = Number(player.height) || 175
+
+  let effectiveShotSkill = Number(player.skill?.shooting) || 70
   if (isHeader) {
-    // Especialistas como Palermo aumentan su efectividad de cabezazo
-    if (hasTrait('cabeceador_nato') || hasTrait('artillero_area') || (Number(player.skill.jumping) || 70) >= 80) {
-      shootingRoll -= 12
+    // Para cabezazos, el atributo determinante es CABEZA combinado con salto, altura, percepción y fuerza
+    const heightBonus = Math.max(-5, (rawHeight - 175) * 0.4)
+    const effectiveHeaderRating = (headingSkill * 0.50) + (jumpingSkill * 0.22) + (perceptionSkill * 0.16) + (strengthSkill * 0.12) + heightBonus
+    effectiveShotSkill = Math.max(30, Math.min(99, Math.round(effectiveHeaderRating)))
+
+    // Especialistas como Palermo (cabeceador_nato, artillero_area, o gran cabeceo) aumentan drásticamente la efectividad
+    if (hasTrait('cabeceador_nato') || headingSkill >= 90) {
+      shootingRoll -= 18
+      shotPower = Math.max(distToGoalLine + 45, shotPower * 1.20)
+    } else if (hasTrait('artillero_area') || jumpingSkill >= 80) {
+      shootingRoll -= 10
     } else {
       shootingRoll += 2
     }
@@ -421,7 +526,33 @@ export function shotMade(matchDetails, team, player) {
     shootingRoll = Math.max(10, shootingRoll - 16)
   }
 
-  if (player.skill.shooting >= shootingRoll) {
+  let shotType = 'close_range'
+  let goalDetail = 'Tiro dentro del área'
+
+  if (isHeader) {
+    shotType = 'header'
+    goalDetail = 'Cabezazo'
+  } else if (isVolley) {
+    shotType = 'volley'
+    goalDetail = 'De volea'
+  } else if (distToGoalLine > 210 || hasTrait('canonero_media_distancia') || hasTrait('lanzador_canonero')) {
+    shotType = 'long_range'
+    goalDetail = 'Bombazo de media distancia'
+  } else if (isOneOnOne) {
+    shotType = 'finesse'
+    goalDetail = 'A colocar'
+  } else if (isSprintingShot || (player.skill?.strength || 0) >= 86) {
+    shotType = 'power_shot'
+    goalDetail = 'Tiro potente'
+  } else if (distToGoalLine <= 140) {
+    shotType = 'close_range'
+    goalDetail = 'Tiro dentro del área'
+  }
+
+  matchDetails.ball.lastTouch.shotType = shotType
+  matchDetails.ball.lastTouch.goalDetail = goalDetail
+
+  if (effectiveShotSkill >= shootingRoll) {
     thisTeamStats.shots.on++
     player.stats.shots.on++
     if (isOneOnOne) {
@@ -451,7 +582,9 @@ export function shotMade(matchDetails, team, player) {
         half: matchDetails.half,
         bodyPart,
         isHeader,
-        isVolley
+        isVolley,
+        shotType,
+        goalDetail
       })
     }
   } else {
@@ -464,11 +597,12 @@ export function shotMade(matchDetails, team, player) {
       ? common.getRandomNumber(centreGoal - 46 - maxMissSpread, centreGoal - 47)
       : common.getRandomNumber(centreGoal + 47, centreGoal + 46 + maxMissSpread)
     matchDetails.iterationLog.push(`Shot Off Target at X Position ${shotPosition[0]}`)
-    shotPosition[1] = attackingTop ? -2 : (pitchHeight + 2)
+    shotPosition[1] = attackingTop ? -32 : (pitchHeight + 32)
     if (Array.isArray(matchDetails.events)) {
       matchDetails.events.push({
         type: 'shot',
         onTarget: false,
+        outcome: 'miss',
         teamID: team.teamID,
         teamName: team.name,
         playerName: player.name,
@@ -476,7 +610,9 @@ export function shotMade(matchDetails, team, player) {
         half: matchDetails.half,
         bodyPart,
         isHeader,
-        isVolley
+        isVolley,
+        shotType,
+        goalDetail
       })
     }
   }
@@ -492,14 +628,34 @@ export function shotMade(matchDetails, team, player) {
 export function freekickShotMade(matchDetails, team, player) {
   const [pitchWidth, pitchHeight] = matchDetails.pitchSize
   player.action = 'none'
+  matchDetails.ball.isRestart = false
+
+  // Regla 13 IFAB: Tiro libre indirecto no puede rematarse directo al arco
+  if (matchDetails.ball.isIndirect) {
+    matchDetails.iterationLog.push(`Indirect freekick: ${player.name} plays into the box instead of shooting directly.`)
+    return ballCrossed(matchDetails, team, player)
+  }
+
+  // Jugada preparada de distracción / pantalla (Decoy Dummy Run):
+  // El señuelo corre y salta por encima de la pelota, descolocando a la barrera y arquero rival
+  let decoyBoost = 0
+  if (matchDetails.ball.decoyRunner) {
+    const decoy = matchDetails.ball.decoyRunner
+    matchDetails.iterationLog.push(`★ Jugada preparada: ${decoy.name} amaga y salta sobre el balón distrayendo a la barrera rival!`)
+    decoyBoost = 10
+    matchDetails.ball.decoyRunner = null
+  }
+
   matchDetails.iterationLog.push(`Direct Freekick Shot by: ${player.name}`)
   matchDetails.ball.lastTouch.playerName = player.name
   matchDetails.ball.lastTouch.playerID = player.playerID
   matchDetails.ball.lastTouch.teamID = team.teamID
   matchDetails.ball.lastTouch.iterations = 0
   matchDetails.ball.lastTouch.bodyPart = 'foot'
+  matchDetails.ball.lastTouch.shotType = 'freekick'
+  matchDetails.ball.lastTouch.goalDetail = 'Tiro libre'
 
-  const fkSkill = Number(player.skill.freekick || player.skill.shooting || 70)
+  const fkSkill = Number(player.skill.freekick || player.skill.shooting || 70) + decoyBoost
   const isCanonero = Array.isArray(player.traits) && (player.traits.includes('canonero_media_distancia') || player.traits.includes('lanzador_canonero'))
   const baseFkPower = Math.max(
     pitchHeight * 0.32,
@@ -509,6 +665,27 @@ export function freekickShotMade(matchDetails, team, player) {
   const thisTeamStats = getTeamStatisticsObject(matchDetails, team)
   thisTeamStats.shots.total++
   player.stats.shots.total++
+
+  const targetGoalY = (player.originPOS[1] > pitchHeight / 2) ? 0 : pitchHeight
+  const distToGoal = common.distance(matchDetails.ball.position, [pitchWidth / 2, targetGoalY])
+
+  // Verificación de bloqueo de la barrera defensiva (Open Football wall_block_prob)
+  if (Array.isArray(matchDetails.ball.defendingWall) && matchDetails.ball.defendingWall.length > 0) {
+    const blockProb = common.calculateWallBlockProb(matchDetails.ball.defendingWall, fkSkill, distToGoal)
+    if (common.getRandomNumber(1, 100) <= Math.round(blockProb * 100)) {
+      matchDetails.iterationLog.push(`¡El tiro libre se estrella en la barrera defensiva! Bloqueado por la defensa.`)
+      thisTeamStats.shots.off++
+      player.stats.shots.off++
+      matchDetails.ball.defendingWall = null
+      const deflectPos = [
+        matchDetails.ball.position[0] + common.getRandomNumber(-35, 35),
+        matchDetails.ball.position[1] + (targetGoalY === 0 ? -45 : 45),
+        common.getRandomNumber(0, 15)
+      ]
+      return calcBallMovementOverTime(matchDetails, shotPower * 0.35, deflectPos, player, 'deflection')
+    }
+  }
+  matchDetails.ball.defendingWall = null
 
   const centreGoal = pitchWidth / 2
   const shotPosition = [0, 0]
@@ -549,6 +726,8 @@ export function penaltyTaken(matchDetails, team, player) {
   const calcHeight = parseInt(player.height, 10) + parseInt((player.skill.jumping || 0), 10)
   const bodyPart = setAttackBodyPart(matchDetails.ball.position, calcHeight)
   matchDetails.ball.lastTouch.bodyPart = bodyPart
+  matchDetails.ball.lastTouch.shotType = 'penalty'
+  matchDetails.ball.lastTouch.goalDetail = 'De penal'
   const shotPosition = [0, 0]
   const shotPower = common.calculatePower(Math.max(75, player.skill.strength), pitchHeight)
   const attackingTop = player.originPOS[1] > pitchHeight / 2
@@ -606,6 +785,18 @@ export function checkGoalScored(matchDetails) {
     matchDetails = executeGoalkeeperSave(matchDetails, STGoalie, secondTeam, ball.position)
     matchDetails.endIteration = true
   } else if (goalX) {
+    // Regla 13 IFAB (Open Football IndirectFreeKick):
+    // Un tiro libre indirecto no puede terminar en gol directo sin que la toque otro jugador.
+    if (ball.isIndirect && ball.lastTouch?.playerID === ball.indirectTakerID) {
+      matchDetails.iterationLog.push(`Gol directo anulado por ser tiro libre indirecto (Regla 13 IFAB). Saque de arco concedido.`)
+      ball.isIndirect = false
+      if (ball.position[1] < 1) {
+        return setPositions.setTopGoalKick(matchDetails)
+      } else {
+        return setPositions.setBottomGoalKick(matchDetails)
+      }
+    }
+    ball.isIndirect = false
     const kickOffTeamSide = (kickOffTeam.players[0].originPOS[1] < (pitchHeight / 2)) ? 'top' : 'bottom'
     if (ball.position[1] < 1) {
       if (kickOffTeamSide === 'top') matchDetails = setPositions.setSecondTeamGoalScored(matchDetails)
@@ -689,9 +880,13 @@ export function throughBall(matchDetails, team, player) {
     const offsideSnap = evaluateOffsideAtKick(matchDetails, team, opposition, player, realTargetPlayer, ballPos)
     if (offsideSnap && offsideSnap.isOffside) {
       realTargetPlayer.offside = true
+      realTargetPlayer.offsideSnapshot = offsideSnap
       matchDetails.pendingOffsideSnapshot = offsideSnap
+      matchDetails.lastOffsideSnapshot = offsideSnap
+      if (matchDetails.ball) matchDetails.ball.offsideSnapshot = offsideSnap
     } else {
       realTargetPlayer.offside = false
+      realTargetPlayer.offsideSnapshot = null
       matchDetails.pendingOffsideSnapshot = null
     }
   }
@@ -744,9 +939,9 @@ function tballScoreOption(p, attackingTop, ballPos, maxDistance, styleCfg) {
     score += styleCfg?.id === 'wingPlay' ? 65 : 42
   }
 
-  if (['LM', 'RM', 'LB', 'RB'].includes(p.role)) {
+  if (['LM', 'RM', 'EXT', 'LB', 'RB'].includes(p.role)) {
     score += styleCfg?.id === 'wingPlay' ? 35 : 20
-  } else if (['ST', 'CAM'].includes(p.role)) {
+  } else if (['ST', 'CAM', 'EXT'].includes(p.role)) {
     score += 20
   }
 
@@ -937,6 +1132,34 @@ export function thisPlayerIsInProximity(matchDetails, thisPlayer, thisPOS, thisP
         }
       }
 
+      // BLOQUEO DEFENSIVO DE REMATES AL ARCO (Open Football try_block_shot):
+      // Si la pelota es un tiro al arco en vuelo y este defensor está en el corredor de tiro, interpone el cuerpo
+      const isShotInFlight = (matchDetails.ball.kickType === 'shot' || matchDetails.ball.kickType === 'freekick')
+      if (!isTeammateOfKicker && isShotInFlight && thisPlayer.position !== 'GK') {
+        const blockSkill = (Number(thisPlayer.skill.tackling || 60) * 0.45 + Number(thisPlayer.skill.perception || 60) * 0.35 + Number(thisPlayer.skill.strength || 60) * 0.20)
+        if (common.getRandomNumber(1, 100) <= Math.min(85, Math.max(25, blockSkill * 0.75))) {
+          if (!thisPlayer.stats.blocks) thisPlayer.stats.blocks = 0
+          thisPlayer.stats.blocks++
+          matchDetails.iterationLog.push(`¡Remate bloqueado con el cuerpo por: ${thisPlayer.name}!`)
+          if (Array.isArray(matchDetails.events)) {
+            matchDetails.events.push({
+              type: 'shotBlocked',
+              teamID: thisTeam.teamID,
+              teamName: thisTeam.name,
+              playerName: thisPlayer.name,
+              iteration: matchDetails.iterationCount || 0,
+              half: matchDetails.half
+            })
+          }
+          const deflectPos = thisPlayer.currentPOS
+          const newPOS = resolveDeflection(power, thisPOS, deflectPos, thisPlayer, thisTeam, calcHeight, matchDetails)
+          return [common.round(newPOS[0], 2), common.round(newPOS[1], 2)]
+        } else {
+          // El tiro supera al defensor sin ser bloqueado
+          return thisPOS
+        }
+      }
+
       // Si es un rival intentando cortar un pase en tránsito, chequear capacidad de intercepción
       if (!isTeammateOfKicker && matchDetails.ball.isPendingPass) {
         const interceptSkill = ((thisPlayer.skill.perception || 60) + (thisPlayer.skill.tackling || 60)) / 2
@@ -993,19 +1216,21 @@ export function resolveDeflection(power, thisPOS, defPosition, defPlayer, defTea
   const bodyPart = setDeflectBodyPart(thisPOS, calcHeight)
   matchDetails.ball.lastTouch.bodyPart = bodyPart
   matchDetails.ball.lastTouch.deflection = true
+  matchDetails.ball.lastTouch.playerID = defPlayer.playerID
+  matchDetails.ball.lastTouch.playerName = defPlayer.name
+  matchDetails.ball.lastTouch.teamID = defTeam.teamID
+  matchDetails.ball.lastTouch.iterations = 0
   matchDetails.iterationLog.push(`ball deflected by ${defPlayer.name} ${bodyPart}`)
   defPlayer.hasBall = false
   matchDetails.ball.Player = ''
   matchDetails.ball.withPlayer = false
   matchDetails.ball.withTeam = ''
   tempPosition = setDeflectionDirectionPos(direction, defPosition, newPower)
-  const lastTeamID = matchDetails.ball.lastTouch.teamID
-  matchDetails = setPositions.keepInBoundaries(matchDetails, lastTeamID, tempPosition)
-  const intended = matchDetails.ballIntended
-  const lastPOS = intended ? intended.slice() : matchDetails.ball.position.slice()
-  delete matchDetails.ballIntended
+  const traj = common.getBallTrajectory(defPosition, tempPosition, Math.max(35, newPower), 'deflection', matchDetails.pitchSize[1])
+  matchDetails.ball.ballOverIterations = traj
+  matchDetails.ball.position = traj[0] || [defPosition[0], defPosition[1], 0]
   matchDetails.endIteration = true
-  return lastPOS
+  return traj[0] || defPosition
 }
 
 export function setBallMovementMatchDetails(matchDetails, thisPlayer, thisPos, thisTeam) {
@@ -1031,26 +1256,55 @@ function checkForHandball(thisPOS, calcHeight) {
 export function setAttackBodyPart(thisPOS, calcHeight, player = null) {
   const hasTrait = (t) => Array.isArray(player?.traits) && player.traits.includes(t)
   const isTargetMan = player && ((player.position === 'ST' || player.tacticalRole === 'ST') || hasTrait('artillero_area') || hasTrait('cabeceador_nato'))
+  const headingSkill = Number(player?.skill?.heading ?? player?.skill?.cabeza ?? 70)
   const jumpingSkill = Number(player?.skill?.jumping) || 70
-  const heightMeters = (Number(player?.height) || 175) / 100
+  const agilitySkill = Number(player?.skill?.agility) || 70
+  const perceptionSkill = Number(player?.skill?.perception) || 70
+  const rawHeight = Number(player?.height) || 175
+  const heightMeters = rawHeight / 100
 
-  // Si el jugador viene de recibir un centro aéreo en el área
+  // Si el jugador viene de recibir un centro aéreo en el área o córner
   if (player?.isHeaderChance) {
     player.isHeaderChance = false
-    let headChance = 72
-    if (isTargetMan) headChance += 18
-    if (jumpingSkill >= 80) headChance += 8
-    if (heightMeters >= 1.85) headChance += 6
+    let headChance = 52
+    // Atributo Cabeza
+    headChance += (headingSkill - 70) * 0.45
+    // Altura (jugadores de 185cm+ cabecean con mucha mayor facilidad)
+    headChance += (rawHeight - 175) * 0.45
+    // Salto
+    headChance += (jumpingSkill - 70) * 0.35
+    // Percepción / Anticipación
+    headChance += (perceptionSkill - 70) * 0.20
+    // Agilidad: jugadores muy ágiles y no tan altos tienen versatilidad para volea acrobática
+    if (agilitySkill >= 88 && rawHeight < 178) {
+      headChance -= 10
+    }
+    if (isTargetMan) headChance += 14
+
+    headChance = Math.max(15, Math.min(96, Math.round(headChance)))
     if (common.getRandomNumber(1, 100) <= headChance) {
       return 'head'
     }
     return Math.random() < 0.6 ? 'chest' : 'centre of foot'
   }
 
+  const ballZ = thisPOS[2] || 0
   const playerHeightInPitchUnits = (calcHeight || 20) / 10
-  const ratio = (thisPOS[2] || 0) / playerHeightInPitchUnits
+  const ratio = ballZ / playerHeightInPitchUnits
   const lowerBody = ['left of foot', 'right of foot', 'centre of foot']
-  if (ratio <= 0.5) return lowerBody[common.getRandomNumber(0, lowerBody.length - 1)]
+
+  if (ratio <= 0.45) {
+    return lowerBody[common.getRandomNumber(0, lowerBody.length - 1)]
+  }
+  if (ratio > 0.45 && ratio <= 0.85) {
+    let midHeadChance = 35 + (headingSkill - 70) * 0.4 + (jumpingSkill - 70) * 0.3 + (rawHeight - 175) * 0.3
+    if (hasTrait('cabeceador_nato')) midHeadChance += 22
+    if (common.getRandomNumber(1, 100) <= Math.max(10, Math.min(88, midHeadChance))) {
+      return 'head'
+    }
+    return Math.random() < 0.5 ? 'chest' : lowerBody[common.getRandomNumber(0, lowerBody.length - 1)]
+  }
+
   return 'head'
 }
 
@@ -1096,9 +1350,18 @@ export function setDeflectionPlayerHasBall(ballHeight, matchDetails, defPlayer, 
     matchDetails.ball.lastTouch.playerID !== defPlayer.playerID
   ) {
     const passer = defTeam.players.find(p => p.playerID === matchDetails.ball.lastTouch.playerID)
-    if (passer) passer.stats.passes.on++
+    if (passer) {
+      passer.stats.passes.on++
+      if (wasCross) {
+        if (!passer.stats.crosses) passer.stats.crosses = { total: 0, on: 0 }
+        passer.stats.crosses.on = (passer.stats.crosses.on || 0) + 1
+      }
+      matchDetails.ball.lastPasserPlayerID = passer.playerID
+    }
     const teamStats = getTeamStatisticsObject(matchDetails, defTeam)
     teamStats.passesCompleted = (teamStats.passesCompleted || 0) + 1
+  } else if (matchDetails.ball.lastTouch.teamID !== defTeam.teamID) {
+    matchDetails.ball.lastPasserPlayerID = null
   }
   matchDetails.ball.isPendingPass = false
 
@@ -1132,8 +1395,13 @@ export function setDeflectionPlayerHasBall(ballHeight, matchDetails, defPlayer, 
 }
 
 export function setDeflectionPlayerOffside(matchDetails, defTeam, defPlayer) {
-  const offsideVarData = matchDetails.pendingOffsideSnapshot || null
+  const offsideVarData = defPlayer.offsideSnapshot ||
+    matchDetails.lastOffsideSnapshot ||
+    matchDetails.pendingOffsideSnapshot ||
+    matchDetails.ball?.offsideSnapshot ||
+    null
   defPlayer.offside = false
+  defPlayer.offsideSnapshot = null
   defPlayer.hasBall = false
   matchDetails.ball.Player = ''
   matchDetails.ball.withPlayer = false
@@ -1153,6 +1421,8 @@ export function setDeflectionPlayerOffside(matchDetails, defTeam, defPlayer) {
     })
   }
   matchDetails.pendingOffsideSnapshot = null
+  matchDetails.lastOffsideSnapshot = null
+  if (matchDetails.ball) matchDetails.ball.offsideSnapshot = null
   if (defTeam.name === matchDetails.kickOffTeam.name) matchDetails = setPositions.setSetpieceSecondTeam(matchDetails)
   else matchDetails = setPositions.setSetpieceKickOffTeam(matchDetails)
 }
@@ -1247,7 +1517,7 @@ export function ballPassed(matchDetails, team, player) {
     passDist <= 165 &&
     forwardDelta >= 15 &&
     !targetPlayer.isMarked &&
-    ['CAM', 'ST', 'LM', 'RM', 'CM'].includes(player.tacticalRole || player.position)
+    ['CAM', 'ST', 'LM', 'RM', 'CM', 'LB', 'RB', 'LWB', 'RWB'].includes(player.tacticalRole || player.position)
   ) {
     matchDetails.wallPass = {
       passerID: player.playerID,
@@ -1279,8 +1549,8 @@ export function ballPassed(matchDetails, team, player) {
   const accuracyFactor = Math.max(0.02, (100 - player.skill.passing) / 100)
   const spread = Math.min(9, passDist * 0.065 * accuracyFactor)
 
-  const targetX = Math.max(20, Math.min(pitchWidth - 20, aimX + common.getRandomNumber(-spread, spread)))
-  const targetY = Math.max(25, Math.min(pitchHeight - 25, aimY + common.getRandomNumber(-spread, spread)))
+  const targetX = Math.max(42, Math.min(pitchWidth - 42, aimX + common.getRandomNumber(-spread, spread)))
+  const targetY = Math.max(30, Math.min(pitchHeight - 30, aimY + common.getRandomNumber(-spread, spread)))
   const finalTarget = [common.round(targetX, 0), common.round(targetY, 0)]
   const realTargetPlayer = team.players.find(p => p.playerID === targetPlayer.playerID)
   if (realTargetPlayer) {
@@ -1292,9 +1562,13 @@ export function ballPassed(matchDetails, team, player) {
     const offsideSnap = evaluateOffsideAtKick(matchDetails, team, opposition, player, realTargetPlayer, ballPos)
     if (offsideSnap && offsideSnap.isOffside) {
       realTargetPlayer.offside = true
+      realTargetPlayer.offsideSnapshot = offsideSnap
       matchDetails.pendingOffsideSnapshot = offsideSnap
+      matchDetails.lastOffsideSnapshot = offsideSnap
+      if (matchDetails.ball) matchDetails.ball.offsideSnapshot = offsideSnap
     } else {
       realTargetPlayer.offside = false
+      realTargetPlayer.offsideSnapshot = null
       matchDetails.pendingOffsideSnapshot = null
     }
   }
@@ -1325,6 +1599,8 @@ export function ballPassed(matchDetails, team, player) {
   const calcHeight = parseInt(player.height, 10) + parseInt((player.skill.jumping || 0), 10)
   const bodyPart = setAttackBodyPart(matchDetails.ball.position, calcHeight)
   matchDetails.ball.lastTouch.bodyPart = bodyPart
+  matchDetails.ball.lastTouch.shotType = 'penalty'
+  matchDetails.ball.lastTouch.goalDetail = 'De penal'
   const kickType = isSwitchOfPlay ? 'switch' : 'pass'
   const isSprintingPass = !!(player.isSprinting || (player.sprintMomentum || 0) > 0.35)
   const isLanzadorPass = Array.isArray(player.traits) && player.traits.includes('lanzador_canonero')
@@ -1343,7 +1619,7 @@ export function ballPassed(matchDetails, team, player) {
   return calcBallMovementOverTime(matchDetails, kickPow, finalTarget, player, kickType)
 }
 
-function passScoreOption(p, aTop, ballPos, maxDistance, styleCfg, pitchWidth = 680, passer = null, matchDetails = null) {
+export function passScoreOption(p, aTop, ballPos, maxDistance, styleCfg, pitchWidth = 680, passer = null, matchDetails = null) {
   let score = 0
   const d = common.distance(ballPos, p.position)
   const forward = aTop ? ballPos[1] - p.position[1] : p.position[1] - ballPos[1]
@@ -1351,9 +1627,22 @@ function passScoreOption(p, aTop, ballPos, maxDistance, styleCfg, pitchWidth = 6
   // En el saque del medio (Kickoff), pase atrás limpio y obligatorio a un mediocampista en campo propio
   if (passer?.isKickoffPass) {
     if (forward < -15 && forward > -280 && p.role !== 'GK') {
-      return 600 + (p.role === 'CM' ? 100 : 0) - (p.isMarked ? 150 : 0)
+      return 600 + (['CM', 'CDM'].includes(p.role) ? 100 : 0) - (p.isMarked ? 150 : 0)
     }
     return -999
+  }
+
+  // En fase de Retención y Gestación tras Saque del Medio (Kickoff Retention & Build-Up):
+  // El receptor busca circular y armar juego con defensores, laterales o pivote en campo propio.
+  // Prohibido rifar balones adelantados a más de 15px hacia campo rival.
+  if ((matchDetails?.kickoffRetentionTicks || 0) > 0) {
+    if (forward > 15) return -999 // Prohibido rifar el balón al campo contrario
+    if (d > 340) return -999 // Permitir pases de seguridad hasta 340px a los centrales (CB), laterales y arquero
+    if (['CB', 'LB', 'RB', 'CM', 'CDM', 'GK'].includes(p.role) && !p.isMarked && !p.laneBlocked) {
+      const isBackline = ['CB', 'LB', 'RB', 'GK'].includes(p.role)
+      return 600 + (isBackline ? 80 : 0) + Math.min(100, (p.minOppDist || 20) * 3) - d * 0.12
+    }
+    return 120 - d * 0.3
   }
 
   // Evaluación dedicada para SAQUE LATERAL (Throw-in):
@@ -1396,12 +1685,12 @@ function passScoreOption(p, aTop, ballPos, maxDistance, styleCfg, pitchWidth = 6
   // 2.5 Salida limpia y segura desde el fondo: circulación entre defensores, laterales y arquero
   const passerRole = passer?.tacticalRole || passer?.position
   if (p.role === 'GK') {
-    if (['CB', 'LB', 'RB', 'CM'].includes(passerRole) && p.minOppDist > 28 && !p.laneBlocked) {
+    if (['CB', 'LB', 'RB', 'CM', 'CDM'].includes(passerRole) && p.minOppDist > 28 && !p.laneBlocked) {
       score += 65
     } else {
       score -= 100
     }
-  } else if (['CB', 'LB', 'RB'].includes(passerRole) && ['CB', 'LB', 'RB', 'CM'].includes(p.role) && !p.isMarked && !p.laneBlocked) {
+  } else if (['CB', 'LB', 'RB'].includes(passerRole) && ['CB', 'LB', 'RB', 'CM', 'CDM'].includes(p.role) && !p.isMarked && !p.laneBlocked) {
     score += 48
   }
 
@@ -1433,7 +1722,11 @@ function passScoreOption(p, aTop, ballPos, maxDistance, styleCfg, pitchWidth = 6
   }
 
   // 5. Compañero tirando un desmarque activo (diagonal, subida por banda o mostrándose entre líneas)
-  if (p.offBallRun) {
+  if (p.offBallRun?.type === 'overlapFlank') {
+    score += Math.round(85 * (styleCfg?.throughBoost || 1.3))
+  } else if (p.offBallRun?.type === 'diagonalCutInside') {
+    score += Math.round(78 * (styleCfg?.throughBoost || 1.25))
+  } else if (p.offBallRun) {
     score += 62 * (styleCfg?.throughBoost || 1.25)
   }
 
@@ -1448,9 +1741,10 @@ function passScoreOption(p, aTop, ballPos, maxDistance, styleCfg, pitchWidth = 6
   }
   if (p.role === 'CAM' && styleCfg?.id === 'tikiTaka') {
     score += 36
-  } else if (['LM', 'RM', 'LB', 'RB'].includes(p.role)) {
-    score += 18
-  } else if (['CAM', 'ST'].includes(p.role)) {
+  } else if (['LM', 'RM', 'EXT', 'LB', 'RB', 'LWB', 'RWB'].includes(p.role)) {
+    const isAttackingFullback = ['LB', 'RB', 'LWB', 'RWB'].includes(p.role) && forward > 15
+    score += isAttackingFullback ? 38 : 20
+  } else if (['CAM', 'ST', 'EXT'].includes(p.role)) {
     score += 16
   }
   return score
@@ -1468,6 +1762,8 @@ export function ballCrossed(matchDetails, team, player) {
 
   matchDetails.iterationLog.push(`ball crossed by: ${player.name}`)
   player.stats.passes.total++
+  if (!player.stats.crosses) player.stats.crosses = { total: 0, on: 0 }
+  player.stats.crosses.total++
   const teamStats = getTeamStatisticsObject(matchDetails, team)
   teamStats.passesTotal = (teamStats.passesTotal || 0) + 1
 
@@ -1480,7 +1776,7 @@ export function ballCrossed(matchDetails, team, player) {
 
   // Buscar compañeros que estén pisando o cargando el área rival para tirarles el centro a la cabeza/pie
   const hasTrait = (p, t) => Array.isArray(p.traits) && p.traits.includes(t)
-  const isHeaderSpecialist = (p) => (p.role === 'ST' || p.position === 'ST') ||
+  const isHeaderSpecialist = (p) => (['ST', 'EXT'].includes(p.role) || ['ST', 'EXT'].includes(p.position)) ||
     hasTrait(p, 'artillero_area') ||
     hasTrait(p, 'cabeceador_nato') ||
     ((Number(p.skill?.jumping) || 70) >= 80)
@@ -1548,9 +1844,13 @@ export function ballCrossed(matchDetails, team, player) {
       const offsideSnap = evaluateOffsideAtKick(matchDetails, team, opposition, player, realTargetPlayer, ballPos)
       if (offsideSnap && offsideSnap.isOffside) {
         realTargetPlayer.offside = true
+        realTargetPlayer.offsideSnapshot = offsideSnap
         matchDetails.pendingOffsideSnapshot = offsideSnap
+        matchDetails.lastOffsideSnapshot = offsideSnap
+        if (matchDetails.ball) matchDetails.ball.offsideSnapshot = offsideSnap
       } else {
         realTargetPlayer.offside = false
+        realTargetPlayer.offsideSnapshot = null
         matchDetails.pendingOffsideSnapshot = null
       }
     }
@@ -1598,6 +1898,12 @@ export function calcBallMovementOverTime(matchDetails, power, nextPosition, play
   } else {
     matchDetails.ball.isAerialCrossDelivery = false
   }
+  matchDetails.ball.isRestart = false
+  matchDetails.ball.isGoalKick = false
+  matchDetails.ball.isThrowIn = false
+  matchDetails.ball.isCornerKick = false
+  delete matchDetails.isThrowIn
+  delete matchDetails.throwInTakerID
   matchDetails.ball.isPendingPass = (type === 'pass' || type === 'through' || type === 'cross' || type === 'switch')
   matchDetails.iterationLog.push('creating new ball movement')
   common.removeBallFromAllPlayers(matchDetails)
