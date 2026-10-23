@@ -1,5 +1,13 @@
 import * as common from './common.js'
 
+export function isDefenderRole(role) {
+  return ['CB', 'LB', 'RB', 'LWB', 'RWB', 'DFC', 'LÍBERO', 'STOP I', 'STOP D', 'LI', 'LD'].includes(role)
+}
+
+export function isMidfieldRole(role) {
+  return ['CM', 'LM', 'RM', 'CDM', 'CAM', '5 REC', '8 MIX', 'VOL I', 'VOL D', '5 TAPÓN', 'ENG (10)', 'MI', 'MD'].includes(role)
+}
+
 export function selectFreekickTaker(team, allowGoalie = false) {
   const active = team.players.filter(p => common.isOnPitch(p) && (allowGoalie || p.position !== 'GK'))
   if (active.length === 0) return team.players.find(common.isOnPitch) || team.players[0]
@@ -96,8 +104,8 @@ export function applyFreekickTactics(matchDetails, attack, defence, kickPlayer, 
       matchDetails.ball.isSwitchOfPlay = true
       matchDetails.iterationLog.push(`Freekick Switch of Play by ${kickPlayer.name} to the opposite flank`)
     } else if (pStrength >= 74 && roll <= 62) {
-      // Opción c: Pelotazo largo hacia los delanteros
-      kickPlayer.action = 'boot'
+      // Opción c: Pelotazo largo dirigido hacia los delanteros/extremos
+      kickPlayer.action = 'throughBall'
       matchDetails.ball.kickType = 'pass'
       matchDetails.iterationLog.push(`Freekick Long Ball launched forward by ${kickPlayer.name}`)
     } else {
@@ -404,10 +412,10 @@ function setTopOneHundredToHalfwayYPos(matchDetails, attack, defence, kickPlayer
       player.currentPOS = [ball.position[0], ball.position[1]]
     } else if (player.position === 'GK') {
       player.currentPOS = player.originPOS.slice()
-    } else if (['CB', 'LB', 'RB'].includes(player.position)) {
+    } else if (isDefenderRole(player.tacticalRole || player.position)) {
       const newYPOS = player.originPOS[1] + (ball.position[1] - player.originPOS[1]) + 200
       player.currentPOS = [player.originPOS[0], parseInt(common.upToMax(newYPOS, pitchHeight * 0.5), 10)]
-    } else if (['CM', 'LM', 'RM'].includes(player.position)) {
+    } else if (isMidfieldRole(player.tacticalRole || player.position)) {
       const newYPOS = player.originPOS[1] + (ball.position[1] - player.originPOS[1]) + 250
       player.currentPOS = [player.originPOS[0], parseInt(common.upToMax(newYPOS, pitchHeight * 0.75), 10)]
     } else {
@@ -418,8 +426,8 @@ function setTopOneHundredToHalfwayYPos(matchDetails, attack, defence, kickPlayer
   }
   for (const player of defence.players) {
     if (!common.isOnPitch(player)) continue
-    if (['GK', 'CB', 'LB', 'RB'].includes(player.position)) player.currentPOS = player.originPOS.slice()
-    else if (['CM', 'LM', 'RM'].includes(player.position)) {
+    if (['GK'].includes(player.position) || isDefenderRole(player.tacticalRole || player.position)) player.currentPOS = player.originPOS.slice()
+    else if (isMidfieldRole(player.tacticalRole || player.position)) {
       player.currentPOS = [player.originPOS[0], parseInt((pitchHeight * 0.75) + 5, 10)]
     } else {
       player.currentPOS = [player.originPOS[0], parseInt(pitchHeight * 0.5, 10)]
@@ -450,10 +458,10 @@ function setBottomOneHundredToHalfwayYPos(matchDetails, attack, defence, kickPla
       player.currentPOS = [ball.position[0], ball.position[1]]
     } else if (player.position === 'GK') {
       player.currentPOS = player.originPOS.slice()
-    } else if (['CB', 'LB', 'RB'].includes(player.position)) {
+    } else if (isDefenderRole(player.tacticalRole || player.position)) {
       const newYPOS = player.originPOS[1] + (ball.position[1] - player.originPOS[1]) - 200
       player.currentPOS = [player.originPOS[0], parseInt(common.upToMin(newYPOS, pitchHeight * 0.5), 10)]
-    } else if (['CM', 'LM', 'RM'].includes(player.position)) {
+    } else if (isMidfieldRole(player.tacticalRole || player.position)) {
       const newYPOS = player.originPOS[1] + (ball.position[1] - player.originPOS[1]) - 250
       player.currentPOS = [player.originPOS[0], parseInt(common.upToMin(newYPOS, pitchHeight * 0.25), 10)]
     } else {
@@ -464,8 +472,8 @@ function setBottomOneHundredToHalfwayYPos(matchDetails, attack, defence, kickPla
   }
   for (const player of defence.players) {
     if (!common.isOnPitch(player)) continue
-    if (['GK', 'CB', 'LB', 'RB'].includes(player.position)) player.currentPOS = player.originPOS.slice()
-    else if (['CM', 'LM', 'RM'].includes(player.position)) {
+    if (['GK'].includes(player.position) || isDefenderRole(player.tacticalRole || player.position)) player.currentPOS = player.originPOS.slice()
+    else if (isMidfieldRole(player.tacticalRole || player.position)) {
       player.currentPOS = [player.originPOS[0], parseInt((pitchHeight * 0.25) - 5, 10)]
     } else {
       player.currentPOS = [player.originPOS[0], parseInt(pitchHeight * 0.5, 10)]
@@ -497,10 +505,10 @@ function setTopHalfwayToBottomQtrYPos(matchDetails, attack, defence, kickPlayer)
     if (!common.isOnPitch(player)) continue
     if (player.playerID === kickPlayer.playerID) continue
     if (player.position === 'GK') player.currentPOS = [player.originPOS[0], parseInt(pitchHeight * 0.2, 10)]
-    else if (['CB', 'LB', 'RB'].includes(player.position)) {
+    else if (isDefenderRole(player.tacticalRole || player.position)) {
       const maxYPOSCheck = parseInt(common.upToMax(ball.position[1] - 100, pitchHeight * 0.5), 10)
       player.currentPOS = [player.originPOS[0], maxYPOSCheck]
-    } else if (['CM', 'LM', 'RM'].includes(player.position)) {
+    } else if (isMidfieldRole(player.tacticalRole || player.position)) {
       const maxYPOSCheck = common.upToMax(ball.position[1] + common.getRandomNumber(150, 300), pitchHeight * 0.75)
       player.currentPOS = [player.originPOS[0], parseInt(maxYPOSCheck, 10)]
     } else {
@@ -511,9 +519,9 @@ function setTopHalfwayToBottomQtrYPos(matchDetails, attack, defence, kickPlayer)
   }
   for (const player of defence.players) {
     if (!common.isOnPitch(player)) continue
-    if (['GK', 'CB', 'LB', 'RB'].includes(player.position)) {
+    if (['GK'].includes(player.position) || isDefenderRole(player.tacticalRole || player.position)) {
       player.currentPOS = player.originPOS.slice()
-    } else if (['CM', 'LM', 'RM'].includes(player.position)) {
+    } else if (isMidfieldRole(player.tacticalRole || player.position)) {
       player.currentPOS = [player.originPOS[0], parseInt(pitchHeight * 0.75, 10)]
     } else {
       player.currentPOS = [player.originPOS[0], parseInt(pitchHeight * 0.5, 10)]
@@ -545,10 +553,10 @@ function setBottomHalfwayToTopQtrYPos(matchDetails, attack, defence, kickPlayer)
     if (!common.isOnPitch(player)) continue
     if (player.playerID === kickPlayer.playerID) continue
     if (player.position === 'GK') player.currentPOS = [player.originPOS[0], parseInt(pitchHeight * 0.8, 10)]
-    else if (['CB', 'LB', 'RB'].includes(player.position)) {
+    else if (isDefenderRole(player.tacticalRole || player.position)) {
       const maxYPOSCheck = parseInt(common.upToMin(ball.position[1] + 100, pitchHeight * 0.5), 10)
       player.currentPOS = [player.originPOS[0], maxYPOSCheck]
-    } else if (['CM', 'LM', 'RM'].includes(player.position)) {
+    } else if (isMidfieldRole(player.tacticalRole || player.position)) {
       const maxYPOSCheck = common.upToMin(ball.position[1] - common.getRandomNumber(150, 300), pitchHeight * 0.25)
       player.currentPOS = [player.originPOS[0], parseInt(maxYPOSCheck, 10)]
     } else {
@@ -559,9 +567,9 @@ function setBottomHalfwayToTopQtrYPos(matchDetails, attack, defence, kickPlayer)
   }
   for (const player of defence.players) {
     if (!common.isOnPitch(player)) continue
-    if (['GK', 'CB', 'LB', 'RB'].includes(player.position)) {
+    if (['GK'].includes(player.position) || isDefenderRole(player.tacticalRole || player.position)) {
       player.currentPOS = player.originPOS.slice()
-    } else if (['CM', 'LM', 'RM'].includes(player.position)) {
+    } else if (isMidfieldRole(player.tacticalRole || player.position)) {
       player.currentPOS = [player.originPOS[0], parseInt(pitchHeight * 0.25, 10)]
     } else {
       player.currentPOS = [player.originPOS[0], parseInt(pitchHeight * 0.5, 10)]
@@ -593,8 +601,8 @@ function setTopBottomQtrCentreYPos(matchDetails, attack, defence, kickPlayer) {
   for (const player of attack.players) {
     if (!common.isOnPitch(player) || player.playerID === kickPlayer.playerID) continue
     if (player.position === 'GK') player.currentPOS = [player.originPOS[0], parseInt(pitchHeight * 0.15, 10)]
-    else if (['CB', 'LB', 'RB'].includes(player.position)) {
-      if (player.position === 'CB') player.currentPOS = [player.originPOS[0], parseInt(pitchHeight * 0.5, 10)]
+    else if (isDefenderRole(player.tacticalRole || player.position)) {
+      if (['CB', 'DFC'].includes(player.tacticalRole || player.position)) player.currentPOS = [player.originPOS[0], parseInt(pitchHeight * 0.5, 10)]
       else player.currentPOS = [player.originPOS[0], parseInt(pitchHeight * 0.66, 10)]
     } else {
       player.currentPOS = common.getRandomBottomPenaltyPosition(matchDetails)
@@ -602,7 +610,7 @@ function setTopBottomQtrCentreYPos(matchDetails, attack, defence, kickPlayer) {
     player.intentPOS = player.currentPOS.slice()
   }
 
-  let playerSpace = -3
+  let playerSpace = -33
   for (const player of defence.players) {
     if (!common.isOnPitch(player)) continue
     const ballDistanceFromGoalX = ball.position[0] - (pitchWidth / 2)
@@ -610,12 +618,12 @@ function setTopBottomQtrCentreYPos(matchDetails, attack, defence, kickPlayer) {
     const ballDistanceFromGoalY = pitchHeight - ball.position[1]
     const midWayFromBalltoGoalY = parseInt(ball.position[1] + (ballDistanceFromGoalY * 0.25), 10)
     if (player.position === 'GK') player.currentPOS = player.originPOS.slice()
-    else if (['CB', 'LB', 'RB'].includes(player.position)) {
+    else if (isDefenderRole(player.tacticalRole || player.position)) {
       player.currentPOS = [
         common.upToMax(common.upToMin(midWayFromBalltoGoalX + playerSpace, 10), pitchWidth - 10),
         common.upToMax(common.upToMin(midWayFromBalltoGoalY, 10), pitchHeight - 10)
       ]
-      playerSpace += 2
+      playerSpace += 22
     } else {
       player.currentPOS = common.getRandomBottomPenaltyPosition(matchDetails)
     }
@@ -646,8 +654,8 @@ function setBottomUpperQtrCentreYPos(matchDetails, attack, defence, kickPlayer) 
   for (const player of attack.players) {
     if (!common.isOnPitch(player) || player.playerID === kickPlayer.playerID) continue
     if (player.position === 'GK') player.currentPOS = [player.originPOS[0], parseInt(pitchHeight * 0.85, 10)]
-    else if (['CB', 'LB', 'RB'].includes(player.position)) {
-      if (player.position === 'CB') player.currentPOS = [player.originPOS[0], parseInt(pitchHeight * 0.5, 10)]
+    else if (isDefenderRole(player.tacticalRole || player.position)) {
+      if (['CB', 'DFC'].includes(player.tacticalRole || player.position)) player.currentPOS = [player.originPOS[0], parseInt(pitchHeight * 0.5, 10)]
       else player.currentPOS = [player.originPOS[0], parseInt(pitchHeight * 0.33, 10)]
     } else {
       player.currentPOS = common.getRandomTopPenaltyPosition(matchDetails)
@@ -655,19 +663,19 @@ function setBottomUpperQtrCentreYPos(matchDetails, attack, defence, kickPlayer) 
     player.intentPOS = player.currentPOS.slice()
   }
 
-  let playerSpace = -3
+  let playerSpace = -33
   for (const player of defence.players) {
     if (!common.isOnPitch(player)) continue
     const ballDistanceFromGoalX = ball.position[0] - (pitchWidth / 2)
     const midWayFromBalltoGoalX = parseInt(ball.position[0] - (ballDistanceFromGoalX / 2), 10)
     const midWayFromBalltoGoalY = parseInt(ball.position[1] * 0.75, 10)
     if (player.position === 'GK') player.currentPOS = player.originPOS.slice()
-    else if (['CB', 'LB', 'RB'].includes(player.position)) {
+    else if (isDefenderRole(player.tacticalRole || player.position)) {
       player.currentPOS = [
         common.upToMax(common.upToMin(midWayFromBalltoGoalX + playerSpace, 10), pitchWidth - 10),
         common.upToMax(common.upToMin(midWayFromBalltoGoalY, 10), pitchHeight - 10)
       ]
-      playerSpace += 2
+      playerSpace += 22
     } else {
       player.currentPOS = common.getRandomTopPenaltyPosition(matchDetails)
     }

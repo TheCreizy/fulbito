@@ -21,8 +21,10 @@ export function resetPlayerPositions(matchDetails) {
 }
 
 export function setGameVariables(team) {
+  team.teamID = team.teamID || common.getRandomNumber(1000000000000, 99999999999999999)
   team.players.forEach((player, idx) => {
     player.playerID = player.playerID || player.id || common.getRandomNumber(1000000000000, 99999999999999999)
+    player.teamID = team.teamID
     player.shirtNumber = player.shirtNumber || (idx + 1)
     player.baseSkill = { ...player.skill }
     // Convertir todos los skills a números por seguridad
@@ -74,6 +76,7 @@ export function setGameVariables(team) {
   if (Array.isArray(team.bench)) {
     team.bench.forEach((player, idx) => {
       player.playerID = player.playerID || player.id || common.getRandomNumber(1000000000000, 99999999999999999)
+      player.teamID = team.teamID
       player.shirtNumber = player.shirtNumber || (idx + 12)
       player.baseSkill = { ...player.skill }
       for (const k of Object.keys(player.skill || {})) {
@@ -103,7 +106,6 @@ export function setGameVariables(team) {
     })
   }
   team.intent = 'none'
-  team.teamID = team.teamID || common.getRandomNumber(1000000000000, 99999999999999999)
   team.substitutionsUsed = team.substitutionsUsed || 0
   team.maxSubstitutions = team.maxSubstitutions || 5
   updateTeamEffectiveSkills(team)
@@ -125,6 +127,8 @@ export function koDecider(team1, matchDetails) {
   matchDetails.ball.withPlayer = true
   matchDetails.ball.Player = team1.players[kickOffIdx].playerID
   matchDetails.ball.withTeam = team1.teamID
+  matchDetails.ball.isRestart = true
+  matchDetails.ball.restartWaitTicks = 6
   team1.intent = 'attack'
   team1.players[kickOffIdx].currentPOS = [matchDetails.ball.position[0], matchDetails.ball.position[1]]
   team1.players[kickOffIdx].intentPOS = [matchDetails.ball.position[0], matchDetails.ball.position[1]]
@@ -141,8 +145,8 @@ export function koDecider(team1, matchDetails) {
   matchDetails.ball.ballOverIterations = []
 
   if (team1.players[waitingIdx] && common.isOnPitch(team1.players[waitingIdx])) {
-    team1.players[waitingIdx].currentPOS = [matchDetails.ball.position[0] + 18, matchDetails.ball.position[1]]
-    team1.players[waitingIdx].intentPOS = [matchDetails.ball.position[0] + 18, matchDetails.ball.position[1]]
+    team1.players[waitingIdx].currentPOS = [matchDetails.ball.position[0] + 24, matchDetails.ball.position[1]]
+    team1.players[waitingIdx].intentPOS = [matchDetails.ball.position[0] + 24, matchDetails.ball.position[1]]
   }
   return team1
 }

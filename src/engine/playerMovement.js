@@ -29,7 +29,7 @@ export function decideMovement(closestPlayer, team, opp, matchDetails) {
       if (lastTouchPlayer && ballRecentlyKicked && ballMoving) action = 'wait'
       else {
         action = actions.selectAction(possibleActions)
-        action = checkProvidedAction(matchDetails, thisPlayer, action)
+        action = checkProvidedAction(matchDetails, thisPlayer, action, team)
       }
 
       // Gestión inteligente de conducción: solo forzar descarga si está rodeado por >= 2 rivales
@@ -214,7 +214,7 @@ export function decideMovement(closestPlayer, team, opp, matchDetails) {
           }
         }
       }
-      if (action === 'sprint') {
+      if (action === 'sprint' || action === 'intercept') {
         thisPlayer.isSprinting = true
         thisPlayer.sprintMomentum = Math.min(1.0, (thisPlayer.sprintMomentum || 0) + 0.25)
       } else {
@@ -410,12 +410,14 @@ export function executeBallAction(move, team, opp, matchDetails) {
 
 export function setClosePlayerTakesBall(matchDetails, thisPlayer, team, opp) {
   if (!common.isOnPitch(thisPlayer)) return
-  if (thisPlayer.offside) {
-    const offsideVarData = thisPlayer.offsideSnapshot ||
-      matchDetails.lastOffsideSnapshot ||
-      matchDetails.pendingOffsideSnapshot ||
-      matchDetails.ball?.offsideSnapshot ||
-      null
+  const offsideVarData = thisPlayer.offsideSnapshot ||
+    matchDetails.lastOffsideSnapshot ||
+    matchDetails.pendingOffsideSnapshot ||
+    matchDetails.ball?.offsideSnapshot ||
+    null
+
+  // Cobrar offside únicamente si el jugador estaba adelantado en un pase con snapshot válido
+  if (thisPlayer.offside && offsideVarData) {
     thisPlayer.offside = false
     thisPlayer.offsideSnapshot = null
     matchDetails.iterationLog.push(`${thisPlayer.name} is offside`)
@@ -438,6 +440,8 @@ export function setClosePlayerTakesBall(matchDetails, thisPlayer, team, opp) {
     if (team.name === matchDetails.kickOffTeam.name) setPositions.setSetpieceSecondTeam(matchDetails)
     else setPositions.setSetpieceKickOffTeam(matchDetails)
   } else {
+    thisPlayer.offside = false
+    thisPlayer.offsideSnapshot = null
     // Si venía de un pase pendiente de un compañero, sumar pase completado
     if (
       matchDetails.ball.isPendingPass &&
@@ -591,12 +595,14 @@ export function closestPlayerActionBallY(ballToPlayerY) {
   return ballToPlayerY
 }
 
-export function checkProvidedAction(matchDetails, thisPlayer, action) {
+export function checkProvidedAction(matchDetails, thisPlayer, action, team) {
   const ballActions = ['shoot', 'throughBall', 'pass', 'cross', 'cleared', 'boot', 'penalty', 'freekickShot']
   const allActions = [
     'shoot', 'throughBall', 'pass', 'cross', 'tackle', 'intercept', 'slide',
     'run', 'sprint', 'cleared', 'boot', 'penalty', 'freekickShot'
   ]
+
+  const myTeamID = team?.teamID || thisPlayer.teamID || ''
 
   // Reglas 13, 15 y 16 IFAB (Open Football TakeRestart):
   // El ejecutor de una pelota parada NO puede salir conduciendo/gambeteando la pelota (auto-pase prohibido).
@@ -616,7 +622,7 @@ export function checkProvidedAction(matchDetails, thisPlayer, action) {
 
   if (thisPlayer.playerID !== matchDetails.ball.Player) {
     if (ballActions.includes(action)) return 'run'
-    if (matchDetails.ball.withTeam === (thisPlayer.teamID || '') && ['tackle', 'slide', 'intercept'].includes(action)) {
+    if (matchDetails.ball.withTeam === myTeamID && ['tackle', 'slide', 'intercept'].includes(action)) {
       return 'run'
     }
   }
@@ -629,7 +635,7 @@ export function checkProvidedAction(matchDetails, thisPlayer, action) {
         thisPlayer.action = 'none'
         return 'run'
       }
-      if (matchDetails.ball.withTeam === (thisPlayer.teamID || '') && ['tackle', 'slide', 'intercept'].includes(providedAction)) {
+      if (matchDetails.ball.withTeam === myTeamID && ['tackle', 'slide', 'intercept'].includes(providedAction)) {
         thisPlayer.action = 'none'
         return 'run'
       }
@@ -706,10 +712,7 @@ export function getMovement(player, action, opposition, ballX, ballY, matchDetai
     return getTackleMovement(ballX, ballY)
   }
   if (action === 'intercept') {
-    const isSprinting = player.isSprinting || (player.sprintMomentum || 0) > 0.35
-    let maxSpeed = isSprinting
-      ? (player.skill.agility >= 86 ? 8.5 : 7.0)
-      : (player.skill.agility >= 80 ? 3.6 : 2.8)
+    let maxSpeed = player.skill.agility >= 86 ? 8.5 : 7.2
     const tempo = team?.coachState?.coefficients?.tempoMultiplier || 1.0
     maxSpeed *= tempo
     return calculateInterceptMovement(player, matchDetails, maxSpeed)
@@ -882,8 +885,9 @@ export function getRunMovement(matchDetails, player, ballX, ballY, team, opposit
     }
   }
 
-  // Solo ir directo a la pelota si está suelta muy cerca (< 48px)
-  if (!matchDetails.ball.withPlayer && common.isBetween(ballX, -48, 48) && common.isBetween(ballY, -48, 48)) {
+  // Solo ir directo a la pelota si está suelta muy cerca (< 24px) o es el jugador asignado a la presión
+  const isClosest = team?.closestPlayerID === player.playerID
+  if (!matchDetails.ball.withPlayer && !matchDetails.ball.isPendingPass && (isClosest || Math.hypot(ballX, ballY) < 24)) {
     return steerTowardsTarget(player, matchDetails.ball.position, step, team, matchDetails.pitchSize)
   }
   const target = Array.isArray(player.intentPOS) ? player.intentPOS : player.originPOS
@@ -970,9 +974,9 @@ export function closestPlayerToBall(closestPlayer, team, matchDetails) {
   const { position } = matchDetails.ball
   for (const thisPlayer of team.players) {
     if (!common.isOnPitch(thisPlayer)) continue
-    const ballToPlayerX = Math.abs(thisPlayer.currentPOS[0] - position[0])
-    const ballToPlayerY = Math.abs(thisPlayer.currentPOS[1] - position[1])
-    const proximityToBall = ballToPlayerX + ballToPlayerY
+    const ballToPlayerX = thisPlayer.currentPOS[0] - position[0]
+    const ballToPlayerY = thisPlayer.currentPOS[1] - position[1]
+    const proximityToBall = Math.hypot(ballToPlayerX, ballToPlayerY)
     if (proximityToBall < closestPlayer.position) {
       closestPlayer.name = thisPlayer.name
       closestPlayer.position = proximityToBall
@@ -991,23 +995,9 @@ export function closestPlayerToBall(closestPlayer, team, matchDetails) {
 }
 
 export function checkOffside(team1, team2, matchDetails) {
-  if (
-    matchDetails?.ball?.isPendingPass ||
-    matchDetails?.pendingOffsideSnapshot ||
-    matchDetails?.lastOffsideSnapshot ||
-    (Array.isArray(matchDetails?.ball?.ballOverIterations) && matchDetails.ball.ballOverIterations.length > 0)
-  ) {
-    // Si la pelota está en viaje tras un pase o hay un offside pendiente de resolución, no interferir
-    return matchDetails
-  }
-  const { ball, pitchSize } = matchDetails
-  const team1side = (team1.players[0].originPOS[1] < (pitchSize[1] / 2)) ? 'top' : 'bottom'
-  if (!ball.withTeam) return matchDetails
-  if (team1side === 'bottom') {
-    team1atBottom(team1, team2, pitchSize[1])
-  } else {
-    team1atTop(team1, team2, pitchSize[1])
-  }
+  // El fuera de juego se evalúa de forma reglamentaria en el momento del pase (evaluateOffsideAtKick en ballMovement.js).
+  // La comprobación estática sin pase queda desactivada para evitar offsides fantasma sin líneas de VAR.
+  return matchDetails
 }
 
 function getTopMostPlayer(team, pitchHeight) {

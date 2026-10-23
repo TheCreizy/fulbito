@@ -529,10 +529,10 @@ const PLAYER_CUSTOM_SKILLS_BY_ID = {
   39: { stamina: 78, heading: 64 }, // Aimar
   40: { stamina: 82, heading: 76 }, // Guillermo Barros Schelotto
   41: { stamina: 85, heading: 74 }, // Caniggia
-  43: { stamina: 85, heading: 94 }, // Hernán Crespo (cabezazo letal de goleador)
-  45: { stamina: 84, heading: 78 }, // Agüero
-  46: { stamina: 94, heading: 80 }, // Javier Mascherano (Jefecito incombustible)
-  47: { stamina: 92, heading: 82 }, // Esteban Cambiasso
+  42: { stamina: 85, heading: 94 }, // Hernán Crespo (cabezazo letal de goleador)
+  43: { stamina: 84, heading: 78 }, // Sergio Agüero
+  133: { stamina: 94, heading: 80 }, // Javier Mascherano (Jefecito incombustible)
+  134: { stamina: 92, heading: 82 }, // Esteban Cambiasso
 }
 
 function inferStaminaAndHeading(position, height, agi, str, jum, per, sho, tac, sav, con) {

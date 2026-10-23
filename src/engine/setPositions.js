@@ -568,7 +568,7 @@ export function closestPlayerToPosition(player, team, position) {
     if (!player || player.playerID !== thisPlayer.playerID) {
       const ballToPlayerX = thisPlayer.currentPOS[0] - position[0]
       const ballToPlayerY = thisPlayer.currentPOS[1] - position[1]
-      const proximityToBall = Math.abs(ballToPlayerX) + Math.abs(ballToPlayerY)
+      const proximityToBall = Math.hypot(ballToPlayerX, ballToPlayerY)
       if (proximityToBall < currentDifference) {
         playerInformation.thePlayer = thisPlayer
         playerInformation.proxPOS = [ballToPlayerX, ballToPlayerY]
@@ -790,11 +790,18 @@ export function setKickOffTeamGoalScored(matchDetails) {
   let scorer = matchDetails.ball.lastTouch.playerName
   let thisIndex = matchDetails.kickOffTeam.players.findIndex(thisPlayer => thisPlayer.name === scorer)
   if (thisIndex === -1) {
-    // Gol en contra o rebote: asignar al delantero o último jugador activo del equipo que anotó
-    const active = matchDetails.kickOffTeam.players.filter(common.isOnPitch)
-    const fallbackScorer = active[active.length - 1] || matchDetails.kickOffTeam.players[0]
-    scorer = fallbackScorer.name
-    fallbackScorer.stats.goals++
+    if (matchDetails.ball.lastShooter?.teamID === matchDetails.kickOffTeam.teamID) {
+      thisIndex = matchDetails.kickOffTeam.players.findIndex(p => p.playerID === matchDetails.ball.lastShooter.playerID)
+    }
+    if (thisIndex === -1) {
+      const nearest = closestPlayerToPosition(null, matchDetails.kickOffTeam, matchDetails.ball.position)
+      const fallbackScorer = nearest.thePlayer || matchDetails.kickOffTeam.players.find(common.isOnPitch) || matchDetails.kickOffTeam.players[0]
+      scorer = fallbackScorer.name
+      fallbackScorer.stats.goals++
+    } else {
+      scorer = matchDetails.kickOffTeam.players[thisIndex].name
+      matchDetails.kickOffTeam.players[thisIndex].stats.goals++
+    }
   } else {
     matchDetails.kickOffTeam.players[thisIndex].stats.goals++
   }
@@ -834,10 +841,15 @@ export function setKickOffTeamGoalScored(matchDetails) {
   matchDetails.ball.lastTouch.playerID = ''
   matchDetails.ball.lastTouch.teamID = ''
   common.removeBallFromAllPlayers(matchDetails)
-  setVariables.resetPlayerPositions(matchDetails)
-  setBallSpecificGoalScoreValue(matchDetails, matchDetails.secondTeam)
-  matchDetails.secondTeam.intent = 'attack'
-  matchDetails.kickOffTeam.intent = 'defend'
+
+  // La pelota permanece clavada dentro de la red del arco durante la celebración
+  const [, pitchHeight] = matchDetails.pitchSize
+  const goalInNetY = matchDetails.ball.position[1] < (pitchHeight / 2) ? -12 : (pitchHeight + 12)
+  matchDetails.ball.position = [matchDetails.ball.position[0], goalInNetY, 0]
+  matchDetails.ball.ballOverIterations = []
+  matchDetails.ball.withPlayer = false
+  matchDetails.ball.withTeam = ''
+  matchDetails.pendingKickoffTeam = 'secondTeam'
   matchDetails.kickOffTeamStatistics.goals++
   matchDetails.endIteration = true
   return matchDetails
@@ -847,10 +859,18 @@ export function setSecondTeamGoalScored(matchDetails) {
   let scorer = matchDetails.ball.lastTouch.playerName
   let thisIndex = matchDetails.secondTeam.players.findIndex(thisPlayer => thisPlayer.name === scorer)
   if (thisIndex === -1) {
-    const active = matchDetails.secondTeam.players.filter(common.isOnPitch)
-    const fallbackScorer = active[active.length - 1] || matchDetails.secondTeam.players[0]
-    scorer = fallbackScorer.name
-    fallbackScorer.stats.goals++
+    if (matchDetails.ball.lastShooter?.teamID === matchDetails.secondTeam.teamID) {
+      thisIndex = matchDetails.secondTeam.players.findIndex(p => p.playerID === matchDetails.ball.lastShooter.playerID)
+    }
+    if (thisIndex === -1) {
+      const nearest = closestPlayerToPosition(null, matchDetails.secondTeam, matchDetails.ball.position)
+      const fallbackScorer = nearest.thePlayer || matchDetails.secondTeam.players.find(common.isOnPitch) || matchDetails.secondTeam.players[0]
+      scorer = fallbackScorer.name
+      fallbackScorer.stats.goals++
+    } else {
+      scorer = matchDetails.secondTeam.players[thisIndex].name
+      matchDetails.secondTeam.players[thisIndex].stats.goals++
+    }
   } else {
     matchDetails.secondTeam.players[thisIndex].stats.goals++
   }
@@ -890,10 +910,15 @@ export function setSecondTeamGoalScored(matchDetails) {
   matchDetails.ball.lastTouch.playerID = ''
   matchDetails.ball.lastTouch.teamID = ''
   common.removeBallFromAllPlayers(matchDetails)
-  setVariables.resetPlayerPositions(matchDetails)
-  setBallSpecificGoalScoreValue(matchDetails, matchDetails.kickOffTeam)
-  matchDetails.kickOffTeam.intent = 'attack'
-  matchDetails.secondTeam.intent = 'defend'
+
+  // La pelota permanece clavada dentro de la red del arco durante la celebración
+  const [, pitchHeight] = matchDetails.pitchSize
+  const goalInNetY = matchDetails.ball.position[1] < (pitchHeight / 2) ? -12 : (pitchHeight + 12)
+  matchDetails.ball.position = [matchDetails.ball.position[0], goalInNetY, 0]
+  matchDetails.ball.ballOverIterations = []
+  matchDetails.ball.withPlayer = false
+  matchDetails.ball.withTeam = ''
+  matchDetails.pendingKickoffTeam = 'kickOffTeam'
   matchDetails.secondTeamStatistics.goals++
   matchDetails.endIteration = true
   return matchDetails
@@ -941,8 +966,8 @@ export function setBallSpecificGoalScoreValue(matchDetails, concedingTeam) {
   matchDetails.ball.lastTouch.deflection = false
   matchDetails.ball.Player = kicker.playerID
   if (waiter && waiter.playerID !== kicker.playerID) {
-    waiter.currentPOS = [centerX + 18, centerY]
-    waiter.intentPOS = [centerX + 18, centerY]
+    waiter.currentPOS = [centerX + 24, centerY]
+    waiter.intentPOS = [centerX + 24, centerY]
   }
 }
 
@@ -1368,7 +1393,7 @@ function setDefenceRelativePos(matchDetails, defendingTeam, closestPlayer, attac
       // Si un delantero rival pica en diagonal hacia el centro o el área, el central debe salir a interceptar la línea de pase/carrera
       const cuttingAttacker = attackingTeam?.players?.find(op => {
         if (!common.isOnPitch(op) || op.position === 'GK') return false
-        const isAttackerRole = ['ST', 'CF', 'CAM', 'LM', 'RM'].includes(op.tacticalRole || op.position)
+        const isAttackerRole = ['ST', 'CF', 'CAM', 'LM', 'RM', 'EXT', 'RW', 'LW'].includes(op.tacticalRole || op.position)
         const isDiagonalRun = op.offBallRun?.type === 'diagonalRun' || op.offBallRun?.type === 'diagonalInBehind' || op.offBallRun?.type === 'diagonalCutInside'
         const distY = isTopTeam ? (op.currentPOS[1] - player.currentPOS[1]) : (player.currentPOS[1] - op.currentPOS[1])
         return isAttackerRole && isDiagonalRun && distY > -40 && distY < 260 && Math.abs(op.currentPOS[0] - player.currentPOS[0]) < 170
@@ -1385,7 +1410,7 @@ function setDefenceRelativePos(matchDetails, defendingTeam, closestPlayer, attac
         // Ningún defensor de la línea puede quedar por delante del delantero rival más profundo de su sector
         const nearbyAttacker = attackingTeam?.players?.find(op => {
           if (!common.isOnPitch(op) || op.position === 'GK') return false
-          const isFwd = ['ST', 'CF', 'RW', 'LW', 'CAM', 'LM', 'RM'].includes(op.tacticalRole || op.position) || op.position === 'ST'
+          const isFwd = ['ST', 'CF', 'RW', 'LW', 'CAM', 'LM', 'RM', 'EXT'].includes(op.tacticalRole || op.position) || op.position === 'ST'
           return isFwd && Math.abs(op.currentPOS[0] - anchor[0]) < 135
         })
 
@@ -1476,7 +1501,7 @@ function findOpenPocketX(preferredX, defendingTeam, targetY, pitchWidth) {
   return bestX
 }
 
-function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
+export function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
   const { ball, pitchSize } = matchDetails
   const [pitchWidth, pitchHeight] = pitchSize
   const isTopTeam = kickingTeam.players[0].originPOS[1] < (pitchHeight / 2)
@@ -1507,7 +1532,10 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
   const slotGeom = getBoxSlotGeometry(matchDetails, isTopTeam, onsideLimitY)
 
   // 3. Identificar portador del balón
-  const carrier = kickingTeam.players.find(p => p.hasBall)
+  const carrier = kickingTeam.players.find(p => p.hasBall) ||
+    (matchDetails.ball.isPendingPass && matchDetails.ball.targetPlayerID
+      ? kickingTeam.players.find(p => p.playerID === matchDetails.ball.targetPlayerID)
+      : null)
 
   // 4. NearSupport (Apoyo cercano para descargar el juego)
   const availableAttackers = kickingTeam.players.filter(

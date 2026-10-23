@@ -10,6 +10,7 @@ dist-ssr/
 .vscode/
 
 # Archivos y carpetas específicos que pediste
+convert_to_markdown.js
 Motor de Simulación Deportiva.pdf
 open-football-master/
 

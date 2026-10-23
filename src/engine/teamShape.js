@@ -75,7 +75,7 @@ export function buildTeamShape(matchDetails, team, inPossession) {
   let maxLat = -9999
 
   for (const p of team.players) {
-    if (p.position === 'GK') continue
+    if (p.position === 'GK' || !Array.isArray(p.originPOS) || typeof p.originPOS[1] !== 'number' || typeof p.originPOS[0] !== 'number') continue
     const depthProgress = isTopTeam
       ? p.originPOS[1] / pitchHeight
       : (pitchHeight - p.originPOS[1]) / pitchHeight
@@ -83,6 +83,13 @@ export function buildTeamShape(matchDetails, team, inPossession) {
     maxDepth = Math.max(maxDepth, depthProgress)
     minLat = Math.min(minLat, p.originPOS[0])
     maxLat = Math.max(maxLat, p.originPOS[0])
+  }
+
+  if (minDepth > maxDepth) {
+    minDepth = 0.1
+    maxDepth = 0.8
+    minLat = 80
+    maxLat = pitchWidth - 80
   }
 
   const depthSpan = Math.max(0.01, maxDepth - minDepth)
@@ -196,6 +203,13 @@ export function buildTeamShape(matchDetails, team, inPossession) {
       continue
     }
 
+    if (!Array.isArray(p.originPOS) || typeof p.originPOS[1] !== 'number' || typeof p.originPOS[0] !== 'number') {
+      if (Array.isArray(p.currentPOS) && typeof p.currentPOS[0] === 'number') {
+        anchors[p.playerID] = [p.currentPOS[0], p.currentPOS[1]]
+      }
+      continue
+    }
+
     const pDepthProgress = isTopTeam
       ? p.originPOS[1] / pitchHeight
       : (pitchHeight - p.originPOS[1]) / pitchHeight
@@ -304,7 +318,10 @@ export function assignAttackPlanWithIncumbency(kickingTeam, defendingTeam, match
   const ballFlank = ball[0] < pitchWidth / 2 ? 'left' : 'right'
   const distBallToGoalY = isTopTeam ? (pitchHeight - ball[1]) : ball[1]
 
-  const carrier = kickingTeam.players.find(p => p.hasBall)
+  const carrier = kickingTeam.players.find(p => p.hasBall) ||
+    (matchDetails.ball.isPendingPass && matchDetails.ball.targetPlayerID
+      ? kickingTeam.players.find(p => p.playerID === matchDetails.ball.targetPlayerID)
+      : null)
   const carrierID = carrier ? carrier.playerID : null
   const prevAttackPlan = kickingTeam.attackPlan || {}
   const prevSlots = prevAttackPlan.boxSlots || {}
@@ -319,26 +336,26 @@ export function assignAttackPlanWithIncumbency(kickingTeam, defendingTeam, match
   let leftHolder = null
   let rightHolder = null
 
-  // Candidatos izquierdos: ordenados por cercanía a la banda izquierda (prioridad a extremos LM sobre laterales LB)
+  // Candidatos izquierdos: ordenados por cercanía a la banda izquierda (prioridad a extremos LM/EXT sobre laterales LB)
   const leftCandidates = available.filter(p => (p.originPOS[0] < pitchWidth / 2 || p.currentPOS[0] < pitchWidth / 2))
   leftCandidates.sort((a, b) => {
     const roleA = a.tacticalRole || a.position
     const roleB = b.tacticalRole || b.position
-    const aWingBonus = (roleA === 'LM') ? -160 : ((roleA === 'LB') ? -80 : 0)
-    const bWingBonus = (roleB === 'LM') ? -160 : ((roleB === 'LB') ? -80 : 0)
+    const aWingBonus = (roleA === 'LM' || roleA === 'EXT' || roleA === 'LW') ? -160 : ((roleA === 'LB') ? -80 : 0)
+    const bWingBonus = (roleB === 'LM' || roleB === 'EXT' || roleB === 'LW') ? -160 : ((roleB === 'LB') ? -80 : 0)
     const incA = prevWidePlan.leftHolderID === a.playerID ? -50 : 0
     const incB = prevWidePlan.leftHolderID === b.playerID ? -50 : 0
     return (a.currentPOS[0] + aWingBonus + incA) - (b.currentPOS[0] + bWingBonus + incB)
   })
   if (leftCandidates.length > 0) leftHolder = leftCandidates[0]
 
-  // Candidatos derechos: ordenados por cercanía a la banda derecha (prioridad a extremos RM sobre laterales RB)
+  // Candidatos derechos: ordenados por cercanía a la banda derecha (prioridad a extremos RM/EXT sobre laterales RB)
   const rightCandidates = available.filter(p => (p.originPOS[0] >= pitchWidth / 2 || p.currentPOS[0] >= pitchWidth / 2))
   rightCandidates.sort((a, b) => {
     const roleA = a.tacticalRole || a.position
     const roleB = b.tacticalRole || b.position
-    const aWingBonus = (roleA === 'RM') ? -160 : ((roleA === 'RB') ? -80 : 0)
-    const bWingBonus = (roleB === 'RM') ? -160 : ((roleB === 'RB') ? -80 : 0)
+    const aWingBonus = (roleA === 'RM' || roleA === 'EXT' || roleA === 'RW') ? -160 : ((roleA === 'RB') ? -80 : 0)
+    const bWingBonus = (roleB === 'RM' || roleB === 'EXT' || roleB === 'RW') ? -160 : ((roleB === 'RB') ? -80 : 0)
     const incA = prevWidePlan.rightHolderID === a.playerID ? -50 : 0
     const incB = prevWidePlan.rightHolderID === b.playerID ? -50 : 0
     return ((pitchWidth - a.currentPOS[0]) + aWingBonus + incA) - ((pitchWidth - b.currentPOS[0]) + bWingBonus + incB)
@@ -458,6 +475,7 @@ export function assignAttackPlanWithIncumbency(kickingTeam, defendingTeam, match
  */
 export function assignDefensivePlanWithIncumbency(defendingTeam, attackingTeam, matchDetails, isTopTeam) {
   const ball = matchDetails.ball.position
+  const [pitchWidth, pitchHeight] = matchDetails?.pitchSize || [680, 1050]
   const prevPlan = defendingTeam.defensivePlan || {}
   const prevDuties = prevPlan.duties || {}
 
@@ -472,8 +490,12 @@ export function assignDefensivePlanWithIncumbency(defendingTeam, attackingTeam, 
   // 1. Asignar PRESSER exclusivo (jugador más cercano al balón con bono de incumbencia)
   let bestPresser = null
   let minPresserDist = 9999
+  const ballDistToDefGoal = isTopTeam ? ball[1] : (pitchHeight - ball[1])
+
   for (const p of outfielders) {
-    const d = common.distance(p.currentPOS, ball)
+    const isCB = ['CB', 'DFC', 'LÍBERO', 'STOP I', 'STOP D'].includes(p.tacticalRole || p.position) || p.position === 'CB'
+    const cbPressPenalty = (isCB && ballDistToDefGoal > 210) ? 55 : 0
+    const d = common.distance(p.currentPOS, ball) + cbPressPenalty
     const effectiveD = d - ((prevPlan.presserID === p.playerID) ? 22 : 0)
     if (effectiveD < minPresserDist) {
       minPresserDist = effectiveD
@@ -511,11 +533,11 @@ export function assignDefensivePlanWithIncumbency(defendingTeam, attackingTeam, 
   const oppSlots = attackingTeam?.attackPlan?.boxSlots || {}
   const targetThreatIDs = [oppSlots.penaltySpot, oppSlots.nearPost, oppSlots.farPost, oppSlots.cutbackEdge].filter(Boolean)
 
-  // En juego abierto, los centrales deben tomar de forma prioritaria la marca de los delanteros rivales (ST / CF)
+  // En juego abierto, los centrales deben tomar de forma prioritaria la marca de los delanteros rivales (ST / CF / EXT)
   const opponentAttackers = (attackingTeam?.players || []).filter(p => {
     if (!common.isOnPitch(p) || p.position === 'GK') return false
     const r = p.tacticalRole || p.position
-    return r === 'ST' || r === 'CF' || p.position === 'ST'
+    return r === 'ST' || r === 'CF' || r === 'EXT' || p.position === 'ST' || p.position === 'EXT'
   })
 
   for (const fwd of opponentAttackers) {
@@ -536,7 +558,9 @@ export function assignDefensivePlanWithIncumbency(defendingTeam, attackingTeam, 
     for (const p of outfielders) {
       if (takenDefenderIDs.has(p.playerID)) continue
       const role = p.tacticalRole || p.position
-      const roleBonus = (role === 'CB' || role === 'DFC' || role === 'LÍBERO' || role === 'STOP I' || role === 'STOP D') ? -60 : 0
+      const isCentralThreat = Math.abs(oppPlayer.currentPOS[0] - (pitchWidth / 2)) < 130
+      const isCB = (role === 'CB' || role === 'DFC' || role === 'LÍBERO' || role === 'STOP I' || role === 'STOP D' || p.position === 'CB')
+      const roleBonus = (isCB && isCentralThreat) ? -60 : 0
       const d = common.distance(p.currentPOS, oppPlayer.currentPOS) + roleBonus
       // Incumbency: si este defensor ya marcaba a este atacante, fuerte fidelidad de marca (-45px)
       const effectiveD = d - ((prevMarkerID === p.playerID) ? 45 : 0)

@@ -49,6 +49,28 @@ export async function playIteration(matchDetails) {
   validate.validateTeamSecondHalf(matchDetails.secondTeam)
   validate.validatePlayerPositions(matchDetails)
 
+  // Transición de gol: la pelota permanece en la red hasta el festejo y luego se reinicia el saque
+  if (matchDetails.pendingKickoffTeam) {
+    const concedingTeam = matchDetails.pendingKickoffTeam === 'secondTeam' ? matchDetails.secondTeam : matchDetails.kickOffTeam
+    const scoringTeam = matchDetails.pendingKickoffTeam === 'secondTeam' ? matchDetails.kickOffTeam : matchDetails.secondTeam
+    delete matchDetails.pendingKickoffTeam
+    common.removeBallFromAllPlayers(matchDetails)
+    setVariables.resetPlayerPositions(matchDetails)
+    setPositions.setBallSpecificGoalScoreValue(matchDetails, concedingTeam)
+    concedingTeam.intent = 'attack'
+    scoringTeam.intent = 'defend'
+    matchDetails.ball.restartWaitTicks = 6
+    delete matchDetails.endIteration
+    return matchDetails
+  }
+
+  // Pausa visual de pelota parada / gol con los jugadores ya formados en cancha (sin avanzar reloj)
+  if ((matchDetails.ball?.restartWaitTicks || 0) > 0) {
+    matchDetails.ball.restartWaitTicks--
+    delete matchDetails.endIteration
+    return matchDetails
+  }
+
   // Guardar snapshot previo de posiciones para interpolación visual 60fps y transiciones de pelota parada
   matchDetails.prevSnapshot = {
     ball: matchDetails.ball?.position ? matchDetails.ball.position.slice() : [340, 525, 0],
@@ -108,6 +130,10 @@ export async function playIteration(matchDetails) {
     matchDetails.kickOffTeam = playerMovement.movePlayers(koTeamAllOtherMoves, kickOffTeam, secondTeam, matchDetails)
   }
   playerMovement.resolveMutualPlayerSeparation(matchDetails)
+  if (matchDetails.endIteration === true) {
+    delete matchDetails.endIteration
+    return matchDetails
+  }
 
   const allBallMoves = [...koTeamMovesBallMoves, ...stMovesBallMoves]
   const validBallMoves = allBallMoves.filter(m => m.player.hasBall === true)
@@ -194,6 +220,7 @@ export function applyLiveTactics(matchDetails, teamKey, { formationId, mentality
   const slots = getFormationCoordinates(team.formation || '4-4-2', team.mentality || 'balanced', currentSide)
   team.players.forEach((player, idx) => {
     player.playerID = player.playerID || player.id || common.getRandomNumber(1000000000000, 99999999999999999)
+    player.teamID = team.teamID
     if (!player.stats) {
       player.stats = {
         goals: 0,
@@ -224,6 +251,11 @@ export function applyLiveTactics(matchDetails, teamKey, { formationId, mentality
       player.intentPOS = slot.coords.slice()
     }
   })
+  if (Array.isArray(team.bench)) {
+    team.bench.forEach(player => {
+      player.teamID = team.teamID
+    })
+  }
 
   updateTeamEffectiveSkills(team)
   matchDetails.iterationLog.push(`Tactical change applied by ${team.name}: ${team.formation} (${team.mentality})`)
@@ -295,6 +327,7 @@ export function makeSubstitution(matchDetails, teamKey, fieldIndex, benchIndex) 
 
   // Preparar jugador entrante con coordenadas y estructura de partido
   incoming.playerID = incoming.playerID || incoming.id || common.getRandomNumber(1000000000000, 99999999999999999)
+  incoming.teamID = team.teamID
   incoming.baseSkill = incoming.baseSkill || { ...incoming.skill }
   for (const k of Object.keys(incoming.skill)) {
     incoming.skill[k] = Number(incoming.skill[k])

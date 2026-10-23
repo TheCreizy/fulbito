@@ -1373,7 +1373,7 @@ export default function MatchSimulator({
 
     if (activeVarH?.active) {
       const elapsed = now - (activeVarH.startTime || 0)
-      if (elapsed <= (activeVarH.durationMs || 4200)) {
+      if (elapsed <= (activeVarH.durationMs || 4800)) {
         drawVarReplayLines(ctx, activeVarH.varData, true, W, H, padX, padY, playableW, playableH)
       }
     }
@@ -1681,7 +1681,7 @@ export default function MatchSimulator({
 
     if (activeVarV?.active) {
       const elapsed = now - (activeVarV.startTime || 0)
-      if (elapsed <= (activeVarV.durationMs || 4200)) {
+      if (elapsed <= (activeVarV.durationMs || 4800)) {
         drawVarReplayLines(ctx, activeVarV.varData, false, W, H, padX, padY, playableW, playableH)
       }
     }
@@ -1922,6 +1922,10 @@ export default function MatchSimulator({
 
     // Procesar carteles superiores y efectos de sonido
     for (const ev of filteredEvents) {
+      // Suprimir carteles prematuros de remate desviado mientras la pelota sigue viajando hacia el arco
+      if ((ev.type === 'shot' || ev.type === 'penaltyKick') && ((m.ball?.ballOverIterations?.length || 0) > 0)) {
+        continue
+      }
       const bannerObj = buildPitchBannerFromEvent(ev, minLabel)
       if (bannerObj) showPitchEventBanner(bannerObj)
 
@@ -1977,11 +1981,11 @@ export default function MatchSimulator({
           varData,
           ev,
           startTime: performance.now(),
-          durationMs: speed === 'x4' ? 1800 : 4200
+          durationMs: speed === 'x4' ? 2400 : 4800
         }
         varReplayRef.current = replayObj
         setVarReplay(replayObj)
-        const varDuration = speed === 'x4' ? 1800 : 4200
+        const varDuration = speed === 'x4' ? 2400 : 4800
         if (varTimeoutRef.current) clearTimeout(varTimeoutRef.current)
         varTimeoutRef.current = setTimeout(() => {
           varReplayRef.current = null

@@ -137,15 +137,17 @@ export function sumFrom1toX(x) {
 
 export function inTopPenalty(matchDetails, item) {
   const [matchWidth, matchHeight] = matchDetails.pitchSize
-  const ballInPenaltyBoxX = isBetween(item[0], (matchWidth / 4) + 5, matchWidth - (matchWidth / 4) - 5)
-  const ballInTopPenaltyBoxY = isBetween(item[1], -1, (matchHeight / 6) + 7)
+  const boxDepthY = Math.round(matchHeight * (16.5 / 105)) - 3 // 162px (adentro de la línea reglamentaria de 165px)
+  const ballInPenaltyBoxX = isBetween(item[0], (matchWidth / 4) + 8, matchWidth - (matchWidth / 4) - 8)
+  const ballInTopPenaltyBoxY = isBetween(item[1], -1, boxDepthY)
   return !!(ballInPenaltyBoxX && ballInTopPenaltyBoxY)
 }
 
 export function inBottomPenalty(matchDetails, item) {
   const [matchWidth, matchHeight] = matchDetails.pitchSize
-  const ballInPenaltyBoxX = isBetween(item[0], (matchWidth / 4) + 5, matchWidth - (matchWidth / 4) - 5)
-  const ballInBottomPenaltyBoxY = isBetween(item[1], matchHeight - (matchHeight / 6) - 7, matchHeight + 1)
+  const boxDepthY = Math.round(matchHeight * (16.5 / 105)) - 3 // 162px
+  const ballInPenaltyBoxX = isBetween(item[0], (matchWidth / 4) + 8, matchWidth - (matchWidth / 4) - 8)
+  const ballInBottomPenaltyBoxY = isBetween(item[1], matchHeight - boxDepthY, matchHeight + 1)
   return !!(ballInPenaltyBoxX && ballInBottomPenaltyBoxY)
 }
 
