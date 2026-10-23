@@ -212,23 +212,32 @@ export function steerTowardsTarget(player, targetPOS, step, team, pitchSize) {
   let vx = (dx / dist) * Math.min(effectiveStep, dist)
   let vy = (dy / dist) * Math.min(effectiveStep, dist)
 
-  // Separación para mantener líneas de pase y evitar "racimo de uvas" (36px)
-  if (team && Array.isArray(team.players)) {
+  // Separación suave para mantener líneas de pase y evitar aglomeraciones (solo si no está asentado en destino)
+  if (dist > 12 && team && Array.isArray(team.players)) {
     for (const mate of team.players) {
       if (!common.isOnPitch(mate) || mate.playerID === player.playerID) continue
       const mx = player.currentPOS[0] - mate.currentPOS[0]
       const my = player.currentPOS[1] - mate.currentPOS[1]
-      const mDist = Math.sqrt(mx * mx + my * my)
-      if (mDist > 0 && mDist < 36) {
-        const push = ((36 - mDist) / 36) * 2.2
+      const mDist = Math.hypot(mx, my)
+      if (mDist > 0 && mDist < 28) {
+        const push = ((28 - mDist) / 28) * 1.2
         vx += (mx / mDist) * push
         vy += (my / mDist) * push
       }
     }
   }
 
-  const finalDx = Math.max(-step, Math.min(step, Math.round(vx)))
-  const finalDy = Math.max(-step, Math.min(step, Math.round(vy)))
+  let finalDx = Math.max(-step, Math.min(step, Math.round(vx)))
+  let finalDy = Math.max(-step, Math.min(step, Math.round(vy)))
+
+  // Evitar detención prematura por redondeo si aún no llegó al objetivo
+  if (finalDx === 0 && finalDy === 0 && dist >= 2) {
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      finalDx = dx > 0 ? 1 : -1
+    } else {
+      finalDy = dy > 0 ? 1 : -1
+    }
+  }
   const nextX = player.currentPOS[0] + finalDx
   const nextY = player.currentPOS[1] + finalDy
   return [

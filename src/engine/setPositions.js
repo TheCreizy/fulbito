@@ -1211,12 +1211,18 @@ export function computeTeamGamePhase(team, matchDetails, inPossession) {
   return 'MidBlock'
 }
 
-export function setIntentPosition(matchDetails, closestPlayer) {
-  if (!closestPlayer) return
+export function setIntentPosition(matchDetails, closestPlayer = null) {
   const { ball, kickOffTeam, secondTeam } = matchDetails
+  if (!ball || !kickOffTeam || !secondTeam) return
   const kickOffTeamCheck = kickOffTeam.players.find(thisPlayer => thisPlayer.playerID === ball.Player)
   const secondTeamCheck = secondTeam.players.find(thisPlayer => thisPlayer.playerID === ball.Player)
-  const kickTeam = kickOffTeamCheck ? kickOffTeam : (secondTeamCheck ? secondTeam : 'none')
+  let kickTeam = kickOffTeamCheck ? kickOffTeam : (secondTeamCheck ? secondTeam : 'none')
+
+  // Si la pelota viaja por un pase/centro activo, mantener la estructura de ataque y defensa
+  if (kickTeam === 'none' && ball.isPendingPass && ball.lastTouch?.teamID) {
+    if (ball.lastTouch.teamID === kickOffTeam.teamID) kickTeam = kickOffTeam
+    else if (ball.lastTouch.teamID === secondTeam.teamID) kickTeam = secondTeam
+  }
   const defendingTeam = (kickTeam === 'none') ? 'none' : (kickTeam.teamID === kickOffTeam.teamID ? secondTeam : kickOffTeam)
 
   // Asignar GamePhases a ambos equipos (open-football model)
@@ -1252,7 +1258,9 @@ function setLooseintentPOS(matchDetails, thisTeam, closestPlayer) {
       continue
     }
 
-    if (closestPlayer && player.playerID === closestPlayer.playerID) {
+    const isClosest = (thisTeam.closestPlayerID && player.playerID === thisTeam.closestPlayerID) ||
+      (closestPlayer && player.playerID === closestPlayer.playerID)
+    if (isClosest) {
       player.intentPOS = [ball.position[0], ball.position[1]]
       continue
     }
@@ -1328,17 +1336,22 @@ function setDefenceRelativePos(matchDetails, defendingTeam, closestPlayer, attac
       continue
     }
 
-    // C. MARKERS: Defensores tomando la marca personal en el área
+    // C. MARKERS: Marcaje mixto (solo sigue al atacante si está en zona peligrosa y cerca de su sector)
     if (playerDuty.duty === 'Mark' && playerDuty.targetID) {
       const oppPlayer = attackingTeam?.players?.find(op => op.playerID === playerDuty.targetID)
       if (oppPlayer && common.isOnPitch(oppPlayer)) {
-        const markX = oppPlayer.currentPOS[0]
-        const markY = oppPlayer.currentPOS[1] + goalDirY * 12
-        player.intentPOS = [
-          Math.max(35, Math.min(pitchWidth - 35, markX)),
-          isTopTeam ? Math.max(35, markY) : Math.min(pitchHeight - 35, markY)
-        ]
-        continue
+        const distOppToGoalY = isTopTeam ? oppPlayer.currentPOS[1] : (pitchHeight - oppPlayer.currentPOS[1])
+        const lateralDeviation = Math.abs(oppPlayer.currentPOS[0] - anchor[0])
+        // Solo tomar marca personal estricta si el atacante está en el último tercio (< 290px) y en su carril (< 115px)
+        if (distOppToGoalY < 290 && lateralDeviation < 115) {
+          const markX = oppPlayer.currentPOS[0] * 0.75 + anchor[0] * 0.25
+          const markY = oppPlayer.currentPOS[1] + goalDirY * 14
+          player.intentPOS = [
+            Math.max(35, Math.min(pitchWidth - 35, markX)),
+            isTopTeam ? Math.max(32, markY) : Math.min(pitchHeight - 32, markY)
+          ]
+          continue
+        }
       }
     }
 
@@ -1356,10 +1369,9 @@ function setDefenceRelativePos(matchDetails, defendingTeam, closestPlayer, attac
       const cuttingAttacker = attackingTeam?.players?.find(op => {
         if (!common.isOnPitch(op) || op.position === 'GK') return false
         const isAttackerRole = ['ST', 'CF', 'CAM', 'LM', 'RM'].includes(op.tacticalRole || op.position)
-        const isDiagonalRun = op.offBallRun?.type === 'diagonalRun'
-        const inCentralChannel = Math.abs(op.currentPOS[0] - pitchWidth / 2) < 180
+        const isDiagonalRun = op.offBallRun?.type === 'diagonalRun' || op.offBallRun?.type === 'diagonalInBehind' || op.offBallRun?.type === 'diagonalCutInside'
         const distY = isTopTeam ? (op.currentPOS[1] - player.currentPOS[1]) : (player.currentPOS[1] - op.currentPOS[1])
-        return isAttackerRole && (isDiagonalRun || inCentralChannel) && distY > -40 && distY < 260 && Math.abs(op.currentPOS[0] - player.currentPOS[0]) < 170
+        return isAttackerRole && isDiagonalRun && distY > -40 && distY < 260 && Math.abs(op.currentPOS[0] - player.currentPOS[0]) < 170
       })
 
       if (cuttingAttacker && ['CB', 'DFC', 'LÍBERO', 'STOP I', 'STOP D'].includes(role)) {
@@ -1540,6 +1552,11 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
       continue
     }
 
+    if (ball.isPendingPass && ball.targetPlayerID === player.playerID && Array.isArray(ball.targetPOS)) {
+      player.intentPOS = [...ball.targetPOS]
+      continue
+    }
+
     const anchor = anchors[player.playerID] || player.originPOS
     const role = player.tacticalRole || player.position
     const isWide = ['LM', 'RM', 'LB', 'RB'].includes(role)
@@ -1593,14 +1610,19 @@ function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
       continue
     }
 
-    // C. WidePlan: Touchline Holder (extremo/lateral manteniendo amplitud en la cal)
+    // C. WidePlan: Touchline Holder (si el lateral de su banda desdobla por fuera, el extremo se cierra al carril interior)
     if (widePlan.active && (widePlan.leftHolderID === player.playerID || widePlan.rightHolderID === player.playerID)) {
       const isLeft = widePlan.leftHolderID === player.playerID
-      const touchlineX = isLeft ? 40 : (pitchWidth - 40)
-      // Avanzar con la línea de la jugada manteniendo la línea de cal
+      const isSameFlankOverlapping = Boolean(
+        widePlan.overlapRunnerID &&
+        ((isLeft && widePlan.ballFlank === 'left') || (!isLeft && widePlan.ballFlank === 'right'))
+      )
+      const targetX = isSameFlankOverlapping
+        ? (isLeft ? 115 : (pitchWidth - 115)) // Deja el carril externo al lateral y ocupa el half-space
+        : (isLeft ? 40 : (pitchWidth - 40)) // Fija amplitud contra la raya
       const advancedY = isTopTeam ? Math.max(anchor[1], ball.position[1] - 30) : Math.min(anchor[1], ball.position[1] + 30)
       const holderY = clampOnsideY(isAttackingPhase ? advancedY : anchor[1])
-      player.intentPOS = [touchlineX, holderY]
+      player.intentPOS = [targetX, holderY]
       continue
     }
 

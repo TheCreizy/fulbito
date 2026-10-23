@@ -196,7 +196,9 @@ export function updateTeamCoachDirectives(matchDetails) {
   }
   // Sincronizar la mentalidad efectiva para el motor táctico si no fue forzada manualmente
   if (!kickOffTeam.manualMentalityLock) {
-    kickOffTeam.mentality = cfg1.mentalityEquivalent
+    kickOffTeam.mentality = (instr1 === 'Normal')
+      ? (kickOffTeam.initialMentality || 'balanced')
+      : cfg1.mentalityEquivalent
   }
 
   // 2. Evaluar Equipo 2
@@ -209,6 +211,8 @@ export function updateTeamCoachDirectives(matchDetails) {
     lastUpdateIter: currentIter
   }
   if (!secondTeam.manualMentalityLock) {
-    secondTeam.mentality = cfg2.mentalityEquivalent
+    secondTeam.mentality = (instr2 === 'Normal')
+      ? (secondTeam.initialMentality || 'balanced')
+      : cfg2.mentalityEquivalent
   }
 }

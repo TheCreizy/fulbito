@@ -28,6 +28,8 @@ export async function initiateGame(team1, team2, pitchDetails) {
       if (p.intentPOS[1] < centerY + 65) p.intentPOS[1] = centerY + 65
     }
   }
+  kickOffTeam.initialMentality = kickOffTeam.mentality || 'balanced'
+  secondTeam.initialMentality = secondTeam.mentality || 'balanced'
   matchDetails.kickOffTeam = kickOffTeam
   matchDetails.secondTeam = secondTeam
   return matchDetails
@@ -91,6 +93,7 @@ export async function playIteration(matchDetails) {
 
   playerMovement.closestPlayerToBall(closestPlayerA, kickOffTeam, matchDetails)
   playerMovement.closestPlayerToBall(closestPlayerB, secondTeam, matchDetails)
+  setPositions.setIntentPosition(matchDetails)
   const koTeamMoves = playerMovement.decideMovement(closestPlayerA, kickOffTeam, secondTeam, matchDetails)
   const stMoves = playerMovement.decideMovement(closestPlayerB, secondTeam, kickOffTeam, matchDetails)
   const koTeamMovesBallMoves = actions.extractBallActions(koTeamMoves, 'ball')

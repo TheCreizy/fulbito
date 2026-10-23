@@ -19,7 +19,8 @@
     "test:defensive-open-manager": "node tests/verifyDefensiveAndBehavioralOpenManager.js",
     "test:attributes-fatigue-goals": "node tests/verifyAttributesFatigueAndGoals.js",
     "test:var-kickoff-jamming": "node tests/verifyVarKickoffAndJammingFixes.js",
-    "test": "node tests/verifyEngineAndDraft.js && node tests/verifyFutDraft.js && node tests/verifyTacticalAndSetPieces.js && node tests/verifyGameplayRebalance.js && node tests/verifyOffsideAndTacticalStoppages.js && node tests/verifyCornersPenaltiesThroughBallsCrosses.js && node tests/verifySetPiecesAdvanced.js && node tests/verifyReboundsAndSetPiecesFixes.js && node tests/verifyDefensiveAndBehavioralOpenManager.js && node tests/verifyAttributesFatigueAndGoals.js && node tests/verifyVarKickoffAndJammingFixes.js"
+    "test:argon-optimizations": "node tests/verifyGeminiArgonOptimizations.js",
+    "test": "node tests/verifyEngineAndDraft.js && node tests/verifyFutDraft.js && node tests/verifyTacticalAndSetPieces.js && node tests/verifyGameplayRebalance.js && node tests/verifyOffsideAndTacticalStoppages.js && node tests/verifyCornersPenaltiesThroughBallsCrosses.js && node tests/verifySetPiecesAdvanced.js && node tests/verifyReboundsAndSetPiecesFixes.js && node tests/verifyDefensiveAndBehavioralOpenManager.js && node tests/verifyAttributesFatigueAndGoals.js && node tests/verifyVarKickoffAndJammingFixes.js && node tests/verifyGeminiArgonOptimizations.js"
   },
   "dependencies": {
     "react": "^18.3.1",

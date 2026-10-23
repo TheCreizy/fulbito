@@ -845,6 +845,28 @@ export function throughBall(matchDetails, team, player) {
   const targetPlayer = candidates[0]
   matchDetails.iterationLog.push(`through ball target: ${targetPlayer.name}`)
 
+  // Gestión de Pared ("One-Two Wall Pass")
+  if (
+    matchDetails.wallPass &&
+    matchDetails.wallPass.wallPartnerID === player.playerID &&
+    currentIter <= matchDetails.wallPass.expireIter
+  ) {
+    const origPasserName = matchDetails.wallPass.passerName
+    matchDetails.iterationLog.push(`One-two wall pass by: ${origPasserName} with ${player.name}`)
+    if (Array.isArray(matchDetails.events)) {
+      matchDetails.events.push({
+        type: 'oneTwoPass',
+        teamID: team.teamID,
+        teamName: team.name,
+        playerName: origPasserName,
+        receiverName: player.name,
+        iteration: currentIter,
+        half: matchDetails.half
+      })
+    }
+    matchDetails.wallPass = null
+  }
+
   // Calcular el punto de encuentro en carrera (al vacío adelante del receptor o hacia su diagonal activa)
   const passDist = common.distance(ballPos, targetPlayer.position)
   let leadX = targetPlayer.position[0]
@@ -1025,11 +1047,15 @@ export function resolveBallMovement(player, matchDetails) {
   const checkPos = [common.round(nextPos[0], 0), common.round(nextPos[1], 0), nextPos[2] || 0]
   const playerInfo1 = setPositions.closestPlayerToPosition(player, kickOffTeam, checkPos)
   const playerInfo2 = setPositions.closestPlayerToPosition(player, secondTeam, checkPos)
-  const isTeam1Closer = playerInfo1.proxToBall <= playerInfo2.proxToBall
-  const thisPlayer = isTeam1Closer ? playerInfo1.thePlayer : playerInfo2.thePlayer
-  const thisTeam = isTeam1Closer ? kickOffTeam : secondTeam
+  const Ordered = playerInfo1.proxToBall <= playerInfo2.proxToBall
+    ? [{ p: playerInfo1.thePlayer, t: kickOffTeam }, { p: playerInfo2.thePlayer, t: secondTeam }]
+    : [{ p: playerInfo2.thePlayer, t: secondTeam }, { p: playerInfo1.thePlayer, t: kickOffTeam }]
 
-  if (thisPlayer) thisPlayerIsInProximity(matchDetails, thisPlayer, ballPos, nextPos, ballPow, thisTeam)
+  for (const item of Ordered) {
+    if (item.p && !matchDetails.endIteration) {
+      thisPlayerIsInProximity(matchDetails, item.p, ballPos, nextPos, ballPow, item.t)
+    }
+  }
   matchDetails.ball.velocity = [nextPos[0] - ballPos[0], nextPos[1] - ballPos[1]]
   matchDetails.ball.position = nextPos
   return [common.round(nextPos[0], 2), common.round(nextPos[1], 2), common.round(nextPos[2] || 0, 2)]
@@ -1525,13 +1551,13 @@ export function ballPassed(matchDetails, team, player) {
       wallPartnerID: targetPlayer.playerID,
       wallPartnerName: targetPlayer.name,
       startIter: currentIter,
-      expireIter: currentIter + 12
+      expireIter: currentIter + 22
     }
     player.offBallRun = {
       type: 'wallReturnRun',
       targetX: Math.max(30, Math.min(pitchWidth - 30, targetPlayer.position[0] + (targetPlayer.position[0] >= player.currentPOS[0] ? 35 : -35))),
       targetY: Math.max(30, Math.min(pitchHeight - 30, targetPlayer.position[1] + (dir * 75))),
-      untilIteration: currentIter + 12
+      untilIteration: currentIter + 22
     }
     player.intentPOS = [player.offBallRun.targetX, player.offBallRun.targetY]
   }
@@ -1599,8 +1625,6 @@ export function ballPassed(matchDetails, team, player) {
   const calcHeight = parseInt(player.height, 10) + parseInt((player.skill.jumping || 0), 10)
   const bodyPart = setAttackBodyPart(matchDetails.ball.position, calcHeight)
   matchDetails.ball.lastTouch.bodyPart = bodyPart
-  matchDetails.ball.lastTouch.shotType = 'penalty'
-  matchDetails.ball.lastTouch.goalDetail = 'De penal'
   const kickType = isSwitchOfPlay ? 'switch' : 'pass'
   const isSprintingPass = !!(player.isSprinting || (player.sprintMomentum || 0) > 0.35)
   const isLanzadorPass = Array.isArray(player.traits) && player.traits.includes('lanzador_canonero')
@@ -1706,9 +1730,9 @@ export function passScoreOption(p, aTop, ballPos, maxDistance, styleCfg, pitchWi
     if (consecutiveSwitches === 1) switchPenalty = 130
     else if (consecutiveSwitches >= 2) switchPenalty = 460
     score += (isLanzador ? 48 : 28) * (styleCfg?.switchBoost || 0.95) - switchPenalty
-    if (p.laneBlocked) score -= 115
+    if (p.laneBlocked) score -= 260
   } else {
-    if (p.laneBlocked) score -= 115
+    if (p.laneBlocked) score -= 260
     // Preferir distancias naturales de asociación (65px a 240px) cuando no es cambio de frente
     if (d < 34) score -= 22
     else if (d > 290) score -= (d - 290) * 0.35
@@ -1772,6 +1796,28 @@ export function ballCrossed(matchDetails, team, player) {
   const dir = aTop ? -1 : 1
   const opposition = (team.teamID === matchDetails.kickOffTeam.teamID) ? matchDetails.secondTeam : matchDetails.kickOffTeam
   const currentIter = matchDetails.iterationCount || 0
+
+  // Gestión de Pared ("One-Two Wall Pass"): el socio devuelve en profundidad
+  if (
+    matchDetails.wallPass &&
+    matchDetails.wallPass.wallPartnerID === player.playerID &&
+    currentIter <= matchDetails.wallPass.expireIter
+  ) {
+    const origPasserName = matchDetails.wallPass.passerName
+    matchDetails.iterationLog.push(`One-two wall pass by: ${origPasserName} with ${player.name}`)
+    if (Array.isArray(matchDetails.events)) {
+      matchDetails.events.push({
+        type: 'oneTwoPass',
+        teamID: team.teamID,
+        teamName: team.name,
+        playerName: origPasserName,
+        receiverName: player.name,
+        iteration: currentIter,
+        half: matchDetails.half
+      })
+    }
+    matchDetails.wallPass = null
+  }
   const teammates = getPlayersInDistance(team, player, pitchSize, opposition, currentIter)
 
   // Buscar compañeros que estén pisando o cargando el área rival para tirarles el centro a la cabeza/pie

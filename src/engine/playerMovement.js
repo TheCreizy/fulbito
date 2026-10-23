@@ -614,11 +614,22 @@ export function checkProvidedAction(matchDetails, thisPlayer, action) {
     return action
   }
 
+  if (thisPlayer.playerID !== matchDetails.ball.Player) {
+    if (ballActions.includes(action)) return 'run'
+    if (matchDetails.ball.withTeam === (thisPlayer.teamID || '') && ['tackle', 'slide', 'intercept'].includes(action)) {
+      return 'run'
+    }
+  }
+
   const providedAction = thisPlayer.action ? thisPlayer.action : 'unassigned'
   if (providedAction === 'none') return action
   if (allActions.includes(providedAction)) {
     if (thisPlayer.playerID !== matchDetails.ball.Player) {
       if (ballActions.includes(providedAction)) {
+        thisPlayer.action = 'none'
+        return 'run'
+      }
+      if (matchDetails.ball.withTeam === (thisPlayer.teamID || '') && ['tackle', 'slide', 'intercept'].includes(providedAction)) {
         thisPlayer.action = 'none'
         return 'run'
       }
@@ -944,8 +955,10 @@ export function getSprintMovement(matchDetails, player, ballX, ballY, team, oppo
     }
   }
 
-  // Si es el jugador que presiona o busca una pelota a menos de 75px, ir hacia la pelota con vector suave
-  if (common.isBetween(ballX, -75, 75) && common.isBetween(ballY, -75, 75)) {
+  // Si es el jugador que presiona o disputa pelota suelta cercana, ir hacia el balón
+  const isPresser = team?.defensivePlan?.presserID === player.playerID
+  const isLooseBallNear = !matchDetails.ball.withPlayer && Math.hypot(ballX, ballY) < 65
+  if ((isPresser || isLooseBallNear) && matchDetails.ball.withTeam !== team?.teamID) {
     return steerTowardsTarget(player, matchDetails.ball.position, step, team, matchDetails.pitchSize)
   }
   const target = Array.isArray(player.intentPOS) ? player.intentPOS : player.originPOS
@@ -971,7 +984,9 @@ export function closestPlayerToBall(closestPlayer, team, matchDetails) {
     closestPlayer.name = closestPlayerDetails.name
     closestPlayer.position = 0
   }
-  setPositions.setIntentPosition(matchDetails, closestPlayerDetails)
+  team.closestPlayerID = closestPlayerDetails.playerID
+  closestPlayer.playerID = closestPlayerDetails.playerID
+  closestPlayer.thePlayer = closestPlayerDetails
   matchDetails.iterationLog.push(`Closest Player to ball: ${closestPlayerDetails.name}`)
 }
 

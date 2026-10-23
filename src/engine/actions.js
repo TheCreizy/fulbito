@@ -79,6 +79,7 @@ export function scanCarrierEnvironment(matchDetails, player, team, opposition) {
   let hasRunnerInBehind = false
   let hasSwitchOption = false
   let hasBetterPositionedMate = false
+  let hasCentralMateOpen = false
   let hasBoxTarget = false
   let hasCutbackOption = false
   let hasOverlapRunnerOutside = false
@@ -113,6 +114,10 @@ export function scanCarrierEnvironment(matchDetails, player, team, opposition) {
     }
     if (!laneBlocked && forwardGain >= 40 && minOppToMate > 24) {
       hasBetterPositionedMate = true
+    }
+    const isCentralMate = Math.abs(mX - pitchWidth / 2) <= 140
+    if (!laneBlocked && isCentralMate && forwardGain >= 10 && minOppToMate > 24) {
+      hasCentralMateOpen = true
     }
     const consecutiveSwitches = matchDetails?.ball?.consecutiveSwitches || 0
     if (consecutiveSwitches < 2 && Math.abs(mX - curX) >= 230 && (mX < 185 || mX > pitchWidth - 185) && minOppToMate > 38 && forwardGain > -35) {
@@ -175,6 +180,7 @@ export function scanCarrierEnvironment(matchDetails, player, team, opposition) {
     hasRunnerInBehind,
     hasSwitchOption,
     hasBetterPositionedMate,
+    hasCentralMateOpen,
     hasBoxTarget,
     hasCutbackOption,
     hasOverlapRunnerOutside,
@@ -346,7 +352,7 @@ function computeBaseCarrierDecision(matchDetails, player, team, opposition, env)
 
     // EFECTO "BAIT": Si el extremo o lateral arrastra la marca hacia la cal y deja un hueco interior
     // en el carril central con un volante o delantero libre de frente al arco, filtrar el pase directo al área
-    if (env.hasBetterPositionedMate && inCentralCorridor && !env.shotBlocked && env.distToGoalY > 150) {
+    if (env.hasCentralMateOpen && !env.shotBlocked && env.distToGoalY > 150) {
       const baitInsideThrough = Math.round(62 * styleCfg.throughBoost)
       return [0, baitInsideThrough, 22, 0, 0, 0, 0, 6, 10, 0, 0, 0]
     }
@@ -511,12 +517,13 @@ function computeBaseCarrierDecision(matchDetails, player, team, opposition, env)
   // "PARA LA PELOTA" (wait) para permitir que los laterales suban y los compañeros tiren diagonales
   // (NO aplica si el carril de banda o frontal está libre para galopar)
   if (carrierTicks <= 4 && env.nearestOppDist > 25 && env.distToGoalY > 210 && !env.hasFlankRunway && !env.hasOpenRunway && env.nearestOppAheadDist < 35) {
-    const pauseWeight = (styleCfg.id === 'tikiTaka' || team?.mentality === 'balanced') ? 48 : 34
+    const pauseWeight = (styleCfg.id === 'tikiTaka') ? 22 : 12
     const throughInStride = (env.hasRunnerInBehind && (!inOwnHalf || allowLongBallFromDeep))
       ? Math.round((isLongPassSpecialist ? 24 : 16) * styleCfg.throughBoost)
       : 2
-    const passOption = 28
-    return [0, throughInStride, passOption, 0, 0, 0, 0, 22, 20, 0, 0, pauseWeight]
+    const passOption = 34
+    const carryRun = 30
+    return [0, throughInStride, passOption, 0, 0, 0, 0, carryRun, 20, 0, 0, pauseWeight]
   }
 
   // Si tiene espacio libre adelante (nearestOppAheadDist > 34 y nearestOppDist > 20), avanza con la pelota
@@ -590,18 +597,42 @@ export function checkOppositionBelow(closePlayerPosition, currentPOS) {
 export function playerDoesNotHaveBall(player, ballX, ballY, ballZ, matchDetails) {
   const [pitchWidth, pitchHeight] = matchDetails.pitchSize
   const { position, currentPOS, originPOS } = player
-  if (position === 'GK') return [0, 0, 0, 0, 0, 0, 0, 60, 40, 0, 0]
+  if (position === 'GK') return [0, 0, 0, 0, 0, 0, 0, 60, 40, 0, 0, 0]
+
+  const myTeam = matchDetails.kickOffTeam.players.some(p => p.playerID === player.playerID)
+    ? matchDetails.kickOffTeam
+    : matchDetails.secondTeam
+  const teamHasBall = matchDetails.ball.withPlayer && matchDetails.ball.withTeam === myTeam.teamID
+
+  // 1. NUESTRO EQUIPO TIENE LA PELOTA: prohibido taclear o interceptar a compañeros.
+  // Moverse hacia el espacio táctico (intentPOS / BoxSlots / apoyo).
+  if (teamHasBall) {
+    const hasActiveRun = player.offBallRun && player.offBallRun.untilIteration > (matchDetails.iterationCount || 0)
+    if (hasActiveRun) return [0, 0, 0, 0, 0, 0, 0, 15, 85, 0, 0, 0]
+    return [0, 0, 0, 0, 0, 0, 0, 75, 25, 0, 0, 0]
+  }
+
+  // 2. PELOTA SUELTA: disputan los más cercanos (< 38px)
+  const distToBall = Math.hypot(ballX, ballY)
+  if (!matchDetails.ball.withPlayer) {
+    if (distToBall < 38) return [0, 0, 0, 0, 0, 65, 0, 0, 35, 0, 0, 0]
+    return [0, 0, 0, 0, 0, 0, 0, 65, 35, 0, 0, 0]
+  }
+
+  // 3. RIVAL CON PELOTA: respetar el rol asignado en defensivePlan (Press, Cover, Mark, HoldZone)
+  const defDuty = myTeam.defensivePlan?.duties?.[player.playerID]?.duty || 'HoldZone'
+  if (defDuty !== 'Press' && distToBall > 22) {
+    // Jugadores en Cover, Mark o HoldZone mantienen su posición/marca en vez de perseguir la pelota
+    return [0, 0, 0, 0, 0, 0, 0, 70, 30, 0, 0, 0]
+  }
+
   if (common.isBetween(ballX, -20, 20) && common.isBetween(ballY, -20, 20)) {
     return noBallNotGK2CloseBall(matchDetails, currentPOS, originPOS, pitchWidth, pitchHeight)
   }
   if (common.isBetween(ballX, -40, 40) && common.isBetween(ballY, -40, 40)) {
     return noBallNotGK4CloseBall(matchDetails, currentPOS, originPOS, pitchWidth, pitchHeight)
   }
-  if (common.isBetween(ballX, -80, 80) && common.isBetween(ballY, -80, 80)) {
-    if (matchDetails.ball.withPlayer === false) return [0, 0, 0, 0, 0, 0, 0, 60, 40, 0, 0]
-    return [0, 0, 0, 0, 0, 40, 0, 30, 30, 0, 0]
-  }
-  return [0, 0, 0, 0, 0, 10, 0, 50, 30, 0, 0]
+  return [0, 0, 0, 0, 0, 35, 0, 30, 35, 0, 0, 0]
 }
 
 export function noBallNotGK4CloseBall(matchDetails, currentPOS, originPOS, pitchWidth, pitchHeight) {
@@ -722,7 +753,9 @@ export function populatePossibleActions(possibleActions, player, matchDetails, a
 
   // Regla IFAB: Ejecutor de pelota parada no puede salir conduciendo
   const isRestartCarrier = Boolean(
-    matchDetails?.ball?.isRestart && matchDetails?.ball?.Player === player.playerID
+    matchDetails?.ball?.isRestart &&
+    matchDetails?.ball?.Player === player.playerID &&
+    !(matchDetails?.kickoffRetentionTicks > 0 && !player.isKickoffPass)
   )
   if (isRestartCarrier) {
     runPts = 0
@@ -1103,8 +1136,8 @@ function adjustForBallHeight(actions, player, matchDetails) {
       actions[3].points = 0
       actions[4].points = 0
       actions[6].points = 0
-      actions[9].points += 25
-      actions[10].points += 25
+      actions[7].points += 25
+      actions[8].points += 25
       return actions
     }
     const rawFactor = 1 - (ballZ / aerialMax)
@@ -1113,8 +1146,8 @@ function adjustForBallHeight(actions, player, matchDetails) {
     actions[1].points *= heightFactor
     actions[2].points *= heightFactor
     actions[3].points *= heightFactor
-    actions[9].points += 15 * (1 - heightFactor)
-    actions[10].points += 10 * (1 - heightFactor)
+    actions[7].points += 15 * (1 - heightFactor)
+    actions[8].points += 10 * (1 - heightFactor)
     return actions
   }
   if (withPlayer === true && matchDetails.ball.Player === player.playerID && ballZ > groundMax) {
