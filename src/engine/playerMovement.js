@@ -373,20 +373,24 @@ export function movePlayers(moves, team, opp, matchDetails) {
       if (matchDetails.ball?.isRestart) continue
 
       const role = thisPlayer.tacticalRole || thisPlayer.position
-      const isAttacker = role === 'ST' || role === 'CAM' || thisPlayer.position === 'ST'
-      const autoChallengeChance = isAttacker ? 10 : 52
-      if (samePositionAsBall) {
-        if (withPlayer === true && thisPlayer.hasBall === false && withTeam !== team.teamID) {
-          if (action === 'slide' && !isAttacker) matchDetails = completeSlide(matchDetails, thisPlayer, team, opp)
-          else if (action === 'tackle' && !isAttacker) matchDetails = completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, opp)
-          else if (common.getRandomNumber(0, 100) < autoChallengeChance) matchDetails = completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, opp)
-        } else if (withPlayer === false) {
-          setClosePlayerTakesBall(matchDetails, thisPlayer, team, opp)
+      const isAttacker = ['ST', 'CF', 'RW', 'LW', 'CAM', 'EXT'].includes(role) || thisPlayer.position === 'ST'
+      const isDefenderOrMid = ['CB', 'LB', 'RB', 'CDM', 'CM', 'DFC', 'LÍBERO', 'STOP I', 'STOP D', 'LI', 'LD'].includes(role)
+
+      if (closeWithPlayer) {
+        setClosePlayerTakesBall(matchDetails, thisPlayer, team, opp)
+      } else if (action === 'tackle') {
+        matchDetails = completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, opp)
+      } else if (action === 'slide') {
+        matchDetails = completeSlide(matchDetails, thisPlayer, team, opp)
+      } else if (samePositionAsBall) {
+        // Contacto directo cuerpo a cuerpo (< 8px): el defensor siempre disputa
+        const autoChallengeChance = isAttacker ? 30 : (isDefenderOrMid ? 88 : 65)
+        if (common.getRandomNumber(0, 100) < autoChallengeChance) {
+          matchDetails = completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, opp)
         }
-      } else if (withPlayer === true && thisPlayer.hasBall === false && withTeam !== team.teamID) {
-        if (action === 'slide' && !isAttacker) matchDetails = completeSlide(matchDetails, thisPlayer, team, opp)
-        else if (action === 'tackle' && !isAttacker) matchDetails = completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, opp)
-        else if (!isAttacker && common.getRandomNumber(0, 100) < 36) matchDetails = completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, opp)
+      } else if (!isAttacker && common.getRandomNumber(0, 100) < (isDefenderOrMid ? 68 : 45)) {
+        // En zona de disputa (< 22px), el defensor mete la pierna aunque viniera corriendo con 'run'/'sprint'
+        matchDetails = completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, opp)
       } else if (withPlayer === false && xPosition && yPosition) {
         setClosePlayerTakesBall(matchDetails, thisPlayer, team, opp)
       }

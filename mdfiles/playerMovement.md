@@ -2,8 +2,8 @@
 
 > **Categoría:** `Física y Cinemática`  
 > **Ubicación:** `src/engine/playerMovement.js`  
-> **Líneas de código:** 1184  
-> **Tamaño:** 54.92 KB
+> **Líneas de código:** 1188  
+> **Tamaño:** 54.87 KB
 
 ---
 
@@ -17,38 +17,38 @@ Gestiona la velocidad, aceleración, desaceleración, fatiga acumulada en cada t
 
 - **Línea 8:** `export function decideMovement(closestPlayer, team, opp, matchDetails)`
 - **Línea 320:** `export function movePlayers(moves, team, opp, matchDetails)`
-- **Línea 398:** `export function executeBallAction(move, team, opp, matchDetails)`
-- **Línea 411:** `export function setClosePlayerTakesBall(matchDetails, thisPlayer, team, opp)`
-- **Línea 516:** `export function completeSlide(matchDetails, thisPlayer, team, opp)`
-- **Línea 538:** `export function completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, opp)`
-- **Línea 582:** `export function closestPlayerActionBallX(ballToPlayerX)`
-- **Línea 590:** `export function closestPlayerActionBallY(ballToPlayerY)`
-- **Línea 598:** `export function checkProvidedAction(matchDetails, thisPlayer, action, team)`
-- **Línea 653:** `export function handleBallPlayerActions(matchDetails, thisPlayer, team, opp, action)`
-- **Línea 686:** `export function ballMoved(matchDetails, thisPlayer, team, opp)`
-- **Línea 702:** `export function updateInformation(matchDetails, newPosition)`
-- **Línea 707:** `export function getMovement(player, action, opposition, ballX, ballY, matchDetails, team)`
-- **Línea 852:** `export function getRunMovement(matchDetails, player, ballX, ballY, team, opposition)`
-- **Línea 897:** `export function getSprintMovement(matchDetails, player, ballX, ballY, team, opposition)`
-- **Línea 972:** `export function closestPlayerToBall(closestPlayer, team, matchDetails)`
-- **Línea 997:** `export function checkOffside(team1, team2, matchDetails)`
-- **Línea 1029:** `export function team1atBottom(team1, team2, pitchHeight)`
-- **Línea 1056:** `export function team1atTop(team1, team2, pitchHeight)`
-- **Línea 1115:** `export function resolveMutualPlayerSeparation(matchDetails)`
+- **Línea 402:** `export function executeBallAction(move, team, opp, matchDetails)`
+- **Línea 415:** `export function setClosePlayerTakesBall(matchDetails, thisPlayer, team, opp)`
+- **Línea 520:** `export function completeSlide(matchDetails, thisPlayer, team, opp)`
+- **Línea 542:** `export function completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, opp)`
+- **Línea 586:** `export function closestPlayerActionBallX(ballToPlayerX)`
+- **Línea 594:** `export function closestPlayerActionBallY(ballToPlayerY)`
+- **Línea 602:** `export function checkProvidedAction(matchDetails, thisPlayer, action, team)`
+- **Línea 657:** `export function handleBallPlayerActions(matchDetails, thisPlayer, team, opp, action)`
+- **Línea 690:** `export function ballMoved(matchDetails, thisPlayer, team, opp)`
+- **Línea 706:** `export function updateInformation(matchDetails, newPosition)`
+- **Línea 711:** `export function getMovement(player, action, opposition, ballX, ballY, matchDetails, team)`
+- **Línea 856:** `export function getRunMovement(matchDetails, player, ballX, ballY, team, opposition)`
+- **Línea 901:** `export function getSprintMovement(matchDetails, player, ballX, ballY, team, opposition)`
+- **Línea 976:** `export function closestPlayerToBall(closestPlayer, team, matchDetails)`
+- **Línea 1001:** `export function checkOffside(team1, team2, matchDetails)`
+- **Línea 1033:** `export function team1atBottom(team1, team2, pitchHeight)`
+- **Línea 1060:** `export function team1atTop(team1, team2, pitchHeight)`
+- **Línea 1119:** `export function resolveMutualPlayerSeparation(matchDetails)`
 
 ### Funciones Internas Notables
 
 | Función | Parámetros | Línea |
 | :--- | :--- | :--- |
 | `tryCarrierGambeta` | `matchDetails, carrier, team, opp, move` | L231 |
-| `sendPlayerOff` | `matchDetails, team, thisPlayer, reason = 'red'` | L476 |
-| `giveYellowCard` | `matchDetails, team, thisPlayer` | L497 |
-| `completeMovement` | `matchDetails, currentPOS, move, player = null` | L560 |
-| `getTackleMovement` | `ballX, ballY` | L729 |
-| `getSmartDribbleMove` | `matchDetails, player, step, opposition, team` | L744 |
-| `getTopMostPlayer` | `team, pitchHeight` | L1003 |
-| `getBottomMostPlayer` | `team` | L1016 |
-| `offsideYPOS` | `team, side, pitchHeight` | L1083 |
+| `sendPlayerOff` | `matchDetails, team, thisPlayer, reason = 'red'` | L480 |
+| `giveYellowCard` | `matchDetails, team, thisPlayer` | L501 |
+| `completeMovement` | `matchDetails, currentPOS, move, player = null` | L564 |
+| `getTackleMovement` | `ballX, ballY` | L733 |
+| `getSmartDribbleMove` | `matchDetails, player, step, opposition, team` | L748 |
+| `getTopMostPlayer` | `team, pitchHeight` | L1007 |
+| `getBottomMostPlayer` | `team` | L1020 |
+| `offsideYPOS` | `team, side, pitchHeight` | L1087 |
 
 ---
 
@@ -430,20 +430,24 @@ export function movePlayers(moves, team, opp, matchDetails) {
       if (matchDetails.ball?.isRestart) continue
 
       const role = thisPlayer.tacticalRole || thisPlayer.position
-      const isAttacker = role === 'ST' || role === 'CAM' || thisPlayer.position === 'ST'
-      const autoChallengeChance = isAttacker ? 10 : 52
-      if (samePositionAsBall) {
-        if (withPlayer === true && thisPlayer.hasBall === false && withTeam !== team.teamID) {
-          if (action === 'slide' && !isAttacker) matchDetails = completeSlide(matchDetails, thisPlayer, team, opp)
-          else if (action === 'tackle' && !isAttacker) matchDetails = completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, opp)
-          else if (common.getRandomNumber(0, 100) < autoChallengeChance) matchDetails = completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, opp)
-        } else if (withPlayer === false) {
-          setClosePlayerTakesBall(matchDetails, thisPlayer, team, opp)
+      const isAttacker = ['ST', 'CF', 'RW', 'LW', 'CAM', 'EXT'].includes(role) || thisPlayer.position === 'ST'
+      const isDefenderOrMid = ['CB', 'LB', 'RB', 'CDM', 'CM', 'DFC', 'LÍBERO', 'STOP I', 'STOP D', 'LI', 'LD'].includes(role)
+
+      if (closeWithPlayer) {
+        setClosePlayerTakesBall(matchDetails, thisPlayer, team, opp)
+      } else if (action === 'tackle') {
+        matchDetails = completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, opp)
+      } else if (action === 'slide') {
+        matchDetails = completeSlide(matchDetails, thisPlayer, team, opp)
+      } else if (samePositionAsBall) {
+        // Contacto directo cuerpo a cuerpo (< 8px): el defensor siempre disputa
+        const autoChallengeChance = isAttacker ? 30 : (isDefenderOrMid ? 88 : 65)
+        if (common.getRandomNumber(0, 100) < autoChallengeChance) {
+          matchDetails = completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, opp)
         }
-      } else if (withPlayer === true && thisPlayer.hasBall === false && withTeam !== team.teamID) {
-        if (action === 'slide' && !isAttacker) matchDetails = completeSlide(matchDetails, thisPlayer, team, opp)
-        else if (action === 'tackle' && !isAttacker) matchDetails = completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, opp)
-        else if (!isAttacker && common.getRandomNumber(0, 100) < 36) matchDetails = completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, opp)
+      } else if (!isAttacker && common.getRandomNumber(0, 100) < (isDefenderOrMid ? 68 : 45)) {
+        // En zona de disputa (< 22px), el defensor mete la pierna aunque viniera corriendo con 'run'/'sprint'
+        matchDetails = completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, opp)
       } else if (withPlayer === false && xPosition && yPosition) {
         setClosePlayerTakesBall(matchDetails, thisPlayer, team, opp)
       }

@@ -8,6 +8,52 @@ export function isMidfieldRole(role) {
   return ['CM', 'LM', 'RM', 'CDM', 'CAM', '5 REC', '8 MIX', 'VOL I', 'VOL D', '5 TAPÓN', 'ENG (10)', 'MI', 'MD'].includes(role)
 }
 
+export function getPenaltyAreaPosition(matchDetails, isTop) {
+  const [pitchWidth, pitchHeight] = matchDetails.pitchSize
+  const minX = 195
+  const maxX = pitchWidth - 195 // 485
+  const x = common.getRandomNumber(minX, maxX)
+  const y = isTop
+    ? common.getRandomNumber(55, 145)
+    : common.getRandomNumber(pitchHeight - 145, pitchHeight - 55)
+  return [x, y]
+}
+
+/**
+ * Genera un conjunto de posiciones separadas dentro del área penal, garantizando
+ * al menos 20px de distancia física entre defensores para evitar amontonamientos.
+ */
+export function getSpacedPenaltyPositions(matchDetails, isTop, count) {
+  const [pitchWidth, pitchHeight] = matchDetails.pitchSize
+  const minX = 205
+  const maxX = pitchWidth - 205 // 475
+  const minY = isTop ? 65 : (pitchHeight - 145)
+  const maxY = isTop ? 145 : (pitchHeight - 65)
+
+  const positions = []
+  for (let i = 0; i < count; i++) {
+    let placed = false
+    for (let attempt = 0; attempt < 35; attempt++) {
+      const rx = common.getRandomNumber(minX, maxX)
+      const ry = common.getRandomNumber(minY, maxY)
+      const tooClose = positions.some(pos => Math.hypot(pos[0] - rx, pos[1] - ry) < 22)
+      if (!tooClose) {
+        positions.push([rx, ry])
+        placed = true
+        break
+      }
+    }
+    if (!placed) {
+      const col = i % 4
+      const row = Math.floor(i / 4)
+      const gx = minX + col * 68
+      const gy = minY + row * 32
+      positions.push([gx, gy])
+    }
+  }
+  return positions
+}
+
 export function selectFreekickTaker(team, allowGoalie = false) {
   const active = team.players.filter(p => common.isOnPitch(p) && (allowGoalie || p.position !== 'GK'))
   if (active.length === 0) return team.players.find(common.isOnPitch) || team.players[0]
@@ -132,20 +178,13 @@ export function applyFreekickTactics(matchDetails, attack, defence, kickPlayer, 
     cbs.sort((a, b) => ((b.skill.jumping || 0) + (Number(b.height) || 180)) - ((a.skill.jumping || 0) + (Number(a.height) || 180)))
     const headingCBs = cbs.slice(0, 2)
     for (const cb of headingCBs) {
-      cb.currentPOS = isTopAttacking
-        ? common.getRandomBottomPenaltyPosition(matchDetails)
-        : common.getRandomTopPenaltyPosition(matchDetails)
+      cb.currentPOS = getPenaltyAreaPosition(matchDetails, !isTopAttacking)
       cb.intentPOS = cb.currentPOS.slice()
       matchDetails.iterationLog.push(`CB Header run by: ${cb.name}`)
     }
   }
 
-  // 2. Configurar Barrera Defensiva (Open Football wall_size_for)
-  if (distToGoal <= 340 && distToGoal >= 90) {
-    setupDefendingWall(matchDetails, defence, ballPos, targetGoal, distToGoal, lateralOffset > 150)
-  }
-
-  // 3. Evaluar jugada de distracción/pantalla (Opción h):
+  // 2. Evaluar jugada de distracción/pantalla (Opción h):
   // Un compañero corre y salta por encima de la pelota sin tocarla para descolocar al arquero y barrera
   const tryDecoy = !isIndirect && distToGoal <= 310 && common.getRandomNumber(1, 100) <= 15
   if (tryDecoy) {
@@ -228,6 +267,11 @@ export function applyFreekickTactics(matchDetails, attack, defence, kickPlayer, 
     kickPlayer.action = 'pass'
     matchDetails.ball.kickType = 'pass'
   }
+
+  // 5. Configurar Barrera Defensiva (siempre al final para no ser pisada)
+  if (distToGoal <= 340 && distToGoal >= 90) {
+    setupDefendingWall(matchDetails, defence, ballPos, targetGoal, distToGoal, lateralOffset > 150)
+  }
 }
 
 /**
@@ -235,9 +279,11 @@ export function applyFreekickTactics(matchDetails, attack, defence, kickPlayer, 
  * Se ubica a 65px (distancia reglamentaria de 9.15m) sobre la línea de tiro balón-arco.
  */
 function setupDefendingWall(matchDetails, defence, ballPos, targetGoal, distToGoal, isWideAngle) {
-  const wallSize = common.getWallSize(distToGoal, isWideAngle)
-  const dirX = (targetGoal[0] - ballPos[0]) / distToGoal
-  const dirY = (targetGoal[1] - ballPos[1]) / distToGoal
+  const [pitchWidth] = matchDetails.pitchSize
+  const centreGoal = [pitchWidth / 2, targetGoal[1]]
+  const goalDist = common.distance(ballPos, centreGoal)
+  const dirX = (centreGoal[0] - ballPos[0]) / Math.max(1, goalDist)
+  const dirY = (centreGoal[1] - ballPos[1]) / Math.max(1, goalDist)
   const perpX = -dirY
   const perpY = dirX
 
@@ -252,6 +298,7 @@ function setupDefendingWall(matchDetails, defence, ballPos, targetGoal, distToGo
     ((a.skill?.jumping || 70) + (Number(a.height) || 180) + (a.skill?.tackling || 70))
   ))
 
+  const wallSize = common.getWallSize(distToGoal, isWideAngle)
   const wallPlayers = defCandidates.slice(0, wallSize)
   matchDetails.ball.defendingWall = wallPlayers
 
@@ -605,27 +652,20 @@ function setTopBottomQtrCentreYPos(matchDetails, attack, defence, kickPlayer) {
       if (['CB', 'DFC'].includes(player.tacticalRole || player.position)) player.currentPOS = [player.originPOS[0], parseInt(pitchHeight * 0.5, 10)]
       else player.currentPOS = [player.originPOS[0], parseInt(pitchHeight * 0.66, 10)]
     } else {
-      player.currentPOS = common.getRandomBottomPenaltyPosition(matchDetails)
+      player.currentPOS = getPenaltyAreaPosition(matchDetails, false)
     }
     player.intentPOS = player.currentPOS.slice()
   }
 
-  let playerSpace = -33
+  const defOutfield1 = defence.players.filter(p => common.isOnPitch(p) && p.position !== 'GK')
+  const spacedPositions1 = getSpacedPenaltyPositions(matchDetails, false, defOutfield1.length)
+  let posIdx1 = 0
   for (const player of defence.players) {
     if (!common.isOnPitch(player)) continue
-    const ballDistanceFromGoalX = ball.position[0] - (pitchWidth / 2)
-    const midWayFromBalltoGoalX = parseInt(ball.position[0] - (ballDistanceFromGoalX / 2), 10)
-    const ballDistanceFromGoalY = pitchHeight - ball.position[1]
-    const midWayFromBalltoGoalY = parseInt(ball.position[1] + (ballDistanceFromGoalY * 0.25), 10)
-    if (player.position === 'GK') player.currentPOS = player.originPOS.slice()
-    else if (isDefenderRole(player.tacticalRole || player.position)) {
-      player.currentPOS = [
-        common.upToMax(common.upToMin(midWayFromBalltoGoalX + playerSpace, 10), pitchWidth - 10),
-        common.upToMax(common.upToMin(midWayFromBalltoGoalY, 10), pitchHeight - 10)
-      ]
-      playerSpace += 22
+    if (player.position === 'GK') {
+      player.currentPOS = player.originPOS.slice()
     } else {
-      player.currentPOS = common.getRandomBottomPenaltyPosition(matchDetails)
+      player.currentPOS = spacedPositions1[posIdx1++] || getPenaltyAreaPosition(matchDetails, false)
     }
     player.intentPOS = player.currentPOS.slice()
   }
@@ -658,26 +698,20 @@ function setBottomUpperQtrCentreYPos(matchDetails, attack, defence, kickPlayer) 
       if (['CB', 'DFC'].includes(player.tacticalRole || player.position)) player.currentPOS = [player.originPOS[0], parseInt(pitchHeight * 0.5, 10)]
       else player.currentPOS = [player.originPOS[0], parseInt(pitchHeight * 0.33, 10)]
     } else {
-      player.currentPOS = common.getRandomTopPenaltyPosition(matchDetails)
+      player.currentPOS = getPenaltyAreaPosition(matchDetails, true)
     }
     player.intentPOS = player.currentPOS.slice()
   }
 
-  let playerSpace = -33
+  const defOutfield2 = defence.players.filter(p => common.isOnPitch(p) && p.position !== 'GK')
+  const spacedPositions2 = getSpacedPenaltyPositions(matchDetails, true, defOutfield2.length)
+  let posIdx2 = 0
   for (const player of defence.players) {
     if (!common.isOnPitch(player)) continue
-    const ballDistanceFromGoalX = ball.position[0] - (pitchWidth / 2)
-    const midWayFromBalltoGoalX = parseInt(ball.position[0] - (ballDistanceFromGoalX / 2), 10)
-    const midWayFromBalltoGoalY = parseInt(ball.position[1] * 0.75, 10)
-    if (player.position === 'GK') player.currentPOS = player.originPOS.slice()
-    else if (isDefenderRole(player.tacticalRole || player.position)) {
-      player.currentPOS = [
-        common.upToMax(common.upToMin(midWayFromBalltoGoalX + playerSpace, 10), pitchWidth - 10),
-        common.upToMax(common.upToMin(midWayFromBalltoGoalY, 10), pitchHeight - 10)
-      ]
-      playerSpace += 22
+    if (player.position === 'GK') {
+      player.currentPOS = player.originPOS.slice()
     } else {
-      player.currentPOS = common.getRandomTopPenaltyPosition(matchDetails)
+      player.currentPOS = spacedPositions2[posIdx2++] || getPenaltyAreaPosition(matchDetails, true)
     }
     player.intentPOS = player.currentPOS.slice()
   }
@@ -708,24 +742,20 @@ function setTopLowerFinalQtrBylinePos(matchDetails, attack, defence, kickPlayer)
     else if (['CB', 'LB', 'RB'].includes(position)) {
       if (position === 'CB') player.currentPOS = [originPOS[0], parseInt(pitchHeight * 0.5, 10)]
       else player.currentPOS = [originPOS[0], parseInt(pitchHeight * 0.66, 10)]
-    } else player.currentPOS = common.getRandomBottomPenaltyPosition(matchDetails)
+    } else player.currentPOS = getPenaltyAreaPosition(matchDetails, false)
     player.intentPOS = player.currentPOS.slice()
   }
 
-  let playerSpace = common.upToMax(ball.position[1] + 3, pitchHeight - 5)
+  const defOutfield3 = defence.players.filter(p => common.isOnPitch(p) && p.position !== 'GK')
+  const spacedPositions3 = getSpacedPenaltyPositions(matchDetails, false, defOutfield3.length)
+  let posIdx3 = 0
   for (const player of defence.players) {
     if (!common.isOnPitch(player)) continue
-    const { position, originPOS } = player
-    const ballDistanceFromGoalX = ball.position[0] - (pitchWidth / 2)
-    const midWayFromBalltoGoalX = parseInt(ball.position[0] - (ballDistanceFromGoalX / 2), 10)
-    if (position === 'GK') player.currentPOS = originPOS.slice()
-    else if (['CB', 'LB', 'RB'].includes(position)) {
-      player.currentPOS = [
-        common.upToMax(common.upToMin(midWayFromBalltoGoalX, 10), pitchWidth - 10),
-        common.upToMax(common.upToMin(playerSpace, 10), pitchHeight - 10)
-      ]
-      playerSpace -= 2
-    } else player.currentPOS = common.getRandomBottomPenaltyPosition(matchDetails)
+    if (player.position === 'GK') {
+      player.currentPOS = player.originPOS.slice()
+    } else {
+      player.currentPOS = spacedPositions3[posIdx3++] || getPenaltyAreaPosition(matchDetails, false)
+    }
     player.intentPOS = player.currentPOS.slice()
   }
   matchDetails.endIteration = true
@@ -755,24 +785,20 @@ function setBottomLowerFinalQtrBylinePos(matchDetails, attack, defence, kickPlay
     else if (['CB', 'LB', 'RB'].includes(position)) {
       if (position === 'CB') player.currentPOS = [originPOS[0], parseInt(pitchHeight * 0.5, 10)]
       else player.currentPOS = [originPOS[0], parseInt(pitchHeight * 0.33, 10)]
-    } else player.currentPOS = common.getRandomTopPenaltyPosition(matchDetails)
+    } else player.currentPOS = getPenaltyAreaPosition(matchDetails, true)
     player.intentPOS = player.currentPOS.slice()
   }
 
-  let playerSpace = common.upToMin(ball.position[1] - 3, 5)
+  const defOutfield4 = defence.players.filter(p => common.isOnPitch(p) && p.position !== 'GK')
+  const spacedPositions4 = getSpacedPenaltyPositions(matchDetails, true, defOutfield4.length)
+  let posIdx4 = 0
   for (const player of defence.players) {
     if (!common.isOnPitch(player)) continue
-    const { position, originPOS } = player
-    const ballDistanceFromGoalX = ball.position[0] - (pitchWidth / 2)
-    const midWayFromBalltoGoalX = parseInt(ball.position[0] - (ballDistanceFromGoalX / 2), 10)
-    if (position === 'GK') player.currentPOS = originPOS.slice()
-    else if (['CB', 'LB', 'RB'].includes(position)) {
-      player.currentPOS = [
-        common.upToMax(common.upToMin(midWayFromBalltoGoalX, 10), pitchWidth - 10),
-        common.upToMax(common.upToMin(playerSpace, 10), pitchHeight - 10)
-      ]
-      playerSpace += 2
-    } else player.currentPOS = common.getRandomTopPenaltyPosition(matchDetails)
+    if (player.position === 'GK') {
+      player.currentPOS = player.originPOS.slice()
+    } else {
+      player.currentPOS = spacedPositions4[posIdx4++] || getPenaltyAreaPosition(matchDetails, true)
+    }
     player.intentPOS = player.currentPOS.slice()
   }
   matchDetails.endIteration = true

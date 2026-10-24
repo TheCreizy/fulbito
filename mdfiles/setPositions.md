@@ -2,8 +2,8 @@
 
 > **Categoría:** `Pelota Parada`  
 > **Ubicación:** `src/engine/setPositions.js`  
-> **Líneas de código:** 1758  
-> **Tamaño:** 78.50 KB
+> **Líneas de código:** 1760  
+> **Tamaño:** 78.68 KB
 
 ---
 
@@ -36,13 +36,13 @@ Distribuye las coordenadas espaciales de los 22 jugadores en tiros de esquina (c
 - **Línea 789:** `export function setKickOffTeamGoalScored(matchDetails)`
 - **Línea 858:** `export function setSecondTeamGoalScored(matchDetails)`
 - **Línea 927:** `export function setBallSpecificGoalScoreValue(matchDetails, concedingTeam)`
-- **Línea 1069:** `export function keepInBoundaries(matchDetails, kickteamID, ballIntended)`
-- **Línea 1160:** `export function setPlayerPositions(matchDetails, team, extra)`
-- **Línea 1176:** `export function formationCheck(origin, current)`
-- **Línea 1182:** `export function switchSide(matchDetails, team)`
-- **Línea 1200:** `export function computeTeamGamePhase(team, matchDetails, inPossession)`
-- **Línea 1239:** `export function setIntentPosition(matchDetails, closestPlayer = null)`
-- **Línea 1504:** `export function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam)`
+- **Línea 1071:** `export function keepInBoundaries(matchDetails, kickteamID, ballIntended)`
+- **Línea 1162:** `export function setPlayerPositions(matchDetails, team, extra)`
+- **Línea 1178:** `export function formationCheck(origin, current)`
+- **Línea 1184:** `export function switchSide(matchDetails, team)`
+- **Línea 1202:** `export function computeTeamGamePhase(team, matchDetails, inPossession)`
+- **Línea 1241:** `export function setIntentPosition(matchDetails, closestPlayer = null)`
+- **Línea 1506:** `export function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam)`
 
 ### Funciones Internas Notables
 
@@ -56,10 +56,10 @@ Distribuye las coordenadas espaciales de los 22 jugadores en tiros de esquina (c
 | `setPlayerPenaltyPositions` | `attack, defence, shootArray, isTop, pitchWidth, pitchHeight` | L721 |
 | `setBallSpecificPenaltyValue` | `matchDetails, shootArray, attack` | L768 |
 | `tryGoalLineSave` | `matchDetails, defendingTeam` | L974 |
-| `setLooseintentPOS` | `matchDetails, thisTeam, closestPlayer` | L1270 |
-| `setDefenceRelativePos` | `matchDetails, defendingTeam, closestPlayer, attackingTeam` | L1311 |
-| `computeOnsideLimitY` | `defendingTeam, isTopTeam, ballY, pitchHeight` | L1466 |
-| `findOpenPocketX` | `preferredX, defendingTeam, targetY, pitchWidth` | L1483 |
+| `setLooseintentPOS` | `matchDetails, thisTeam, closestPlayer` | L1272 |
+| `setDefenceRelativePos` | `matchDetails, defendingTeam, closestPlayer, attackingTeam` | L1313 |
+| `computeOnsideLimitY` | `defendingTeam, isTopTeam, ballY, pitchHeight` | L1468 |
+| `findOpenPocketX` | `preferredX, defendingTeam, targetY, pitchWidth` | L1485 |
 
 ---
 
@@ -1026,7 +1026,7 @@ export function setBallSpecificGoalScoreValue(matchDetails, concedingTeam) {
   kicker.hasBall = true
   kicker.action = 'pass'
   kicker.isKickoffPass = true
-  matchDetails.kickoffRetentionTicks = 16
+  matchDetails.kickoffRetentionTicks = 5
   matchDetails.turnoverTick = -999
   matchDetails.ball.lastTouch.playerName = kicker.name
   matchDetails.ball.lastTouch.playerID = kicker.playerID
@@ -1046,8 +1046,10 @@ function tryGoalLineSave(matchDetails, defendingTeam) {
   if (!goalie || !common.isOnPitch(goalie)) return false
   const saving = Number(goalie.skill?.saving || 72)
   const perception = Number(goalie.skill?.perception || 70)
-  const gkScore = (saving * 0.72 + perception * 0.28)
-  const saveRoll = common.getRandomNumber(42, 124)
+  const shotDist = Number(matchDetails.ball?.lastShotDistance || 140)
+  const longShotBonus = shotDist > 205 ? Math.min(22, Math.round((shotDist - 205) * 0.22)) : 0
+  const gkScore = (saving * 0.72 + perception * 0.28) + longShotBonus
+  const saveRoll = common.getRandomNumber(40, 112)
   if (gkScore >= saveRoll) {
     goalie.stats.saves = (goalie.stats.saves || 0) + 1
     const roll = common.getRandomNumber(1, 100)
@@ -1405,7 +1407,7 @@ function setDefenceRelativePos(matchDetails, defendingTeam, closestPlayer, attac
 
     // A. PRESSER: Sale a presionar al portador goal-side
     if (playerDuty.duty === 'Press') {
-      const isKickoffStandoff = (matchDetails.kickoffRetentionTicks || 0) > 6
+      const isKickoffStandoff = (matchDetails.kickoffRetentionTicks || 0) > 0
       const targetBallY = isKickoffStandoff ? (isTopTeam ? (pitchHeight / 2 - 45) : (pitchHeight / 2 + 45)) : ball.position[1]
       const pressX = ball.position[0] * 0.85 + player.currentPOS[0] * 0.15
       const pressY = targetBallY + goalDirY * 12

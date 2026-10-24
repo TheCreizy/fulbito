@@ -492,9 +492,22 @@ export function assignDefensivePlanWithIncumbency(defendingTeam, attackingTeam, 
   let minPresserDist = 9999
   const ballDistToDefGoal = isTopTeam ? ball[1] : (pitchHeight - ball[1])
 
+  // Verificar si hay algún mediocampista propio todavía posicionado entre la pelota y nuestro arco
+  const hasMidfielderInFront = outfielders.some(p => {
+    const r = p.tacticalRole || p.position
+    if (!['CDM', 'CM', 'CAM', 'LM', 'RM'].includes(r)) return false
+    const pDistToGoal = isTopTeam ? p.currentPOS[1] : (pitchHeight - p.currentPOS[1])
+    return pDistToGoal < ballDistToDefGoal + 18 && Math.abs(p.currentPOS[0] - ball[0]) < 115
+  })
+
+  // Si el portador amenaza el tercio defensivo por el cono central (< 360px del arco y < 190px del centro) o ya superó la línea de volantes,
+  // se elimina la penalización al zaguero central para que salga como Stopper a tapar el remate (incluso en diagonales).
+  const isCarrierCentralThreat = ballDistToDefGoal < 360 && Math.abs(ball[0] - (pitchWidth / 2)) < 190
+  const releaseCBStopper = isCarrierCentralThreat || !hasMidfielderInFront
+
   for (const p of outfielders) {
     const isCB = ['CB', 'DFC', 'LÍBERO', 'STOP I', 'STOP D'].includes(p.tacticalRole || p.position) || p.position === 'CB'
-    const cbPressPenalty = (isCB && ballDistToDefGoal > 210) ? 55 : 0
+    const cbPressPenalty = (isCB && ballDistToDefGoal > 210 && !releaseCBStopper) ? 55 : 0
     const d = common.distance(p.currentPOS, ball) + cbPressPenalty
     const effectiveD = d - ((prevPlan.presserID === p.playerID) ? 22 : 0)
     if (effectiveD < minPresserDist) {

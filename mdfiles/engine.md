@@ -2,8 +2,8 @@
 
 > **Categoría:** `Núcleo del Simulador`  
 > **Ubicación:** `src/engine/engine.js`  
-> **Líneas de código:** 442  
-> **Tamaño:** 18.34 KB
+> **Líneas de código:** 467  
+> **Tamaño:** 19.41 KB
 
 ---
 
@@ -15,10 +15,11 @@ Coordina el ciclo de simulación paso a paso (ticks/iteraciones), inicializa los
 
 ## 🧩 Exportaciones y Elementos Principales
 
-- **Línea 206:** `export function applyLiveTactics(matchDetails, teamKey, { formationId, mentalityId, playStyleId, setPieces })`
-- **Línea 265:** `export function checkSeriousInjurySubstitutions(matchDetails, team, teamKey)`
-- **Línea 305:** `export function makeSubstitution(matchDetails, teamKey, fieldIndex, benchIndex)`
-- **Línea 391:** `export function simulateShootoutKick(kicker, goalkeeper)`
+- **Línea 38:** `export function syncPrevSnapshot(matchDetails)`
+- **Línea 231:** `export function applyLiveTactics(matchDetails, teamKey, { formationId, mentalityId, playStyleId, setPieces })`
+- **Línea 290:** `export function checkSeriousInjurySubstitutions(matchDetails, team, teamKey)`
+- **Línea 330:** `export function makeSubstitution(matchDetails, teamKey, fieldIndex, benchIndex)`
+- **Línea 416:** `export function simulateShootoutKick(kicker, goalkeeper)`
 
 
 
@@ -64,6 +65,19 @@ export async function initiateGame(team1, team2, pitchDetails) {
   return matchDetails
 }
 
+export function syncPrevSnapshot(matchDetails) {
+  if (!matchDetails || !matchDetails.kickOffTeam || !matchDetails.secondTeam) return
+  matchDetails.prevSnapshot = {
+    ball: matchDetails.ball?.position ? matchDetails.ball.position.slice() : [340, 525, 0],
+    kickOffTeam: matchDetails.kickOffTeam.players.map(p => (
+      Array.isArray(p.currentPOS) ? p.currentPOS.slice() : ['NP', 'NP']
+    )),
+    secondTeam: matchDetails.secondTeam.players.map(p => (
+      Array.isArray(p.currentPOS) ? p.currentPOS.slice() : ['NP', 'NP']
+    ))
+  }
+}
+
 export async function playIteration(matchDetails) {
   const closestPlayerA = {
     name: '',
@@ -89,6 +103,15 @@ export async function playIteration(matchDetails) {
     concedingTeam.intent = 'attack'
     scoringTeam.intent = 'defend'
     matchDetails.ball.restartWaitTicks = 6
+    syncPrevSnapshot(matchDetails) // Evita que vuelen desde el área hasta mitad de cancha
+    if (Array.isArray(matchDetails.events)) {
+      matchDetails.events.push({
+        type: 'kickoff_ready',
+        deadBall: true,
+        iteration: matchDetails.iterationCount || 0,
+        half: matchDetails.half
+      })
+    }
     delete matchDetails.endIteration
     return matchDetails
   }
@@ -96,6 +119,7 @@ export async function playIteration(matchDetails) {
   // Pausa visual de pelota parada / gol con los jugadores ya formados en cancha (sin avanzar reloj)
   if ((matchDetails.ball?.restartWaitTicks || 0) > 0) {
     matchDetails.ball.restartWaitTicks--
+    syncPrevSnapshot(matchDetails) // Mantiene quieto el snapshot durante la espera
     delete matchDetails.endIteration
     return matchDetails
   }
@@ -138,6 +162,7 @@ export async function playIteration(matchDetails) {
 
   matchDetails = ballMovement.moveBall(matchDetails)
   if (matchDetails.endIteration === true) {
+    if (matchDetails.ball?.isRestart) syncPrevSnapshot(matchDetails)
     delete matchDetails.endIteration
     return matchDetails
   }
@@ -160,6 +185,7 @@ export async function playIteration(matchDetails) {
   }
   playerMovement.resolveMutualPlayerSeparation(matchDetails)
   if (matchDetails.endIteration === true) {
+    if (matchDetails.ball?.isRestart) syncPrevSnapshot(matchDetails)
     delete matchDetails.endIteration
     return matchDetails
   }

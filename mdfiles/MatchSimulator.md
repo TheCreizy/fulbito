@@ -2,8 +2,8 @@
 
 > **Categoría:** `Componentes UI / Simulador 2D`  
 > **Ubicación:** `src\components\MatchSimulator.js`  
-> **Líneas de código:** 3391  
-> **Tamaño:** 146.27 KB
+> **Líneas de código:** 3403  
+> **Tamaño:** 146.82 KB
 
 ---
 
@@ -30,7 +30,7 @@ Componente React principal para la visualización del partido en tiempo real. Ma
 | `renderVarFreezePlayersH` | `ctx, varData, kickOffTeam, secondTeam, W, H, padX, padY, playableW, playableH` | L565 |
 | `renderVarFreezePlayersV` | `ctx, varData, kickOffTeam, secondTeam, W, H, padX, padY, playableW, playableH` | L661 |
 | `TeamStatsBoard` | `{ team, teamGoals, oppGoals, isLeft }` | L757 |
-| `setup` | `ninguno` | L947 |
+| `setup` | `ninguno` | L948 |
 
 ---
 
@@ -922,6 +922,7 @@ export default function MatchSimulator({
   const [deadBallOverlay, setDeadBallOverlay] = useState(null);
   const [varReplay, setVarReplay] = useState(null);
   const [tacticalStoppage, setTacticalStoppage] = useState(null);
+  const hadTacticalStoppageRef = useRef(false);
   const [pitchOrientation, setPitchOrientation] = useState('horizontal'); // 'horizontal' | 'vertical'
   const [showDetailPanels, setShowDetailPanels] = useState(false);
   const [penaltyWinner, setPenaltyWinner] = useState(null);
@@ -2298,10 +2299,18 @@ export default function MatchSimulator({
       teamID: team.teamID
     };
 
+    const isSeriousInjury = Boolean(outgoing.injured && (outgoing.injuryStatus?.canContinue === false || outgoing.injuryStatus?.grade === 'serious'));
+    const isStopped = isSeriousInjury || checkIsMatchPlayStopped(m, phase, isFoulPausedRef.current, isDeadBallPausedRef.current, Boolean(tacticalStoppage) || hadTacticalStoppageRef.current, Boolean(varReplayRef.current || varReplay)) || speed === 'paused' || m.ball?.isRestart;
+
     const nextPending = [...pendingSubsRef.current, newSub];
     pendingSubsRef.current = nextPending;
     setPendingSubs(nextPending);
     m.pendingSubstitutions = nextPending;
+
+    if (isStopped) {
+      m = applyPendingSubstitutions(m);
+    }
+
     matchRef.current = m;
     setMatch({ ...m });
   };
@@ -2325,10 +2334,12 @@ export default function MatchSimulator({
 
   const handleCloseTacticsModal = () => {
     setShowTacticsModal(false);
+    hadTacticalStoppageRef.current = false;
     let m = matchRef.current;
     if (!m) return;
-    const isStopped = checkIsMatchPlayStopped(m, phase, isFoulPausedRef.current, isDeadBallPausedRef.current, Boolean(tacticalStoppage), Boolean(varReplayRef.current || varReplay));
-    if (isStopped && (m.pendingSubstitutions && m.pendingSubstitutions.length > 0 || pendingSubsRef.current.length > 0)) {
+    const hasRemainingSubs = Array.isArray(m.pendingSubstitutions) && m.pendingSubstitutions.length > 0 ||
+    Array.isArray(pendingSubsRef.current) && pendingSubsRef.current.length > 0;
+    if (hasRemainingSubs) {
       m = applyPendingSubstitutions(m);
       matchRef.current = m;
       setMatch({ ...m });
@@ -3363,6 +3374,7 @@ export default function MatchSimulator({
               type: "button",
               className: "btn btn-gold btn-lg",
               onClick: () => {
+                hadTacticalStoppageRef.current = true;
                 setTacticalStoppage(null);
                 setShowTacticsModal(true);
               }, children:
@@ -3435,8 +3447,8 @@ export default function MatchSimulator({
 ## ⚛️ Código Fuente Original en React JSX (`MatchSimulator.jsx`)
 
 > **Archivo original:** `src\components\MatchSimulator.jsx`  
-> **Líneas JSX:** 3392  
-> **Tamaño:** 141.25 KB
+> **Líneas JSX:** 3404  
+> **Tamaño:** 141.79 KB
 
 <details>
 <summary><b>Haz clic aquí para desplegar el código fuente original en JSX</b></summary>
@@ -4327,6 +4339,7 @@ export default function MatchSimulator({
   const [deadBallOverlay, setDeadBallOverlay] = useState(null)
   const [varReplay, setVarReplay] = useState(null)
   const [tacticalStoppage, setTacticalStoppage] = useState(null)
+  const hadTacticalStoppageRef = useRef(false)
   const [pitchOrientation, setPitchOrientation] = useState('horizontal') // 'horizontal' | 'vertical'
   const [showDetailPanels, setShowDetailPanels] = useState(false)
   const [penaltyWinner, setPenaltyWinner] = useState(null)
@@ -5703,10 +5716,18 @@ export default function MatchSimulator({
       teamID: team.teamID
     }
 
+    const isSeriousInjury = Boolean(outgoing.injured && (outgoing.injuryStatus?.canContinue === false || outgoing.injuryStatus?.grade === 'serious'))
+    const isStopped = isSeriousInjury || checkIsMatchPlayStopped(m, phase, isFoulPausedRef.current, isDeadBallPausedRef.current, Boolean(tacticalStoppage) || hadTacticalStoppageRef.current, Boolean(varReplayRef.current || varReplay)) || speed === 'paused' || m.ball?.isRestart
+
     const nextPending = [...pendingSubsRef.current, newSub]
     pendingSubsRef.current = nextPending
     setPendingSubs(nextPending)
     m.pendingSubstitutions = nextPending
+
+    if (isStopped) {
+      m = applyPendingSubstitutions(m)
+    }
+
     matchRef.current = m
     setMatch({ ...m })
   }
@@ -5730,10 +5751,12 @@ export default function MatchSimulator({
 
   const handleCloseTacticsModal = () => {
     setShowTacticsModal(false)
+    hadTacticalStoppageRef.current = false
     let m = matchRef.current
     if (!m) return
-    const isStopped = checkIsMatchPlayStopped(m, phase, isFoulPausedRef.current, isDeadBallPausedRef.current, Boolean(tacticalStoppage), Boolean(varReplayRef.current || varReplay))
-    if (isStopped && ((m.pendingSubstitutions && m.pendingSubstitutions.length > 0) || pendingSubsRef.current.length > 0)) {
+    const hasRemainingSubs = (Array.isArray(m.pendingSubstitutions) && m.pendingSubstitutions.length > 0) ||
+      (Array.isArray(pendingSubsRef.current) && pendingSubsRef.current.length > 0)
+    if (hasRemainingSubs) {
       m = applyPendingSubstitutions(m)
       matchRef.current = m
       setMatch({ ...m })
@@ -6768,6 +6791,7 @@ export default function MatchSimulator({
                 type="button"
                 className="btn btn-gold btn-lg"
                 onClick={() => {
+                  hadTacticalStoppageRef.current = true
                   setTacticalStoppage(null)
                   setShowTacticsModal(true)
                 }}

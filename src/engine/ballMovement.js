@@ -511,9 +511,14 @@ export function shotMade(matchDetails, team, player) {
     shotPower = Math.max(distToGoalLine + 25, shotPower * 0.92)
   }
 
-  // Penalización leve por distancia si patea desde afuera del área (> 175px)
-  const distancePenalty = distToGoalLine > 175 ? Math.round((distToGoalLine - 175) * 0.14) : 0
-  let shootingRoll = common.getRandomNumber(18, 92) + distancePenalty
+  matchDetails.ball.lastShotDistance = distToGoalLine
+
+  // Penalización progresiva por distancia fuera del área (> 165px)
+  const extraDist = Math.max(0, distToGoalLine - 165)
+  const distancePenalty = extraDist > 0
+    ? Math.round(extraDist * 0.22 + (extraDist > 75 ? (extraDist - 75) * 0.18 : 0))
+    : 0
+  let shootingRoll = common.getRandomNumber(20, 94) + distancePenalty
   if (isVolley) shootingRoll += 4
 
   const headingSkill = Number(player.skill?.heading ?? player.skill?.cabeza ?? player.skill?.shooting ?? 70)
@@ -831,7 +836,7 @@ export function checkGoalScored(matchDetails) {
   const goalX = common.isBetween(ball.position[0], centreGoal - goalEdge, centreGoal + goalEdge)
   const KOGoalie = kickOffTeam.players[0]
   const STGoalie = secondTeam.players[0]
-  const ballProx = 9
+  const ballProx = 24
   const [ballX, ballY] = ball.position
   const nearKOGoalieX = common.isBetween(ballX, KOGoalie.currentPOS[0] - ballProx, KOGoalie.currentPOS[0] + ballProx)
   const nearKOGoalieY = common.isBetween(ballY, KOGoalie.currentPOS[1] - ballProx, KOGoalie.currentPOS[1] + ballProx)

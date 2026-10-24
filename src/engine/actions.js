@@ -619,10 +619,15 @@ export function playerDoesNotHaveBall(player, ballX, ballY, ballZ, matchDetails)
     return [0, 0, 0, 0, 0, 0, 0, 65, 35, 0, 0, 0]
   }
 
-  // 3. RIVAL CON PELOTA: respetar el rol asignado en defensivePlan (Press, Cover, Mark, HoldZone)
+  // 3. RIVAL CON PELOTA: respetar el rol asignado en defensivePlan, pero activar quite si el portador invade su radio
   const defDuty = myTeam.defensivePlan?.duties?.[player.playerID]?.duty || 'HoldZone'
-  if (defDuty !== 'Press' && distToBall > 22) {
-    // Jugadores en Cover, Mark o HoldZone mantienen su posición/marca en vez de perseguir la pelota
+  const role = player.tacticalRole || player.position
+  const isDefensiveRole = ['CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM', 'DFC', 'LÍBERO', 'STOP I', 'STOP D', 'LI', 'LD'].includes(role)
+  const inGoalCorridor = Math.abs(currentPOS[0] - matchDetails.ball.position[0]) < 48
+  const engageRadius = (isDefensiveRole && inGoalCorridor) ? 52 : (isDefensiveRole ? 38 : 24)
+
+  if (defDuty !== 'Press' && distToBall > engageRadius) {
+    // Jugadores lejos de la pelota en Cover, Mark o HoldZone mantienen su posición/marca
     return [0, 0, 0, 0, 0, 0, 0, 70, 30, 0, 0, 0]
   }
 

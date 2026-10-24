@@ -883,6 +883,7 @@ export default function MatchSimulator({
   const [deadBallOverlay, setDeadBallOverlay] = useState(null);
   const [varReplay, setVarReplay] = useState(null);
   const [tacticalStoppage, setTacticalStoppage] = useState(null);
+  const hadTacticalStoppageRef = useRef(false);
   const [pitchOrientation, setPitchOrientation] = useState('horizontal'); // 'horizontal' | 'vertical'
   const [showDetailPanels, setShowDetailPanels] = useState(false);
   const [penaltyWinner, setPenaltyWinner] = useState(null);
@@ -2259,10 +2260,18 @@ export default function MatchSimulator({
       teamID: team.teamID
     };
 
+    const isSeriousInjury = Boolean(outgoing.injured && (outgoing.injuryStatus?.canContinue === false || outgoing.injuryStatus?.grade === 'serious'));
+    const isStopped = isSeriousInjury || checkIsMatchPlayStopped(m, phase, isFoulPausedRef.current, isDeadBallPausedRef.current, Boolean(tacticalStoppage) || hadTacticalStoppageRef.current, Boolean(varReplayRef.current || varReplay)) || speed === 'paused' || m.ball?.isRestart;
+
     const nextPending = [...pendingSubsRef.current, newSub];
     pendingSubsRef.current = nextPending;
     setPendingSubs(nextPending);
     m.pendingSubstitutions = nextPending;
+
+    if (isStopped) {
+      m = applyPendingSubstitutions(m);
+    }
+
     matchRef.current = m;
     setMatch({ ...m });
   };
@@ -2286,10 +2295,12 @@ export default function MatchSimulator({
 
   const handleCloseTacticsModal = () => {
     setShowTacticsModal(false);
+    hadTacticalStoppageRef.current = false;
     let m = matchRef.current;
     if (!m) return;
-    const isStopped = checkIsMatchPlayStopped(m, phase, isFoulPausedRef.current, isDeadBallPausedRef.current, Boolean(tacticalStoppage), Boolean(varReplayRef.current || varReplay));
-    if (isStopped && (m.pendingSubstitutions && m.pendingSubstitutions.length > 0 || pendingSubsRef.current.length > 0)) {
+    const hasRemainingSubs = Array.isArray(m.pendingSubstitutions) && m.pendingSubstitutions.length > 0 ||
+    Array.isArray(pendingSubsRef.current) && pendingSubsRef.current.length > 0;
+    if (hasRemainingSubs) {
       m = applyPendingSubstitutions(m);
       matchRef.current = m;
       setMatch({ ...m });
@@ -3324,6 +3335,7 @@ export default function MatchSimulator({
               type: "button",
               className: "btn btn-gold btn-lg",
               onClick: () => {
+                hadTacticalStoppageRef.current = true;
                 setTacticalStoppage(null);
                 setShowTacticsModal(true);
               }, children:

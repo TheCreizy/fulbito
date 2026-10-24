@@ -958,7 +958,7 @@ export function setBallSpecificGoalScoreValue(matchDetails, concedingTeam) {
   kicker.hasBall = true
   kicker.action = 'pass'
   kicker.isKickoffPass = true
-  matchDetails.kickoffRetentionTicks = 16
+  matchDetails.kickoffRetentionTicks = 5
   matchDetails.turnoverTick = -999
   matchDetails.ball.lastTouch.playerName = kicker.name
   matchDetails.ball.lastTouch.playerID = kicker.playerID
@@ -978,8 +978,10 @@ function tryGoalLineSave(matchDetails, defendingTeam) {
   if (!goalie || !common.isOnPitch(goalie)) return false
   const saving = Number(goalie.skill?.saving || 72)
   const perception = Number(goalie.skill?.perception || 70)
-  const gkScore = (saving * 0.72 + perception * 0.28)
-  const saveRoll = common.getRandomNumber(42, 124)
+  const shotDist = Number(matchDetails.ball?.lastShotDistance || 140)
+  const longShotBonus = shotDist > 205 ? Math.min(22, Math.round((shotDist - 205) * 0.22)) : 0
+  const gkScore = (saving * 0.72 + perception * 0.28) + longShotBonus
+  const saveRoll = common.getRandomNumber(40, 112)
   if (gkScore >= saveRoll) {
     goalie.stats.saves = (goalie.stats.saves || 0) + 1
     const roll = common.getRandomNumber(1, 100)
@@ -1337,7 +1339,7 @@ function setDefenceRelativePos(matchDetails, defendingTeam, closestPlayer, attac
 
     // A. PRESSER: Sale a presionar al portador goal-side
     if (playerDuty.duty === 'Press') {
-      const isKickoffStandoff = (matchDetails.kickoffRetentionTicks || 0) > 6
+      const isKickoffStandoff = (matchDetails.kickoffRetentionTicks || 0) > 0
       const targetBallY = isKickoffStandoff ? (isTopTeam ? (pitchHeight / 2 - 45) : (pitchHeight / 2 + 45)) : ball.position[1]
       const pressX = ball.position[0] * 0.85 + player.currentPOS[0] * 0.15
       const pressY = targetBallY + goalDirY * 12

@@ -2,8 +2,8 @@
 
 > **Categoría:** `Física y Cinemática`  
 > **Ubicación:** `src/engine/ballMovement.js`  
-> **Líneas de código:** 2042  
-> **Tamaño:** 91.46 KB
+> **Líneas de código:** 2047  
+> **Tamaño:** 91.59 KB
 
 ---
 
@@ -24,23 +24,23 @@ Modela la cinemática de la pelota en coordenadas tridimensionales (X, Y, Z), fr
 - **Línea 448:** `export function getTopKickedPosition(direction, position, power)`
 - **Línea 458:** `export function getBottomKickedPosition(direction, position, power)`
 - **Línea 475:** `export function shotMade(matchDetails, team, player)`
-- **Línea 670:** `export function freekickShotMade(matchDetails, team, player)`
-- **Línea 765:** `export function penaltyTaken(matchDetails, team, player)`
-- **Línea 825:** `export function checkGoalScored(matchDetails)`
-- **Línea 875:** `export function throughBall(matchDetails, team, player)`
-- **Línea 1102:** `export function resolveBallMovement(player, matchDetails)`
-- **Línea 1128:** `export function thisPlayerIsInProximity(matchDetails, thisPlayer, thisPOS, thisPos, power, thisTeam)`
-- **Línea 1268:** `export function resolveDeflection(power, thisPOS, defPosition, defPlayer, defTeam, calcHeight, matchDetails)`
-- **Línea 1326:** `export function setBallMovementMatchDetails(matchDetails, thisPlayer, thisPos, thisTeam)`
-- **Línea 1346:** `export function setAttackBodyPart(thisPOS, calcHeight, player = null)`
-- **Línea 1411:** `export function setDeflectionDirectionPos(direction, defPosition, newPower)`
-- **Línea 1434:** `export function setDeflectionPlayerHasBall(ballHeight, matchDetails, defPlayer, defTeam)`
-- **Línea 1487:** `export function setDeflectionPlayerOffside(matchDetails, defTeam, defPlayer)`
-- **Línea 1520:** `export function getBallDirection(matchDetails, nextPOS)`
-- **Línea 1537:** `export function ballPassed(matchDetails, team, player)`
-- **Línea 1719:** `export function passScoreOption(p, aTop, ballPos, maxDistance, styleCfg, pitchWidth = 680, passer = null, matchDetails = null)`
-- **Línea 1850:** `export function ballCrossed(matchDetails, team, player)`
-- **Línea 1996:** `export function calcBallMovementOverTime(matchDetails, power, nextPosition, player, type)`
+- **Línea 675:** `export function freekickShotMade(matchDetails, team, player)`
+- **Línea 770:** `export function penaltyTaken(matchDetails, team, player)`
+- **Línea 830:** `export function checkGoalScored(matchDetails)`
+- **Línea 880:** `export function throughBall(matchDetails, team, player)`
+- **Línea 1107:** `export function resolveBallMovement(player, matchDetails)`
+- **Línea 1133:** `export function thisPlayerIsInProximity(matchDetails, thisPlayer, thisPOS, thisPos, power, thisTeam)`
+- **Línea 1273:** `export function resolveDeflection(power, thisPOS, defPosition, defPlayer, defTeam, calcHeight, matchDetails)`
+- **Línea 1331:** `export function setBallMovementMatchDetails(matchDetails, thisPlayer, thisPos, thisTeam)`
+- **Línea 1351:** `export function setAttackBodyPart(thisPOS, calcHeight, player = null)`
+- **Línea 1416:** `export function setDeflectionDirectionPos(direction, defPosition, newPower)`
+- **Línea 1439:** `export function setDeflectionPlayerHasBall(ballHeight, matchDetails, defPlayer, defTeam)`
+- **Línea 1492:** `export function setDeflectionPlayerOffside(matchDetails, defTeam, defPlayer)`
+- **Línea 1525:** `export function getBallDirection(matchDetails, nextPOS)`
+- **Línea 1542:** `export function ballPassed(matchDetails, team, player)`
+- **Línea 1724:** `export function passScoreOption(p, aTop, ballPos, maxDistance, styleCfg, pitchWidth = 680, passer = null, matchDetails = null)`
+- **Línea 1855:** `export function ballCrossed(matchDetails, team, player)`
+- **Línea 2001:** `export function calcBallMovementOverTime(matchDetails, power, nextPosition, player, type)`
 
 ### Funciones Internas Notables
 
@@ -48,12 +48,12 @@ Modela la cinemática de la pelota en coordenadas tridimensionales (X, Y, Z), fr
 | :--- | :--- | :--- |
 | `getTeamStatisticsObject` | `matchDetails, team` | L284 |
 | `newKickedPosition` | `pos, lowX, highX, lowY, highY` | L468 |
-| `tballScoreOption` | `p, attackingTop, ballPos, maxDistance, styleCfg` | L995 |
-| `pointToSegmentDist` | `px, py, x1, y1, x2, y2` | L1037 |
-| `getPlayersInDistance` | `team, player, pitchSize, opposition = null, currentIter = 0` | L1047 |
-| `checkForHandball` | `thisPOS, calcHeight` | L1338 |
-| `setDeflectBodyPart` | `thisPOS, calcHeight` | L1401 |
-| `checkIfBallControlled` | `player` | L2039 |
+| `tballScoreOption` | `p, attackingTop, ballPos, maxDistance, styleCfg` | L1000 |
+| `pointToSegmentDist` | `px, py, x1, y1, x2, y2` | L1042 |
+| `getPlayersInDistance` | `team, player, pitchSize, opposition = null, currentIter = 0` | L1052 |
+| `checkForHandball` | `thisPOS, calcHeight` | L1343 |
+| `setDeflectBodyPart` | `thisPOS, calcHeight` | L1406 |
+| `checkIfBallControlled` | `player` | L2044 |
 
 ---
 
@@ -573,9 +573,14 @@ export function shotMade(matchDetails, team, player) {
     shotPower = Math.max(distToGoalLine + 25, shotPower * 0.92)
   }
 
-  // Penalización leve por distancia si patea desde afuera del área (> 175px)
-  const distancePenalty = distToGoalLine > 175 ? Math.round((distToGoalLine - 175) * 0.14) : 0
-  let shootingRoll = common.getRandomNumber(18, 92) + distancePenalty
+  matchDetails.ball.lastShotDistance = distToGoalLine
+
+  // Penalización progresiva por distancia fuera del área (> 165px)
+  const extraDist = Math.max(0, distToGoalLine - 165)
+  const distancePenalty = extraDist > 0
+    ? Math.round(extraDist * 0.22 + (extraDist > 75 ? (extraDist - 75) * 0.18 : 0))
+    : 0
+  let shootingRoll = common.getRandomNumber(20, 94) + distancePenalty
   if (isVolley) shootingRoll += 4
 
   const headingSkill = Number(player.skill?.heading ?? player.skill?.cabeza ?? player.skill?.shooting ?? 70)
@@ -893,7 +898,7 @@ export function checkGoalScored(matchDetails) {
   const goalX = common.isBetween(ball.position[0], centreGoal - goalEdge, centreGoal + goalEdge)
   const KOGoalie = kickOffTeam.players[0]
   const STGoalie = secondTeam.players[0]
-  const ballProx = 9
+  const ballProx = 24
   const [ballX, ballY] = ball.position
   const nearKOGoalieX = common.isBetween(ballX, KOGoalie.currentPOS[0] - ballProx, KOGoalie.currentPOS[0] + ballProx)
   const nearKOGoalieY = common.isBetween(ballY, KOGoalie.currentPOS[1] - ballProx, KOGoalie.currentPOS[1] + ballProx)

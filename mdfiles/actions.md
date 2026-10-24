@@ -2,8 +2,8 @@
 
 > **Categoría:** `Comportamiento y Acciones`  
 > **Ubicación:** `src/engine/actions.js`  
-> **Líneas de código:** 1178  
-> **Tamaño:** 53.10 KB
+> **Líneas de código:** 1183  
+> **Tamaño:** 53.47 KB
 
 ---
 
@@ -26,30 +26,30 @@ Controla las decisiones e interacciones de los jugadores en posesión o disputa:
 - **Línea 587:** `export function checkOppositionAhead(closePlayerPosition, currentPOS)`
 - **Línea 592:** `export function checkOppositionBelow(closePlayerPosition, currentPOS)`
 - **Línea 597:** `export function playerDoesNotHaveBall(player, ballX, ballY, ballZ, matchDetails)`
-- **Línea 638:** `export function noBallNotGK4CloseBall(matchDetails, currentPOS, originPOS, pitchWidth, pitchHeight)`
-- **Línea 650:** `export function noBallNotGK4CloseBallBottomTeam(matchDetails, currentPOS, pitchWidth, pitchHeight)`
-- **Línea 659:** `export function noBallNotGK2CloseBall(matchDetails, currentPOS, originPOS, pitchWidth, pitchHeight)`
-- **Línea 671:** `export function noBallNotGK2CloseBallBottomTeam(matchDetails, currentPOS, pitchWidth, pitchHeight)`
-- **Línea 680:** `export function checkPositionInBottomPenaltyBox(position, pitchWidth, pitchHeight)`
-- **Línea 686:** `export function checkPositionInBottomPenaltyBoxClose(position, pitchWidth, pitchHeight)`
-- **Línea 692:** `export function checkPositionInTopPenaltyBox(position, pitchWidth, pitchHeight)`
-- **Línea 698:** `export function checkPositionInTopPenaltyBoxClose(position, pitchWidth, pitchHeight)`
-- **Línea 704:** `export function onBottomCornerBoundary(position, pitchWidth, pitchHeight)`
-- **Línea 708:** `export function onTopCornerBoundary(position, pitchWidth)`
-- **Línea 712:** `export function populatePossibleActions(possibleActions, player, matchDetails, a, b, c, d, e, f, g, h, i, j, k, l = 0)`
-- **Línea 815:** `export function resolveTackle(player, team, opposition, matchDetails)`
-- **Línea 877:** `export function resolveSlide(player, team, opposition, matchDetails)`
-- **Línea 960:** `export function setPostTackleKnockedBall(matchDetails, team, opposition, player, carrier, isSlide = false)`
-- **Línea 1029:** `export function calcTackleScore(skill, diff, player = null)`
-- **Línea 1035:** `export function calcRetentionScore(skill, diff)`
-- **Línea 1039:** `export function setPostTackleBall(matchDetails, team, opposition, player)`
-- **Línea 1054:** `export function setPostTacklePosition(matchDetails, winningPlyr, losePlayer, increment)`
-- **Línea 1067:** `export function setInjury(matchDetails, thatPlayer, player, isSlide = false)`
-- **Línea 1079:** `export function setFoul(matchDetails, team, player, thatPlayer)`
-- **Línea 1098:** `export function wasFoul(x, y)`
-- **Línea 1103:** `export function foulIntensity()`
-- **Línea 1107:** `export function playerJumps(perception)`
-- **Línea 1172:** `export function extractBallActions(moves, type)`
+- **Línea 643:** `export function noBallNotGK4CloseBall(matchDetails, currentPOS, originPOS, pitchWidth, pitchHeight)`
+- **Línea 655:** `export function noBallNotGK4CloseBallBottomTeam(matchDetails, currentPOS, pitchWidth, pitchHeight)`
+- **Línea 664:** `export function noBallNotGK2CloseBall(matchDetails, currentPOS, originPOS, pitchWidth, pitchHeight)`
+- **Línea 676:** `export function noBallNotGK2CloseBallBottomTeam(matchDetails, currentPOS, pitchWidth, pitchHeight)`
+- **Línea 685:** `export function checkPositionInBottomPenaltyBox(position, pitchWidth, pitchHeight)`
+- **Línea 691:** `export function checkPositionInBottomPenaltyBoxClose(position, pitchWidth, pitchHeight)`
+- **Línea 697:** `export function checkPositionInTopPenaltyBox(position, pitchWidth, pitchHeight)`
+- **Línea 703:** `export function checkPositionInTopPenaltyBoxClose(position, pitchWidth, pitchHeight)`
+- **Línea 709:** `export function onBottomCornerBoundary(position, pitchWidth, pitchHeight)`
+- **Línea 713:** `export function onTopCornerBoundary(position, pitchWidth)`
+- **Línea 717:** `export function populatePossibleActions(possibleActions, player, matchDetails, a, b, c, d, e, f, g, h, i, j, k, l = 0)`
+- **Línea 820:** `export function resolveTackle(player, team, opposition, matchDetails)`
+- **Línea 882:** `export function resolveSlide(player, team, opposition, matchDetails)`
+- **Línea 965:** `export function setPostTackleKnockedBall(matchDetails, team, opposition, player, carrier, isSlide = false)`
+- **Línea 1034:** `export function calcTackleScore(skill, diff, player = null)`
+- **Línea 1040:** `export function calcRetentionScore(skill, diff)`
+- **Línea 1044:** `export function setPostTackleBall(matchDetails, team, opposition, player)`
+- **Línea 1059:** `export function setPostTacklePosition(matchDetails, winningPlyr, losePlayer, increment)`
+- **Línea 1072:** `export function setInjury(matchDetails, thatPlayer, player, isSlide = false)`
+- **Línea 1084:** `export function setFoul(matchDetails, team, player, thatPlayer)`
+- **Línea 1103:** `export function wasFoul(x, y)`
+- **Línea 1108:** `export function foulIntensity()`
+- **Línea 1112:** `export function playerJumps(perception)`
+- **Línea 1177:** `export function extractBallActions(moves, type)`
 
 ### Funciones Internas Notables
 
@@ -58,12 +58,12 @@ Controla las decisiones e interacciones de los jugadores en posesión o disputa:
 | `pointToSegmentDist2D` | `px, py, x1, y1, x2, y2` | L29 |
 | `applyCoachDirectivesToDecision` | `decision, team, env, player` | L197 |
 | `computeBaseCarrierDecision` | `matchDetails, player, team, opposition, env` | L239 |
-| `populateActionsJSON` | `ninguno` | L781 |
-| `calculateFoulProbability` | `tackler, carrier, isSlide = false` | L798 |
-| `setFailedTackle` | `matchDetails, player, thatPlayer, tackleDetails` | L997 |
-| `setSuccessTackle` | `matchDetails, team, opposition, player, thatPlayer, tackleDetails` | L1004 |
-| `normaliseActionObjects` | `actions` | L1111 |
-| `adjustForBallHeight` | `actions, player, matchDetails` | L1120 |
+| `populateActionsJSON` | `ninguno` | L786 |
+| `calculateFoulProbability` | `tackler, carrier, isSlide = false` | L803 |
+| `setFailedTackle` | `matchDetails, player, thatPlayer, tackleDetails` | L1002 |
+| `setSuccessTackle` | `matchDetails, team, opposition, player, thatPlayer, tackleDetails` | L1009 |
+| `normaliseActionObjects` | `actions` | L1116 |
+| `adjustForBallHeight` | `actions, player, matchDetails` | L1125 |
 
 ---
 
@@ -691,10 +691,15 @@ export function playerDoesNotHaveBall(player, ballX, ballY, ballZ, matchDetails)
     return [0, 0, 0, 0, 0, 0, 0, 65, 35, 0, 0, 0]
   }
 
-  // 3. RIVAL CON PELOTA: respetar el rol asignado en defensivePlan (Press, Cover, Mark, HoldZone)
+  // 3. RIVAL CON PELOTA: respetar el rol asignado en defensivePlan, pero activar quite si el portador invade su radio
   const defDuty = myTeam.defensivePlan?.duties?.[player.playerID]?.duty || 'HoldZone'
-  if (defDuty !== 'Press' && distToBall > 22) {
-    // Jugadores en Cover, Mark o HoldZone mantienen su posición/marca en vez de perseguir la pelota
+  const role = player.tacticalRole || player.position
+  const isDefensiveRole = ['CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM', 'DFC', 'LÍBERO', 'STOP I', 'STOP D', 'LI', 'LD'].includes(role)
+  const inGoalCorridor = Math.abs(currentPOS[0] - matchDetails.ball.position[0]) < 48
+  const engageRadius = (isDefensiveRole && inGoalCorridor) ? 52 : (isDefensiveRole ? 38 : 24)
+
+  if (defDuty !== 'Press' && distToBall > engageRadius) {
+    // Jugadores lejos de la pelota en Cover, Mark o HoldZone mantienen su posición/marca
     return [0, 0, 0, 0, 0, 0, 0, 70, 30, 0, 0, 0]
   }
 
