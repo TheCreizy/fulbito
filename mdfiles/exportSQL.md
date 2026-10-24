@@ -1,7 +1,7 @@
 # `exportSQL.js` - Exportador de Base de Datos SQL
 
 > **Categoría:** `Base de Datos`  
-> **Ubicación original:** `src/data/exportSQL.js`  
+> **Ubicación:** `src/data/exportSQL.js`  
 > **Líneas de código:** 64  
 > **Tamaño:** 2.61 KB
 
@@ -22,7 +22,7 @@ Utilidad para generar sentencias SQL DDL/DML listas para importar en MySQL/Maria
 
 ---
 
-## 💻 Código Fuente Completo (`exportSQL.js`)
+## 💻 Código Fuente JavaScript (`exportSQL.js`)
 
 ````javascript
 import { PLAYERS_DB } from './playersDB.js'
@@ -90,3 +90,4 @@ export function downloadPlayersSQLFile() {
 
 
 ````
+

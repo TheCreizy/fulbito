@@ -1,7 +1,7 @@
 # `setPositions.js` - Posicionamiento en Balón Parado
 
 > **Categoría:** `Pelota Parada`  
-> **Ubicación original:** `src/engine/setPositions.js`  
+> **Ubicación:** `src/engine/setPositions.js`  
 > **Líneas de código:** 1758  
 > **Tamaño:** 78.50 KB
 
@@ -9,7 +9,7 @@
 
 ## 📋 Resumen del Módulo
 
-Distribuye las coordenadas espaciales de los 22 jugadores en tiros de esquina (córners), saques laterales, tiros libres, saques de arco y definiciones por penales.
+Distribuye las coordenadas espaciales de los 22 jugadores en tiros de esquina (córners), saques laterales, tiros libres, saques de arco, asignación de goleadores en rebotes (lastShooter) y definiciones por penales.
 
 ---
 
@@ -63,7 +63,7 @@ Distribuye las coordenadas espaciales de los 22 jugadores en tiros de esquina (c
 
 ---
 
-## 💻 Código Fuente Completo (`setPositions.js`)
+## 💻 Código Fuente JavaScript (`setPositions.js`)
 
 ````javascript
 import * as common from './common.js'
@@ -1825,3 +1825,4 @@ export function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
 }
 
 ````
+

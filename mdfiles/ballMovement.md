@@ -1,7 +1,7 @@
 # `ballMovement.js` - Física y Trayectoria de la Pelota
 
 > **Categoría:** `Física y Cinemática`  
-> **Ubicación original:** `src/engine/ballMovement.js`  
+> **Ubicación:** `src/engine/ballMovement.js`  
 > **Líneas de código:** 2042  
 > **Tamaño:** 91.46 KB
 
@@ -9,7 +9,7 @@
 
 ## 📋 Resumen del Módulo
 
-Modela la cinemática de la pelota en coordenadas tridimensionales (X, Y, Z), fricción, rebotes, atajadas del arquero, goles, saques de meta y desvíos.
+Modela la cinemática de la pelota en coordenadas tridimensionales (X, Y, Z), fricción, rebotes, atajadas del arquero con contacto visual, offside milimétrico con penúltimo defensor, goles en red física y saques de meta.
 
 ---
 
@@ -57,7 +57,7 @@ Modela la cinemática de la pelota en coordenadas tridimensionales (X, Y, Z), fr
 
 ---
 
-## 💻 Código Fuente Completo (`ballMovement.js`)
+## 💻 Código Fuente JavaScript (`ballMovement.js`)
 
 ````javascript
 import * as common from './common.js'
@@ -2103,3 +2103,4 @@ function checkIfBallControlled(player) {
 }
 
 ````
+

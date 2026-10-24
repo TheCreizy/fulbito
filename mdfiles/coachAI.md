@@ -1,7 +1,7 @@
 # `coachAI.js` - Inteligencia Artificial de Directores Técnicos
 
 > **Categoría:** `Inteligencia Artificial`  
-> **Ubicación original:** `src/engine/coachAI.js`  
+> **Ubicación:** `src/engine/coachAI.js`  
 > **Líneas de código:** 219  
 > **Tamaño:** 7.78 KB
 
@@ -24,7 +24,7 @@ Algoritmo de toma de decisiones tácticas para la IA: análisis del marcador y t
 
 ---
 
-## 💻 Código Fuente Completo (`coachAI.js`)
+## 💻 Código Fuente JavaScript (`coachAI.js`)
 
 ````javascript
 import * as common from './common.js'
@@ -247,3 +247,4 @@ export function updateTeamCoachDirectives(matchDetails) {
 }
 
 ````
+

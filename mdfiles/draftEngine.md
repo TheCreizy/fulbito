@@ -1,7 +1,7 @@
 # `draftEngine.js` - Motor de Draft por Turnos
 
 > **Categoría:** `Modo Draft`  
-> **Ubicación original:** `src/draft/draftEngine.js`  
+> **Ubicación:** `src/draft/draftEngine.js`  
 > **Líneas de código:** 369  
 > **Tamaño:** 14.43 KB
 
@@ -35,7 +35,7 @@ Lógica del sistema de selección de jugadores por sobres (packs de 7 cartas) po
 
 ---
 
-## 💻 Código Fuente Completo (`draftEngine.js`)
+## 💻 Código Fuente JavaScript (`draftEngine.js`)
 
 ````javascript
 // Motor de Draft por Presupuesto ($280M, 18 Rondas, Sobres de 7 Cartas, Reroll $2M e IA Competitiva)
@@ -408,3 +408,4 @@ export function autoSetupTeamFromSquad(squad16, {
 }
 
 ````
+

@@ -1,7 +1,7 @@
 # `verifyGeminiArgonAjustes3.js` - Suite de Verificación Automatizada (Ajustes 3 - Auditoría de Video Argon)
 
 > **Categoría:** `Testing y Verificación`  
-> **Ubicación original:** `tests/verifyGeminiArgonAjustes3.js`  
+> **Ubicación:** `tests/verifyGeminiArgonAjustes3.js`  
 > **Líneas de código:** 242  
 > **Tamaño:** 12.19 KB
 
@@ -25,7 +25,7 @@ _No contiene exportaciones directas explícitas._
 
 ---
 
-## 💻 Código Fuente Completo (`verifyGeminiArgonAjustes3.js`)
+## 💻 Código Fuente JavaScript (`verifyGeminiArgonAjustes3.js`)
 
 ````javascript
 import assert from 'node:assert'
@@ -271,3 +271,4 @@ console.log('🎉 TODOS LOS TESTS DE VERIFICACIÓN DE AJUSTES 3 PASARON EXITOSAM
 console.log('======================================================================')
 
 ````
+

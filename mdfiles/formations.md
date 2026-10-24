@@ -1,7 +1,7 @@
 # `formations.js` - Formaciones y Mentalidades Tácticas
 
 > **Categoría:** `Datos Tácticos y Configuración`  
-> **Ubicación original:** `src/data/formations.js`  
+> **Ubicación:** `src/data/formations.js`  
 > **Líneas de código:** 241  
 > **Tamaño:** 9.56 KB
 
@@ -26,7 +26,7 @@ Define las formaciones tácticas disponibles (4-4-2, 4-3-1-2, 4-3-3, 5-3-2, etc.
 
 ---
 
-## 💻 Código Fuente Completo (`formations.js`)
+## 💻 Código Fuente JavaScript (`formations.js`)
 
 ````javascript
 // Formaciones Tácticas y Mentalidades para cancha de 680 x 1050
@@ -271,3 +271,4 @@ export function getFormationCoordinates(formationId, mentalityId = 'balanced', s
 }
 
 ````
+

@@ -1,7 +1,7 @@
 # `soundEngine.js` - Motor de Efectos de Sonido
 
 > **Categoría:** `Audio`  
-> **Ubicación original:** `src/audio/soundEngine.js`  
+> **Ubicación:** `src/audio/soundEngine.js`  
 > **Líneas de código:** 211  
 > **Tamaño:** 6.33 KB
 
@@ -21,7 +21,7 @@ Gestión y reproducción de audio ambiental, silbatazos, remates, festejos de go
 
 ---
 
-## 💻 Código Fuente Completo (`soundEngine.js`)
+## 💻 Código Fuente JavaScript (`soundEngine.js`)
 
 ````javascript
 // Motor de Sonido Retro Sintetizado (Web Audio API - 100% sin archivos externos)
@@ -236,3 +236,4 @@ class SoundEngine {
 export const soundEngine = new SoundEngine()
 
 ````
+

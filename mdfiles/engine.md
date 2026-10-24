@@ -1,7 +1,7 @@
 # `engine.js` - Núcleo del Motor de Simulación (Loop Principal)
 
 > **Categoría:** `Núcleo del Simulador`  
-> **Ubicación original:** `src/engine/engine.js`  
+> **Ubicación:** `src/engine/engine.js`  
 > **Líneas de código:** 442  
 > **Tamaño:** 18.34 KB
 
@@ -9,7 +9,7 @@
 
 ## 📋 Resumen del Módulo
 
-Coordina el ciclo de simulación paso a paso (ticks/iteraciones), inicializa los tiempos reglamentarios, gestiona tiempos suplementarios y definiciones por penales, y genera el registro de eventos.
+Coordina el ciclo de simulación paso a paso (ticks/iteraciones), inicializa los tiempos reglamentarios, gestiona tiempos suplementarios, pausas post-pelota parada sin consumir tiempo de juego y definiciones por penales.
 
 ---
 
@@ -24,7 +24,7 @@ Coordina el ciclo de simulación paso a paso (ticks/iteraciones), inicializa los
 
 ---
 
-## 💻 Código Fuente Completo (`engine.js`)
+## 💻 Código Fuente JavaScript (`engine.js`)
 
 ````javascript
 import * as common from './common.js'
@@ -470,3 +470,4 @@ export function simulateShootoutKick(kicker, goalkeeper) {
 }
 
 ````
+

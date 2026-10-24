@@ -1,7 +1,7 @@
 # `common.js` - Funciones Auxiliares y Matemáticas Comunes
 
 > **Categoría:** `Utilidades`  
-> **Ubicación original:** `src/engine/common.js`  
+> **Ubicación:** `src/engine/common.js`  
 > **Líneas de código:** 340  
 > **Tamaño:** 11.46 KB
 
@@ -9,7 +9,7 @@
 
 ## 📋 Resumen del Módulo
 
-Conjunto de utilidades matemáticas y vectoriales: distancias euclidianas, ángulos, generación de números pseudoaleatorios con sesgo y cálculos trigonométricos utilizados por todo el motor.
+Conjunto de utilidades matemáticas y vectoriales: distancias euclidianas, ángulos, dimensiones de área de penal reglamentaria (162px / 16.5m), generación de números pseudoaleatorios con sesgo y cálculos trigonométricos.
 
 ---
 
@@ -46,7 +46,7 @@ Conjunto de utilidades matemáticas y vectoriales: distancias euclidianas, ángu
 
 ---
 
-## 💻 Código Fuente Completo (`common.js`)
+## 💻 Código Fuente JavaScript (`common.js`)
 
 ````javascript
 // Funciones matemáticas, geométricas y físicas del motor (100% navegador, sin dependencias de Node.js)
@@ -390,3 +390,4 @@ export function calculateWallBlockProb(wallPlayers = [], takerFkSkill = 75, dist
 }
 
 ````
+

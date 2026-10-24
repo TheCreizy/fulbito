@@ -1,7 +1,7 @@
 # `validate.js` - Validación de Equipos y Atributos
 
 > **Categoría:** `Validación y Seguridad`  
-> **Ubicación original:** `src/engine/validate.js`  
+> **Ubicación:** `src/engine/validate.js`  
 > **Líneas de código:** 175  
 > **Tamaño:** 6.01 KB
 
@@ -32,7 +32,7 @@ Verifica la integridad de las estructuras de datos de los equipos, asegurando qu
 
 ---
 
-## 💻 Código Fuente Completo (`validate.js`)
+## 💻 Código Fuente JavaScript (`validate.js`)
 
 ````javascript
 import * as common from './common.js'
@@ -211,3 +211,4 @@ export function validatePlayerPositions(matchDetails) {
 }
 
 ````
+

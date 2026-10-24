@@ -1,7 +1,7 @@
 # `playerMovement.js` - Movimiento y Desplazamiento de Jugadores
 
 > **Categoría:** `Física y Cinemática`  
-> **Ubicación original:** `src/engine/playerMovement.js`  
+> **Ubicación:** `src/engine/playerMovement.js`  
 > **Líneas de código:** 1184  
 > **Tamaño:** 54.92 KB
 
@@ -52,7 +52,7 @@ Gestiona la velocidad, aceleración, desaceleración, fatiga acumulada en cada t
 
 ---
 
-## 💻 Código Fuente Completo (`playerMovement.js`)
+## 💻 Código Fuente JavaScript (`playerMovement.js`)
 
 ````javascript
 import * as common from './common.js'
@@ -1240,3 +1240,4 @@ export function resolveMutualPlayerSeparation(matchDetails) {
 }
 
 ````
+

@@ -1,7 +1,7 @@
 # `teamShape.js` - Estructura y Bloque Dinámico del Equipo
 
 > **Categoría:** `Táctica de Equipo`  
-> **Ubicación original:** `src/engine/teamShape.js`  
+> **Ubicación:** `src/engine/teamShape.js`  
 > **Líneas de código:** 597  
 > **Tamaño:** 23.10 KB
 
@@ -9,7 +9,7 @@
 
 ## 📋 Resumen del Módulo
 
-Calcula el balance y la deformación del bloque del equipo en función de la posición de la pelota, balanceando líneas de presión, amplitud y repliegue defensivo.
+Calcula el balance y la deformación del bloque del equipo en función de la posición de la pelota, líneas de presión, protección de la cueva de centrales, slots de ataque y marcas individuales con Incumbency Bonus.
 
 ---
 
@@ -29,7 +29,7 @@ Calcula el balance y la deformación del bloque del equipo en función de la pos
 
 ---
 
-## 💻 Código Fuente Completo (`teamShape.js`)
+## 💻 Código Fuente JavaScript (`teamShape.js`)
 
 ````javascript
 import * as common from './common.js'
@@ -630,3 +630,4 @@ export function assignDefensivePlanWithIncumbency(defendingTeam, attackingTeam, 
 }
 
 ````
+

@@ -1,7 +1,7 @@
 # `playersDB.js` - Base de Datos Maestra de Jugadores (100 Cartas RPG)
 
 > **Categoría:** `Datos y Atributos de Jugadores`  
-> **Ubicación original:** `src/data/playersDB.js`  
+> **Ubicación:** `src/data/playersDB.js`  
 > **Líneas de código:** 921  
 > **Tamaño:** 79.41 KB
 
@@ -32,7 +32,7 @@ Catálogo completo de los 100 futbolistas del juego divididos en 4 tiers (Leyend
 
 ---
 
-## 💻 Código Fuente Completo (`playersDB.js`)
+## 💻 Código Fuente JavaScript (`playersDB.js`)
 
 ````javascript
 // Base de Datos Maestra de los 200 Jugadores (Calibración RPG: Leyendas, Ídolos, Plantilla y Relleno)
@@ -957,3 +957,4 @@ export function clonePlayerForTeam(player) {
 }
 
 ````
+

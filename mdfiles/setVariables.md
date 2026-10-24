@@ -1,7 +1,7 @@
 # `setVariables.js` - Inicialización y Estado de Variables del Partido
 
 > **Categoría:** `Estado y Variables`  
-> **Ubicación original:** `src/engine/setVariables.js`  
+> **Ubicación:** `src/engine/setVariables.js`  
 > **Líneas de código:** 212  
 > **Tamaño:** 6.37 KB
 
@@ -9,7 +9,7 @@
 
 ## 📋 Resumen del Módulo
 
-Establece y reinicia los contadores de tiempo, posesión, saques de mitad de cancha, registro de iteraciones y estadísticas acumuladas de ambos equipos.
+Establece y reinicia los contadores de tiempo, posesión, saques de mitad de cancha asociativos (isRestart), registro de iteraciones y estadísticas acumuladas de ambos equipos.
 
 ---
 
@@ -24,7 +24,7 @@ Establece y reinicia los contadores de tiempo, posesión, saques de mitad de can
 
 ---
 
-## 💻 Código Fuente Completo (`setVariables.js`)
+## 💻 Código Fuente JavaScript (`setVariables.js`)
 
 ````javascript
 import * as common from './common.js'
@@ -240,3 +240,4 @@ export function populateMatchDetails(team1, team2, pitchDetails) {
 }
 
 ````
+

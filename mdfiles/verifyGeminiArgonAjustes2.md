@@ -1,7 +1,7 @@
 # `verifyGeminiArgonAjustes2.js` - Suite de Verificación Automatizada (Ajustes 2)
 
 > **Categoría:** `Testing y Verificación`  
-> **Ubicación original:** `tests/verifyGeminiArgonAjustes2.js`  
+> **Ubicación:** `tests/verifyGeminiArgonAjustes2.js`  
 > **Líneas de código:** 245  
 > **Tamaño:** 11.16 KB
 
@@ -25,7 +25,7 @@ _No contiene exportaciones directas explícitas._
 
 ---
 
-## 💻 Código Fuente Completo (`verifyGeminiArgonAjustes2.js`)
+## 💻 Código Fuente JavaScript (`verifyGeminiArgonAjustes2.js`)
 
 ````javascript
 import assert from 'node:assert'
@@ -274,3 +274,4 @@ console.log('=== ¡LOS 6 AJUSTES DE GEMINI ARGON FUERON VERIFICADOS AL 100%! ===
 console.log('======================================================================')
 
 ````
+

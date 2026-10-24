@@ -1,7 +1,7 @@
 # `modifiers.md` - modifiers.md
 
 > **Categoría:** `Módulo General`  
-> **Ubicación original:** `src/engine/modifiers.js`  
+> **Ubicación:** `src/engine/modifiers.js`  
 > **Líneas de código:** 176  
 > **Tamaño:** 6.21 KB
 
@@ -24,7 +24,7 @@ Módulo del proyecto de fútbol.
 
 ---
 
-## 💻 Código Fuente Completo (`modifiers.md`)
+## 💻 Código Fuente JavaScript (`modifiers.md`)
 
 ````javascript
 // Sistema de Modificadores Tácticos:
@@ -204,3 +204,4 @@ export function updateTeamEffectiveSkills(team) {
 }
 
 ````
+

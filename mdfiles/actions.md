@@ -1,7 +1,7 @@
 # `actions.js` - Acciones e Interacciones de Jugadores
 
 > **Categoría:** `Comportamiento y Acciones`  
-> **Ubicación original:** `src/engine/actions.js`  
+> **Ubicación:** `src/engine/actions.js`  
 > **Líneas de código:** 1178  
 > **Tamaño:** 53.10 KB
 
@@ -67,7 +67,7 @@ Controla las decisiones e interacciones de los jugadores en posesión o disputa:
 
 ---
 
-## 💻 Código Fuente Completo (`actions.js`)
+## 💻 Código Fuente JavaScript (`actions.js`)
 
 ````javascript
 import * as common from './common.js'
@@ -1249,3 +1249,4 @@ export function extractBallActions(moves, type) {
 }
 
 ````
+

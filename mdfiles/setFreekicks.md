@@ -1,7 +1,7 @@
 # `setFreekicks.js` - Resolución de Tiros Libres
 
 > **Categoría:** `Pelota Parada`  
-> **Ubicación original:** `src/engine/setFreekicks.js`  
+> **Ubicación:** `src/engine/setFreekicks.js`  
 > **Líneas de código:** 781  
 > **Tamaño:** 36.18 KB
 
@@ -9,7 +9,7 @@
 
 ## 📋 Resumen del Módulo
 
-Configura y ejecuta tiros libres directos e indirectos, asigna el pateador designado según el atributo correspondiente y ubica la barrera defensiva respetando las distancias reglamentarias.
+Configura y ejecuta tiros libres directos e indirectos con selección de pateador por zona, reconocimiento de roles CDM/CAM en el bloque medio y barrera defensiva respetando distancias reglamentarias.
 
 ---
 
@@ -41,7 +41,7 @@ Configura y ejecuta tiros libres directos e indirectos, asigna el pateador desig
 
 ---
 
-## 💻 Código Fuente Completo (`setFreekicks.js`)
+## 💻 Código Fuente JavaScript (`setFreekicks.js`)
 
 ````javascript
 import * as common from './common.js'
@@ -826,3 +826,4 @@ function setBottomLowerFinalQtrBylinePos(matchDetails, attack, defence, kickPlay
 }
 
 ````
+

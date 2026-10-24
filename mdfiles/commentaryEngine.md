@@ -1,7 +1,7 @@
 # `commentaryEngine.js` - Motor de Relatos y Comentarios (Araujo y Macaya)
 
 > **Categoría:** `Relatos y Narración`  
-> **Ubicación original:** `src/commentary/commentaryEngine.js`  
+> **Ubicación:** `src/commentary/commentaryEngine.js`  
 > **Líneas de código:** 812  
 > **Tamaño:** 34.11 KB
 
@@ -28,7 +28,7 @@ Traducción y contextualización en tiempo real de los eventos del partido a rel
 
 ---
 
-## 💻 Código Fuente Completo (`commentaryEngine.js`)
+## 💻 Código Fuente JavaScript (`commentaryEngine.js`)
 
 ````javascript
 // Motor de Relatos y Comentarios Estilo Marcelo Araujo y Enrique Macaya Márquez
@@ -844,3 +844,4 @@ export function generatePenaltyShootoutComment(kicker, goalie, outcome, teamName
 
 
 ````
+

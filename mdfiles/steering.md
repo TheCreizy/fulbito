@@ -1,7 +1,7 @@
 # `steering.js` - Comportamientos de Conducción y Dirección (Steering)
 
 > **Categoría:** `Inteligencia Artificial y Cinemática`  
-> **Ubicación original:** `src/engine/steering.js`  
+> **Ubicación:** `src/engine/steering.js`  
 > **Líneas de código:** 248  
 > **Tamaño:** 9.27 KB
 
@@ -24,7 +24,7 @@ Implementa algoritmos de dirección autónoma basados en vehículos de Reynolds 
 
 ---
 
-## 💻 Código Fuente Completo (`steering.js`)
+## 💻 Código Fuente JavaScript (`steering.js`)
 
 ````javascript
 import * as common from './common.js'
@@ -276,3 +276,4 @@ export function steerTowardsTarget(player, targetPOS, step, team, pitchSize) {
 }
 
 ````
+

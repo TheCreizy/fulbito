@@ -1,7 +1,7 @@
 # `futDraftEngine.js` - Motor de FUT Draft y Química
 
 > **Categoría:** `Modo Draft`  
-> **Ubicación original:** `src/draft/futDraftEngine.js`  
+> **Ubicación:** `src/draft/futDraftEngine.js`  
 > **Líneas de código:** 497  
 > **Tamaño:** 16.75 KB
 
@@ -35,7 +35,7 @@ Gestión avanzada del draft estilo FUT: química por nacionalidad, club o liga, 
 
 ---
 
-## 💻 Código Fuente Completo (`futDraftEngine.js`)
+## 💻 Código Fuente JavaScript (`futDraftEngine.js`)
 
 ````javascript
 // Motor de FUT Draft Táctico (Estilo FIFA Ultimate Team)
@@ -536,3 +536,4 @@ export function buildTeamFromFutDraft(formationId, startersArray, benchArray, te
 }
 
 ````
+
