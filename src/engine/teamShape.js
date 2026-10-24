@@ -176,14 +176,15 @@ export function buildTeamShape(matchDetails, team, inPossession) {
   )
   prev.centreX = centreX
 
-  // Ajuste lateral: estrechar en banda para no salirse de la cancha sin perder compacidad
+  // Ajuste lateral: estrechar en banda para no salirse de la cancha sin perder compacidad.
+  // En defensa, el bloque se mantiene compacto (0.42) para evitar huecos gigantes en el medio.
   const isWingPlay = team?.playStyle === 'wingPlay'
-  const teamWidthTarget = inPossession ? (isWingPlay ? 0.96 : 0.85) : (isDefensive ? 0.35 : 0.6)
+  const teamWidthTarget = inPossession ? (isWingPlay ? 0.96 : 0.85) : (isDefensive ? 0.28 : 0.42)
   const fullWidth = SHAPE_CONFIG.WIDTH_NARROW + (SHAPE_CONFIG.WIDTH_WIDE - SHAPE_CONFIG.WIDTH_NARROW) * teamWidthTarget
   const loX = Math.max(SHAPE_CONFIG.PITCH_MARGIN, centreX - fullWidth * 0.5)
   const hiX = Math.min(pitchWidth - SHAPE_CONFIG.PITCH_MARGIN, centreX + fullWidth * 0.5)
   const effectiveCentreX = (loX + hiX) * 0.5
-  const effectiveWidth = Math.max(SHAPE_CONFIG.WIDTH_NARROW * 0.55, hiX - loX)
+  const effectiveWidth = Math.max(SHAPE_CONFIG.WIDTH_NARROW * 0.50, hiX - loX)
   prev.width = effectiveWidth
 
   // 3. Proyectar anclas de cada jugador dentro del bloque rectangular
@@ -222,7 +223,17 @@ export function buildTeamShape(matchDetails, team, inPossession) {
       SHAPE_CONFIG.PITCH_MARGIN,
       Math.min(pitchHeight - SHAPE_CONFIG.PITCH_MARGIN, rawY)
     )
-    const rawX = effectiveCentreX + (latFrac - 0.5) * effectiveWidth
+    let rawX = effectiveCentreX + (latFrac - 0.5) * effectiveWidth
+
+    // Los centrales (CB) en defensa deben permanecer estrictamente agrupados en el cono central
+    const role = p.tacticalRole || p.position
+    const isCB = role === 'CB' || role === 'DFC' || role === 'LÍBERO' || role === 'STOP I' || role === 'STOP D' || p.position === 'CB'
+    if (!inPossession && isCB) {
+      const isLeftCB = p.originPOS[0] < (pitchWidth / 2)
+      const cbXOffset = isLeftCB ? -48 : 48
+      rawX = Math.max(pitchWidth / 2 - 95, Math.min(pitchWidth / 2 + 95, (pitchWidth / 2) + cbXOffset + (ball[0] - pitchWidth / 2) * 0.15))
+    }
+
     const anchorX = Math.max(
       SHAPE_CONFIG.PITCH_MARGIN,
       Math.min(pitchWidth - SHAPE_CONFIG.PITCH_MARGIN, rawX)
@@ -571,10 +582,14 @@ export function assignDefensivePlanWithIncumbency(defendingTeam, attackingTeam, 
     for (const p of outfielders) {
       if (takenDefenderIDs.has(p.playerID)) continue
       const role = p.tacticalRole || p.position
+      const isOpponentWide = Math.abs(oppPlayer.currentPOS[0] - (pitchWidth / 2)) > 155
       const isCentralThreat = Math.abs(oppPlayer.currentPOS[0] - (pitchWidth / 2)) < 130
       const isCB = (role === 'CB' || role === 'DFC' || role === 'LÍBERO' || role === 'STOP I' || role === 'STOP D' || p.position === 'CB')
+
+      // Penalización severa para evitar que un CB abandone el área chica / cueva para perseguir a un atacante en la raya
+      const cbDistractionPenalty = (isCB && isOpponentWide) ? 350 : 0
       const roleBonus = (isCB && isCentralThreat) ? -60 : 0
-      const d = common.distance(p.currentPOS, oppPlayer.currentPOS) + roleBonus
+      const d = common.distance(p.currentPOS, oppPlayer.currentPOS) + roleBonus + cbDistractionPenalty
       // Incumbency: si este defensor ya marcaba a este atacante, fuerte fidelidad de marca (-45px)
       const effectiveD = d - ((prevMarkerID === p.playerID) ? 45 : 0)
       if (effectiveD < minMarkerDist) {
@@ -583,7 +598,7 @@ export function assignDefensivePlanWithIncumbency(defendingTeam, attackingTeam, 
       }
     }
 
-    if (bestMarker && minMarkerDist < 380) {
+    if (bestMarker && minMarkerDist < 350) {
       duties[bestMarker.playerID] = { duty: 'Mark', targetID: threatID }
       markerMap[threatID] = bestMarker.playerID
       takenDefenderIDs.add(bestMarker.playerID)

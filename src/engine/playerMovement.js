@@ -1149,12 +1149,12 @@ export function resolveMutualPlayerSeparation(matchDetails) {
         let dist = Math.hypot(dx, dy)
 
         // Distancia mínima requerida entre centros de los círculos (dot radius = 15.5px)
-        // Entre compañeros de equipo: 18px (para que se distingan los números y camisetas)
-        // Entre rivales: 13px (permite disputa cuerpo a cuerpo dentro de challengeRadius = 22 sin fusionarse)
-        // Con el arquero: 24px
+        // Entre compañeros de equipo: 22px (evita montoneras y amontonamiento de fichas)
+        // Entre rivales: 15px (permite disputa cuerpo a cuerpo dentro de challengeRadius = 22 sin fusionarse)
+        // Con el arquero: 28px
         const sameTeam = p1Obj.teamID === p2Obj.teamID
         const hasGK = p1Obj.isGK || p2Obj.isGK
-        const minDist = hasGK ? 24 : (sameTeam ? 18 : 13)
+        const minDist = hasGK ? 28 : (sameTeam ? 22 : 15)
 
         if (dist < minDist) {
           if (dist === 0) {

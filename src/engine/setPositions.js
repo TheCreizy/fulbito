@@ -1162,8 +1162,10 @@ export function keepInBoundaries(matchDetails, kickteamID, ballIntended) {
 export function setPlayerPositions(matchDetails, team, extra) {
   for (const thisPlayer of team.players) {
     if (!common.isOnPitch(thisPlayer)) continue
+    thisPlayer.offBallRun = null
     if (thisPlayer.position === 'GK') {
       thisPlayer.currentPOS = thisPlayer.originPOS.slice()
+      thisPlayer.intentPOS = thisPlayer.originPOS.slice()
     } else {
       thisPlayer.currentPOS = thisPlayer.originPOS.slice()
       const playerPos = parseInt(thisPlayer.currentPOS[1], 10) + extra
@@ -1560,14 +1562,17 @@ export function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
     }
   }
 
-  // 5. RestDefence (defensa de reposo para custodiar la contra)
+  // 5. RestDefence (defensa de reposo para custodiar la contra):
+  // Garantiza que la zaga central (2 CBs) MÁS el volante tapón/central (CDM/CM) y/o el lateral opuesto
+  // permanezcan siempre detrás de la pelota resguardando el campo propio contra cualquier contragolpe.
   const onLeftFlank = ball.position[0] < pitchWidth / 2
   const oppositeFullbackRole = onLeftFlank ? 'RB' : 'LB'
   const restDefencePlayers = availableAttackers.filter(p => {
     const role = p.tacticalRole || p.position
-    // Solo los centrales hacen RestDefence obligatoria; el lateral opuesto solo si la mentalidad es defensiva
-    const isOppositeFullbackResting = (kickingTeam?.mentality === 'defensive') && (role === oppositeFullbackRole)
-    return role === 'CB' || role === 'DFC' || role === 'LÍBERO' || role === 'STOP I' || role === 'STOP D' || isOppositeFullbackResting
+    const isCB = role === 'CB' || role === 'DFC' || role === 'LÍBERO' || role === 'STOP I' || role === 'STOP D' || p.position === 'CB'
+    const isCDM = role === 'CDM' || (role === 'CM' && kickingTeam?.mentality !== 'offensive')
+    const isOppositeFullbackResting = role === oppositeFullbackRole
+    return isCB || isCDM || isOppositeFullbackResting
   })
 
   let activeDiagonalRunners = kickingTeam.players.filter(

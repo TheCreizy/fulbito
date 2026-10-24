@@ -304,14 +304,15 @@ function computeBaseCarrierDecision(matchDetails, player, team, opposition, env)
   // 2.6 CANAL LIBRE / SUPERÓ A LOS RIVALES (MANO A MANO HACIA EL GOL)
   // Si el portador tiene el espacio libre adelante o superó a la línea defensiva,
   // NO tocar atrás ni al costado: sprint decidido directo al área/arco rival y tiro
-  if (env.hasOpenRunway && position !== 'GK') {
-    // Si ya está frente al arquero en el área chica o punto penal (distToGoalY <= 115): remate contundente
-    if (env.distToGoalY <= 115) {
-      return [92, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0]
+  const isUnmarkedForward = isStriker && env.nearestOppAheadDist > 45 && env.nearbyOppsCount === 0 && env.distToGoalY < 320
+  if ((env.hasOpenRunway || isUnmarkedForward) && position !== 'GK') {
+    // Si ya está frente al arquero en el área chica o punto penal (distToGoalY <= 125): remate contundente
+    if (env.distToGoalY <= 125) {
+      return [95, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0]
     }
-    // Ingresando al área penal (116px a 165px): tiro colocado o seguir encarando al arquero
-    if (env.distToGoalY <= 165) {
-      const shootPts = (skill.shooting >= 80 || isArtillero) ? 68 : 55
+    // Ingresando al área penal (126px a 195px): tiro al arco o encarar en sprint directo
+    if (env.distToGoalY <= 195) {
+      const shootPts = (skill.shooting >= 75 || isArtillero || isStriker) ? 80 : 65
       const drivePts = 100 - shootPts
       return [shootPts, 0, 0, 0, 0, 0, 0, 0, drivePts, 0, 0, 0]
     }
