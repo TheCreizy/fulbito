@@ -41,6 +41,171 @@ export const SHAPE_CONFIG = {
 }
 
 /**
+ * Configuraciones canónicas de Bloque Defensivo (Fase 2 Fulbito 2.0 / open_football_engine)
+ */
+export const BLOCK_CONFIGS = {
+  low:    { restraintU: 0.14, confrontationU: 0.32, lineSpacingU: 0.10, basculationK: 0.50 },
+  medium: { restraintU: 0.27, confrontationU: 0.52, lineSpacingU: 0.11, basculationK: 0.45 },
+  high:   { restraintU: 0.43, confrontationU: 0.72, lineSpacingU: 0.12, basculationK: 0.40 },
+}
+
+/**
+ * Evalúa si se activa un Detonante de Presión (Pressing Trigger) en tiempo real.
+ */
+export function evaluatePressingTrigger(ballCarrier, ball, pitchBounds, defendingAttackDir = 1) {
+  if (!ballCarrier || !ball) return false
+
+  const bounds = pitchBounds || { minX: 0, maxX: 680, minY: 0, maxY: 1050, width: 680, height: 1050 }
+  const isVertical = bounds.height > bounds.width
+
+  const bx = ball.x ?? (Array.isArray(ball.position) ? ball.position[0] : (ball[0] ?? 0))
+  const by = ball.y ?? (Array.isArray(ball.position) ? ball.position[1] : (ball[1] ?? 0))
+
+  const cx = ballCarrier.x ?? (Array.isArray(ballCarrier.currentPOS) ? ballCarrier.currentPOS[0] : 0)
+  const cy = ballCarrier.y ?? (Array.isArray(ballCarrier.currentPOS) ? ballCarrier.currentPOS[1] : 0)
+
+  // 1. Poseedor encerrado contra la línea de banda (Touchline)
+  const relTrans = isVertical
+    ? (bx - bounds.minX) / bounds.width
+    : (by - bounds.minY) / bounds.height
+  const nearTouchline = relTrans < 0.12 || relTrans > 0.88
+
+  // 2. Poseedor perfilado de espaldas hacia el arco que defiende el equipo
+  const goalDirLong = -defendingAttackDir
+  const facingAngle = ballCarrier.facingAngle ?? 0
+  const carrierFacingLong = isVertical ? Math.sin(facingAngle) : Math.cos(facingAngle)
+  const isFacingOwnGoal = (carrierFacingLong * goalDirLong) < -0.25
+
+  // 3. Control defectuoso (balón separado > 18px / ~1.8m del poseedor)
+  const ballDist = Math.hypot(bx - cx, by - cy)
+  const isHeavyTouch = ballDist > 18
+
+  return nearTouchline || isFacingOwnGoal || isHeavyTouch
+}
+
+/**
+ * Calcula las coordenadas objetivo (anclas dinámicas) de todo el bloque defensivo
+ * garantizando sincronización de línea, compresión <= 12m, basculación y regla del +1 (Spare Man).
+ */
+export function computeDefensiveBlockTargets(teamPlayers, opponents, ball, pitchBounds, tactics = {}) {
+  const bounds = pitchBounds || { minX: 0, maxX: 680, minY: 0, maxY: 1050, width: 680, height: 1050 }
+  const isVertical = bounds.height > bounds.width
+  const attackDir = tactics.attackDir ?? 1
+  const blockType = tactics.blockHeight || 'medium'
+  const cfg = BLOCK_CONFIGS[blockType] || BLOCK_CONFIGS.medium
+
+  const bx = ball?.x ?? (Array.isArray(ball?.position) ? ball.position[0] : (ball?.[0] ?? 340))
+  const by = ball?.y ?? (Array.isArray(ball?.position) ? ball.position[1] : (ball?.[1] ?? 525))
+
+  const rawLong = isVertical
+    ? (by - bounds.minY) / bounds.height
+    : (bx - bounds.minX) / bounds.width
+  const rawTrans = isVertical
+    ? (bx - bounds.minX) / bounds.width
+    : (by - bounds.minY) / bounds.height
+
+  const ballU = attackDir === 1 ? rawLong : 1.0 - rawLong
+  const ballV = attackDir === 1 ? rawTrans : 1.0 - rawTrans
+
+  const ballCarrier = opponents?.find?.(o => (o.id || o.playerID) === (ball?.ownerId || ball?.Player))
+  const triggerActive = evaluatePressingTrigger(ballCarrier, ball, bounds, attackDir)
+
+  // 1. Línea de Restricción dinámica sincronizada
+  const rawLineU = Math.min(cfg.restraintU + (triggerActive ? 0.06 : 0), Math.max(0.09, ballU - 0.16))
+  const unpressuredPasser = ballCarrier && (ballCarrier.pressurePPM || 0) < 0.25 && ballU < 0.65
+  const finalBacklineU = unpressuredPasser ? Math.max(0.10, rawLineU - 0.05) : rawLineU
+
+  // 2. Basculación lateral por centroide
+  const deltaV = cfg.basculationK * (ballV - 0.5)
+
+  // 3. Regla del Hombre Libre (Spare Man / +1)
+  const advancedOpponents = (opponents || []).filter(o => {
+    if (o.role === 'GK' || o.position === 'GK' || o.redCard || o.sentOff) return false
+    const oy = o.y ?? (Array.isArray(o.currentPOS) ? o.currentPOS[1] : 0)
+    const ox = o.x ?? (Array.isArray(o.currentPOS) ? o.currentPOS[0] : 0)
+    const oppLong = isVertical ? (oy - bounds.minY) / bounds.height : (ox - bounds.minX) / bounds.width
+    const oppU = attackDir === 1 ? oppLong : 1.0 - oppLong
+    return oppU < finalBacklineU + 0.14
+  })
+
+  const defenders = (teamPlayers || []).filter(p => {
+    const role = p.tacticalRole || p.position
+    return (p.line === 'DEF' || ['CB', 'LB', 'RB', 'DFC', 'LI', 'LD'].includes(role)) && !p.redCard && !p.sentOff
+  })
+
+  const needPivotDrop = advancedOpponents.length >= defenders.length
+
+  const targets = new Map()
+
+  for (const player of (teamPlayers || [])) {
+    if (player.role === 'GK' || player.position === 'GK' || player.redCard || player.sentOff) continue
+
+    const role = player.tacticalRole || player.position
+    const isDefender = player.line === 'DEF' || ['CB', 'LB', 'RB', 'DFC', 'LI', 'LD', 'LÍBERO', 'STOP I', 'STOP D'].includes(role)
+    const isMidfielder = player.line === 'MID' || ['CDM', 'CM', 'CAM', 'LM', 'RM', 'VOL', 'MC', 'ENG'].includes(role)
+
+    let baseU = player.formationBaseU
+    let baseV = player.formationBaseV
+
+    if (baseU === undefined || baseV === undefined) {
+      const origX = player.originPOS ? player.originPOS[0] : (bounds.width / 2)
+      const origY = player.originPOS ? player.originPOS[1] : (bounds.height / 2)
+      const pLong = isVertical ? (origY - bounds.minY) / bounds.height : (origX - bounds.minX) / bounds.width
+      const pTrans = isVertical ? (origX - bounds.minX) / bounds.width : (origY - bounds.minY) / bounds.height
+      baseU = attackDir === 1 ? pLong : 1.0 - pLong
+      baseV = attackDir === 1 ? pTrans : 1.0 - pTrans
+    }
+
+    let targetU = finalBacklineU
+    if (isDefender) {
+      targetU = finalBacklineU
+    } else if (isMidfielder) {
+      if (needPivotDrop && (role === 'CDM' || role === 'VOL' || player.tacticalRole === 'PIVOT')) {
+        targetU = finalBacklineU + 0.02
+      } else {
+        targetU = Math.min(cfg.confrontationU, finalBacklineU + cfg.lineSpacingU)
+      }
+    } else {
+      targetU = Math.min(cfg.confrontationU + 0.08, Math.max(finalBacklineU + 0.22, ballU - 0.04))
+    }
+
+    // Compresión transversal hacia el balón (Balance del lado débil 38%)
+    const distFromCenterV = baseV - 0.5
+    const isWeakSide = (ballV < 0.45 && baseV > 0.55) || (ballV > 0.55 && baseV < 0.45)
+    const widthCompression = isWeakSide ? 0.62 : 0.78
+
+    const targetV = Math.max(0.08, Math.min(0.92, 0.5 + distFromCenterV * widthCompression + deltaV))
+
+    let worldX, worldY, backlineCoord
+    if (isVertical) {
+      const rawTargetLong = attackDir === 1 ? targetU : 1.0 - targetU
+      const rawTargetTrans = attackDir === 1 ? targetV : 1.0 - targetV
+      worldY = bounds.minY + rawTargetLong * bounds.height
+      worldX = bounds.minX + rawTargetTrans * bounds.width
+      backlineCoord = bounds.minY + (attackDir === 1 ? finalBacklineU : 1.0 - finalBacklineU) * bounds.height
+    } else {
+      const rawTargetLong = attackDir === 1 ? targetU : 1.0 - targetU
+      const rawTargetTrans = attackDir === 1 ? targetV : 1.0 - targetV
+      worldX = bounds.minX + rawTargetLong * bounds.width
+      worldY = bounds.minY + rawTargetTrans * bounds.height
+      backlineCoord = bounds.minX + (attackDir === 1 ? finalBacklineU : 1.0 - finalBacklineU) * bounds.width
+    }
+
+    const pid = player.id || player.playerID
+    targets.set(pid, {
+      x: worldX,
+      y: worldY,
+      backlineCoord,
+      backlineX: isVertical ? worldX : backlineCoord,
+      backlineY: isVertical ? backlineCoord : worldY,
+      triggerActive
+    })
+  }
+
+  return targets
+}
+
+/**
  * Aproximación suave de un valor previo hacia el objetivo limitado por maxStep,
  * o salto directo (snap) si la diferencia supera el umbral de reinicio.
  */
@@ -612,11 +777,29 @@ export function assignDefensivePlanWithIncumbency(defendingTeam, attackingTeam, 
     }
   }
 
+  const pitchBounds = {
+    minX: 0,
+    maxX: pitchWidth,
+    minY: 0,
+    maxY: pitchHeight,
+    width: pitchWidth,
+    height: pitchHeight
+  }
+  const blockTargets = computeDefensiveBlockTargets(
+    defendingTeam.players,
+    attackingTeam.players,
+    matchDetails.ball,
+    pitchBounds,
+    { attackDir: isTopTeam ? 1 : -1, blockHeight: defendingTeam.tactics?.blockHeight || 'medium' }
+  )
+
   defendingTeam.defensivePlan = {
     duties,
     presserID: bestPresser?.playerID,
     coverID: bestCover?.playerID,
     markerMap,
+    blockTargets,
+    triggerActive: blockTargets.values().next().value?.triggerActive || false,
     lastUpdateIter: matchDetails.iterationCount || 0
   }
 

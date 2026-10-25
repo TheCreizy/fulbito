@@ -20,8 +20,9 @@
     "test:attributes-fatigue-goals": "node tests/verifyAttributesFatigueAndGoals.js",
     "test:var-kickoff-jamming": "node tests/verifyVarKickoffAndJammingFixes.js",
     "test:argon-optimizations": "node tests/verifyGeminiArgonOptimizations.js",
+    "test:phase1-phase2": "node tests/verifyPhase1And2Fulbito2.js",
     "convert:md": "node convert_to_markdown.js",
-    "test": "node tests/verifyEngineAndDraft.js && node tests/verifyFutDraft.js && node tests/verifyTacticalAndSetPieces.js && node tests/verifyGameplayRebalance.js && node tests/verifyOffsideAndTacticalStoppages.js && node tests/verifyCornersPenaltiesThroughBallsCrosses.js && node tests/verifySetPiecesAdvanced.js && node tests/verifyReboundsAndSetPiecesFixes.js && node tests/verifyDefensiveAndBehavioralOpenManager.js && node tests/verifyAttributesFatigueAndGoals.js && node tests/verifyVarKickoffAndJammingFixes.js && node tests/verifyGeminiArgonOptimizations.js"
+    "test": "node tests/verifyEngineAndDraft.js && node tests/verifyFutDraft.js && node tests/verifyTacticalAndSetPieces.js && node tests/verifyGameplayRebalance.js && node tests/verifyOffsideAndTacticalStoppages.js && node tests/verifyCornersPenaltiesThroughBallsCrosses.js && node tests/verifySetPiecesAdvanced.js && node tests/verifyReboundsAndSetPiecesFixes.js && node tests/verifyDefensiveAndBehavioralOpenManager.js && node tests/verifyAttributesFatigueAndGoals.js && node tests/verifyVarKickoffAndJammingFixes.js && node tests/verifyGeminiArgonOptimizations.js && node tests/verifyPhase1And2Fulbito2.js"
   },
   "dependencies": {
     "react": "^18.3.1",

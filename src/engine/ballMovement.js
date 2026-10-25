@@ -2,6 +2,9 @@ import * as common from './common.js'
 import * as setPositions from './setPositions.js'
 import * as actions from './actions.js'
 import { getPlayStyleConfig } from '../data/formations.js'
+import { BALL_PHYSICS, kickBall25D, predictBallLanding, updateBallPhysics25D } from './ball/ballPhysics.js'
+
+export { BALL_PHYSICS, kickBall25D, predictBallLanding, updateBallPhysics25D }
 
 export function getSecondLastDefender(defendingTeam, attackingTop, pitchHeight) {
   const activeDefenders = (defendingTeam?.players || []).filter(common.isOnPitch)
