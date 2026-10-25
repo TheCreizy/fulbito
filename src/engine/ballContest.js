@@ -147,8 +147,8 @@ export function resolveBallCarrierEngagement(defender, attacker, ball, matchCont
       ball.ownerId = defId;
       ball.withPlayer = true;
       ball.Player = defId;
-      defender.tackleCooldown = 30;
-      attacker.tackleCooldown = 35;
+      defender.tackleCooldown = 10;
+      attacker.tackleCooldown = 12;
       if (defender.stats?.tackles) {
         defender.stats.tackles.total = (defender.stats.tackles.total || 0) + 1;
         defender.stats.tackles.standing = (defender.stats.tackles.standing || 0) + 1;
@@ -156,12 +156,12 @@ export function resolveBallCarrierEngagement(defender, attacker, ball, matchCont
       return { outcome: 'CLEAN_BODY_WIN' };
     }
 
-    // Falta infrecuente por carga desmedida (<4% si el defensor es poco ágil)
-    if (bodyScoreDef < bodyScoreAtt - 0.22 && rng() < 0.04 * (1.1 - defAgi)) {
-      defender.tackleCooldown = 50;
+    // Carga lateral ilícita / empujón cuando el atacante gana la posición
+    if (bodyScoreDef < bodyScoreAtt - 0.03 && rng() < 0.45 * (1.15 - defAgi)) {
+      defender.tackleCooldown = 6;
       const decision = adjudicateFoul(matchContext.referee, defender, attacker, {
         isInsidePenaltyBox: matchContext.isInsidePenaltyBox,
-        severity: 0.30,
+        severity: 0.35,
         approachFromBehind: false,
         isPromisingCounterAttack: matchContext.isCounterAttack,
         isLastManDOGSO: false,
@@ -178,14 +178,15 @@ export function resolveBallCarrierEngagement(defender, attacker, ball, matchCont
     approachFromBehind
   );
 
-  const attemptTackleProb = 0.28 * (0.6 + 0.4 * defPer) * restraint;
+  // Probabilidad de intentar la entrada al balón
+  const attemptTackleProb = 0.92 * (0.55 + 0.45 * defPer) * restraint;
   if (rng() > attemptTackleProb) {
     attacker.speedModifier = Math.min(attacker.speedModifier || 1.0, 0.72); // Frenado táctico (Delay)
     return { outcome: 'DELAY_JOCKEY' };
   }
 
   // Ejecución de Tackle
-  defender.tackleCooldown = 55;
+  defender.tackleCooldown = 6;
   if (defender.stats?.tackles) {
     defender.stats.tackles.total = (defender.stats.tackles.total || 0) + 1;
   }
@@ -200,17 +201,17 @@ export function resolveBallCarrierEngagement(defender, attacker, ball, matchCont
     ball.ownerId = defId;
     ball.withPlayer = true;
     ball.Player = defId;
-    attacker.tackleCooldown = 40;
+    attacker.tackleCooldown = 8;
     if (defender.stats?.tackles) {
       defender.stats.tackles.on = (defender.stats.tackles.on || 0) + 1;
     }
     return { outcome: 'CLEAN_TACKLE_WIN' };
   }
 
-  // El atacante eludió el tackle: evaluar si hubo infracción
+  // El atacante eludió el tackle: evaluar si hubo infracción (zancadilla o arrastre)
   const foulContactProb = Math.min(
-    0.42,
-    Math.max(0.08, (0.22 - 0.12 * defTac + (approachFromBehind ? 0.18 : 0)) * restraint)
+    0.85,
+    Math.max(0.48, (0.72 - 0.18 * defTac + (approachFromBehind ? 0.22 : 0)) * restraint)
   );
 
   if (rng() < foulContactProb) {

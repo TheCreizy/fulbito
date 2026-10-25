@@ -1334,10 +1334,17 @@ function setDefenceRelativePos(matchDetails, defendingTeam, closestPlayer, attac
     // Arquero: anchor del bloque
     if (player.position === 'GK') {
       player.intentPOS = [anchor[0], anchor[1]]
+      player.defensiveState = 'GOALKEEPER'
       continue
     }
 
     const playerDuty = duties[player.playerID] || { duty: 'HoldZone' }
+    const engagement = defPlan?.engagementRoles?.get?.(player.playerID)
+    if (engagement) {
+      player.defensiveState = engagement.state
+    } else {
+      player.defensiveState = playerDuty.duty === 'Press' ? 'FIRST_DEFENDER_DELAY' : (playerDuty.duty === 'Cover' ? 'SECOND_DEFENDER_COVER' : (playerDuty.duty === 'Mark' ? 'MARKING_TIGHT' : 'HOLDING_LINE_BALANCE'))
+    }
 
     // A. PRESSER: Sale a presionar al portador goal-side
     if (playerDuty.duty === 'Press') {

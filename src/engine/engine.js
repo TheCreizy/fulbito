@@ -11,6 +11,7 @@ import {
 } from "./modifiers.js";
 import { getFormationCoordinates } from "../data/formations.js";
 import { updateTeamCoachDirectives } from "./coachAI.js";
+import { getTacticalZone18, getVerticalLane } from "./space/pitchZones.js";
 
 export async function initiateGame(team1, team2, pitchDetails) {
   validate.validateArguments(team1, team2, pitchDetails);
@@ -135,6 +136,23 @@ export async function playIteration(matchDetails) {
   common.matchInjury(matchDetails, secondTeam);
   checkSeriousInjurySubstitutions(matchDetails, kickOffTeam, "kickOffTeam");
   checkSeriousInjurySubstitutions(matchDetails, secondTeam, "secondTeam");
+
+  // Actualizar 18 Zonas Tácticas y 5 Carriles Verticales para los 22 jugadores
+  const halfwayY = matchDetails.pitchSize[1] / 2;
+  const isTopKo = (kickOffTeam.players?.[0]?.originPOS?.[1] ?? 0) < halfwayY;
+  const isTopSt = (secondTeam.players?.[0]?.originPOS?.[1] ?? 0) < halfwayY;
+  for (const p of kickOffTeam.players) {
+    if (common.isOnPitch(p)) {
+      p.zone18 = getTacticalZone18(p.currentPOS, matchDetails.pitchSize, isTopKo ? 1 : -1);
+      p.lane = getVerticalLane(p.currentPOS, matchDetails.pitchSize, isTopKo ? 1 : -1);
+    }
+  }
+  for (const p of secondTeam.players) {
+    if (common.isOnPitch(p)) {
+      p.zone18 = getTacticalZone18(p.currentPOS, matchDetails.pitchSize, isTopSt ? 1 : -1);
+      p.lane = getVerticalLane(p.currentPOS, matchDetails.pitchSize, isTopSt ? 1 : -1);
+    }
+  }
 
   // Contabilizar posesión en tiempo real y transiciones de posesión (open-football model)
   const currentTeamWithBall =

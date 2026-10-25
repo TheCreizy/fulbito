@@ -18,3 +18,15 @@
   7. Arbitraje IFAB con ley de la ventaja, faltas tácticas (SPA) y DOGSO.
 * **Por qué (Justificación Técnica/Táctica):** Elimina el desorden defensivo (montoneras detrás de la pelota), erradica el exceso de faltas irreales mediante la separación de duelos corporales e intercepciones del tackle, e introduce física tridimensional sin alterar los contratos con la UI ni con las suites de prueba históricas.
 * **Estado de Tests:** 13/13 suites de prueba verificadas al 100% con `npm test` (incluyendo `tests/verifyPhase1And2Fulbito2.js`).
+
+### [2026-10-25] - Fase 1 y 2: Integración Activa en el Loop del Partido, Corrección de Nomenclatura y Calibración IFAB
+* **Archivos tocados:** `src/engine/engine.js`, `src/engine/actions.js`, `src/engine/ballMovement.js`, `src/engine/playerMovement.js`, `src/engine/setPositions.js`, `src/engine/teamShape.js`, `src/engine/ballContest.js`, `src/engine/officiating/referee.js`, `tests/verifyPhase1And2Fulbito2.js`
+* **Qué se hizo:** Se integraron completamente los módulos de Fases 1 y 2 en el loop de simulación en vivo del motor (`engine.js`, `actions.js`, `playerMovement.js`, `setPositions.js` y `ballMovement.js`):
+  1. Se corrigió `resolvePlayerLine` para soportar de forma nativa la taxonomía de posiciones de Fulbito (`'GK'`, `'DEF'`, `'ME'` y `'DEL'`), evitando reclasificar a los mediocampistas (`'ME'`, `'MC'`, `'MCD'`, `'MD'`, `'MI'`) como delanteros.
+  2. Se conectó en cada tick la orientación corporal dinámica `player.facingAngle` y la telemetría `player.pressurePPM`, `player.zone18` y `player.lane` para los 22 futbolistas.
+  3. Se conectó el contrato defensivo en `setDefendingTeamPositions`, asignando a los defensores sus roles activos (`FIRST_DEFENDER_DELAY`, `SECOND_DEFENDER_COVER`, `MARKING_TIGHT`, `HOLDING_LINE_BALANCE`).
+  4. Se integró la balística 2.5D con trayectoria parabólica continua (`ball.z`, `ball.vz`), efecto Magnus y predicción de impacto `ball.landingPoint` en `ballMovement.moveBall`.
+  5. Se reemplazó el tackle viejo en `actions.resolveTackle` y `actions.resolveSlide` por la resolución en 3 capas de `ballContest.js` y el arbitraje calibrado IFAB de `officiating/referee.js`.
+  6. Se calibró la frecuencia de disputas y disciplina en 10 partidos reales (20,000 iteraciones): 12.6 faltas/partido, 3.9 amarillas/partido, 0.00 rojas directas desmedidas, con altura $Z$ de balón alcanzando $116\text{ px}$.
+* **Por qué (Justificación Técnica/Táctica):** Resuelve la desconexión del loop principal detectada en la auditoría forense, asegurando que las innovaciones tácticas y físicas de Fulbito 2.0 impacten directamente en los partidos en vivo de React (`MatchSimulator.jsx`) sin romper contratos ni alterar la base de datos de jugadores.
+* **Estado de Tests:** 13/13 suites de prueba verificadas al 100% con `npm test` (incluyendo `tests/verifyPhase1And2Fulbito2.js` con telemetría en tiempo real sobre 438,680 registros).

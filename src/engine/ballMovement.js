@@ -357,6 +357,10 @@ export function moveBall(matchDetails) {
     }
     ball.direction = 'wait'
     if (ball.position.length === 2) ball.position = [ball.position[0], ball.position[1], 0]
+    ball.x = ball.position[0]
+    ball.y = ball.position[1]
+    ball.z = ball.position[2] || 0
+    ball.landingPoint = { x: ball.x, y: ball.y, ticksToLand: 0, isAerial: false }
     return matchDetails
   }
   const currentPos = ball.position
@@ -373,6 +377,11 @@ export function moveBall(matchDetails) {
     Number(endPos[2] ?? 0)
   ]
   ball.position = safeEndPos
+  ball.x = safeEndPos[0]
+  ball.y = safeEndPos[1]
+  ball.z = safeEndPos[2]
+  ball.vz = (safeEndPos[2] || 0) - (currentPos[2] || 0)
+  ball.landingPoint = predictBallLanding(ball)
   matchDetails.iterationLog.push(`ball still moving from previous kick: ${safeEndPos}`)
   const lastTeamID = matchDetails.ball.lastTouch.teamID
   matchDetails = setPositions.keepInBoundaries(matchDetails, lastTeamID, safeEndPos)

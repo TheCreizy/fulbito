@@ -4,10 +4,30 @@ import * as setPositions from './setPositions.js'
 import * as actions from './actions.js'
 import { isCaptainOnPitch, updatePlayerEffectiveSkills } from './modifiers.js'
 import { calculateInterceptMovement, steerTowardsTarget } from './steering.js'
+import { resolvePlayerLine, isPivotRole, assignDefensiveEngagementRoles } from './teamShape.js'
+import { computePlayerPressure } from './space/pressureMap.js'
+import { tryInterceptLooseBall } from './ballContest.js'
+
+export { resolvePlayerLine, isPivotRole, assignDefensiveEngagementRoles }
 
 export function decideMovement(closestPlayer, team, opp, matchDetails) {
   const { position, withPlayer, withTeam } = matchDetails.ball
   const teamActions = []
+
+  // Actualizar presión PPM para todos los jugadores en cancha
+  for (const p of team.players) {
+    if (common.isOnPitch(p)) {
+      const press = computePlayerPressure(p, opp.players, 10.0)
+      p.pressurePPM = press.totalPressure
+    }
+  }
+  for (const p of opp.players) {
+    if (common.isOnPitch(p)) {
+      const press = computePlayerPressure(p, team.players, 10.0)
+      p.pressurePPM = press.totalPressure
+    }
+  }
+
   for (const thisPlayer of team.players) {
     if (common.isOnPitch(thisPlayer)) {
       if ((thisPlayer.stunnedTicks || 0) > 0) {
@@ -320,6 +340,13 @@ function tryCarrierGambeta(matchDetails, carrier, team, opp, move) {
 export function movePlayers(moves, team, opp, matchDetails) {
   const controlRadius = 12
   const challengeRadius = 22
+
+  // Decrementar cooldowns en cada tick
+  for (const p of team.players) {
+    if ((p.tackleCooldown || 0) > 0) p.tackleCooldown--
+    if ((p.interceptCooldown || 0) > 0) p.interceptCooldown--
+  }
+
   for (const thisPlayerMove of moves) {
     const thisPlayer = thisPlayerMove.player
     if (!common.isOnPitch(thisPlayer)) continue
@@ -356,6 +383,15 @@ export function movePlayers(moves, team, opp, matchDetails) {
       matchDetails.ball.ballOverIterations.length > 0
     )
     if (isRecentKicker) continue
+
+    // Intercepción limpia de pase suelto en tránsito según física 2.5D (Capa 1)
+    if (!withPlayer && matchDetails.ball.ballOverIterations.length > 0) {
+      const intercepted = tryInterceptLooseBall(thisPlayer, matchDetails.ball, 10.0)
+      if (intercepted) {
+        setClosePlayerTakesBall(matchDetails, thisPlayer, team, opp)
+        continue
+      }
+    }
     // Si es un remate al arco en vuelo, lo resuelve thisPlayerIsInProximity / keepInBoundaries (atajada, bloqueo o gol)
     if (
       matchDetails.ball.ballOverIterations.length > 0 &&
@@ -372,9 +408,9 @@ export function movePlayers(moves, team, opp, matchDetails) {
       // ningún rival puede disputar o quitarle el balón al ejecutante antes del tiro.
       if (matchDetails.ball?.isRestart) continue
 
-      const role = thisPlayer.tacticalRole || thisPlayer.position
-      const isAttacker = ['ST', 'CF', 'RW', 'LW', 'CAM', 'EXT'].includes(role) || thisPlayer.position === 'ST'
-      const isDefenderOrMid = ['CB', 'LB', 'RB', 'CDM', 'CM', 'DFC', 'LÍBERO', 'STOP I', 'STOP D', 'LI', 'LD'].includes(role)
+      const line = resolvePlayerLine(thisPlayer)
+      const isAttacker = line === 'ATT'
+      const isDefenderOrMid = line === 'DEF' || line === 'MID'
 
       if (closeWithPlayer) {
         setClosePlayerTakesBall(matchDetails, thisPlayer, team, opp)
@@ -384,11 +420,11 @@ export function movePlayers(moves, team, opp, matchDetails) {
         matchDetails = completeSlide(matchDetails, thisPlayer, team, opp)
       } else if (samePositionAsBall) {
         // Contacto directo cuerpo a cuerpo (< 8px): el defensor siempre disputa
-        const autoChallengeChance = isAttacker ? 30 : (isDefenderOrMid ? 88 : 65)
+        const autoChallengeChance = isAttacker ? 45 : (isDefenderOrMid ? 95 : 80)
         if (common.getRandomNumber(0, 100) < autoChallengeChance) {
           matchDetails = completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, opp)
         }
-      } else if (!isAttacker && common.getRandomNumber(0, 100) < (isDefenderOrMid ? 68 : 45)) {
+      } else if (!isAttacker && common.getRandomNumber(0, 100) < (isDefenderOrMid ? 94 : 78)) {
         // En zona de disputa (< 22px), el defensor mete la pierna aunque viniera corriendo con 'run'/'sprint'
         matchDetails = completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, opp)
       } else if (withPlayer === false && xPosition && yPosition) {
@@ -524,17 +560,21 @@ export function completeSlide(matchDetails, thisPlayer, team, opp) {
   }
   const foul = actions.resolveSlide(thisPlayer, team, opp, matchDetails)
   if (!foul) return matchDetails
-  const intensity = actions.foulIntensity()
   matchDetails.pendingFoulPlayer = { name: thisPlayer.name, playerID: thisPlayer.playerID, teamID: team.teamID }
   matchDetails.pendingFoulCard = null
   matchDetails.pendingPenaltyInfractor = thisPlayer.name
-  if (common.isBetween(intensity, 44, 94)) {
+
+  const card = matchDetails.lastAdjudicatedCard
+  if (card === 'YELLOW') {
     giveYellowCard(matchDetails, team, thisPlayer)
     matchDetails.pendingFoulCard = 'yellow'
-  } else if (intensity >= 95) {
+  } else if (card === 'SECOND_YELLOW_RED') {
+    giveYellowCard(matchDetails, team, thisPlayer)
+  } else if (card === 'RED') {
     sendPlayerOff(matchDetails, team, thisPlayer, 'directRed')
     matchDetails.pendingFoulCard = 'red'
   }
+
   if (opp.name === matchDetails.kickOffTeam.name) return setPositions.setSetpieceKickOffTeam(matchDetails)
   return setPositions.setSetpieceSecondTeam(matchDetails)
 }
@@ -549,14 +589,18 @@ export function completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, op
   matchDetails.pendingFoulPlayer = { name: thisPlayer.name, playerID: thisPlayer.playerID, teamID: team.teamID }
   matchDetails.pendingFoulCard = null
   matchDetails.pendingPenaltyInfractor = thisPlayer.name
-  const intensity = actions.foulIntensity()
-  if (common.isBetween(intensity, 58, 96)) {
+
+  const card = matchDetails.lastAdjudicatedCard
+  if (card === 'YELLOW') {
     giveYellowCard(matchDetails, team, thisPlayer)
     matchDetails.pendingFoulCard = 'yellow'
-  } else if (intensity >= 97) {
+  } else if (card === 'SECOND_YELLOW_RED') {
+    giveYellowCard(matchDetails, team, thisPlayer)
+  } else if (card === 'RED') {
     sendPlayerOff(matchDetails, team, thisPlayer, 'directRed')
     matchDetails.pendingFoulCard = 'red'
   }
+
   if (opp.name === matchDetails.kickOffTeam.name) return setPositions.setSetpieceKickOffTeam(matchDetails)
   return setPositions.setSetpieceSecondTeam(matchDetails)
 }
@@ -575,9 +619,19 @@ function completeMovement(matchDetails, currentPOS, move, player = null) {
       currentPOS[1] += move[1]
       actualMoveY = move[1]
     }
-    if (player && player.stats) {
-      const stepDistMeters = Math.hypot(actualMoveX, actualMoveY) * 0.1
-      player.stats.distanceCovered = common.round((player.stats.distanceCovered || 0) + stepDistMeters, 2)
+    if (player) {
+      if (player.stats) {
+        const stepDistMeters = Math.hypot(actualMoveX, actualMoveY) * 0.1
+        player.stats.distanceCovered = common.round((player.stats.distanceCovered || 0) + stepDistMeters, 2)
+      }
+      player.vx = actualMoveX
+      player.vy = actualMoveY
+      const isTopTeam = (player.originPOS?.[1] ?? 500) < (matchDetails.pitchSize[1] / 2)
+      player.facingAngle = Math.hypot(actualMoveX, actualMoveY) > 0.05
+        ? Math.atan2(actualMoveY, actualMoveX)
+        : (isTopTeam ? Math.PI / 2 : -Math.PI / 2)
+      player.x = currentPOS[0]
+      player.y = currentPOS[1]
     }
   }
   return currentPOS
@@ -1184,127 +1238,4 @@ export function resolveMutualPlayerSeparation(matchDetails) {
       }
     }
   }
-}
-
-/**
- * Asigna el Contrato de Emparejamiento Defensivo (Fase 2.2 Fulbito 2.0 / open_football_engine)
- * - 1.er Defensor: Presión/Delay exclusivo hacia el balón (FIRST_DEFENDER_DELAY)
- * - 2.os Defensores: Cobertura diagonal y permutas al cruzar línea (SECOND_DEFENDER_COVER)
- * - 3.os Defensores: Marcaje estrecho goal-side (MARKING_TIGHT) o equilibrio sincronizado (HOLDING_LINE_BALANCE)
- */
-export function assignDefensiveEngagementRoles(defendingTeam, opponents, ball, blockTargets, scaleMetersToPx = 10.0) {
-  const roles = new Map()
-  const defPlayers = Array.isArray(defendingTeam) ? defendingTeam : (defendingTeam?.players || [])
-  const oppPlayers = Array.isArray(opponents) ? opponents : (opponents?.players || [])
-
-  const activeFieldPlayers = defPlayers.filter(p => {
-    const role = p.tacticalRole || p.position
-    return role !== 'GK' && p.position !== 'GK' && !p.redCard && !p.sentOff
-  })
-
-  const bx = ball?.x ?? (Array.isArray(ball?.position) ? ball.position[0] : (ball?.[0] ?? 340))
-  const by = ball?.y ?? (Array.isArray(ball?.position) ? ball.position[1] : (ball?.[1] ?? 525))
-  const ballOwnerId = ball?.ownerId ?? ball?.Player
-
-  // 1. Elegir al 1.er Defensor con contrato exclusivo
-  let bestPresser = null
-  let bestScore = Infinity
-
-  for (const player of activeFieldPlayers) {
-    const px = player.x ?? (Array.isArray(player.currentPOS) ? player.currentPOS[0] : 0)
-    const py = player.y ?? (Array.isArray(player.currentPOS) ? player.currentPOS[1] : 0)
-    const distToBall = Math.hypot(bx - px, by - py)
-
-    const pid = player.id || player.playerID
-    const anchor = blockTargets?.get?.(pid) || { x: px, y: py }
-    const distFromAnchor = Math.hypot(bx - anchor.x, by - anchor.y)
-
-    const role = player.tacticalRole || player.position
-    const isCB = ['CB', 'DFC', 'LÍBERO', 'STOP I', 'STOP D'].includes(role) || player.position === 'CB' || player.line === 'DEF'
-    const centralPenalty = (isCB && distFromAnchor > 11 * scaleMetersToPx) ? 85 : 0
-    const score = distToBall + 0.45 * distFromAnchor + centralPenalty
-
-    if (score < bestScore) {
-      bestScore = score
-      bestPresser = player
-    }
-  }
-
-  const presserPid = bestPresser ? (bestPresser.id || bestPresser.playerID) : null
-  const presserAnchor = presserPid ? blockTargets?.get?.(presserPid) : null
-
-  for (const player of activeFieldPlayers) {
-    const pid = player.id || player.playerID
-    const px = player.x ?? (Array.isArray(player.currentPOS) ? player.currentPOS[0] : 0)
-    const py = player.y ?? (Array.isArray(player.currentPOS) ? player.currentPOS[1] : 0)
-    const role = player.tacticalRole || player.position
-    const isDefLine = player.line === 'DEF' || ['CB', 'LB', 'RB', 'DFC', 'LI', 'LD', 'LÍBERO'].includes(role)
-
-    if (bestPresser && pid === presserPid) {
-      roles.set(pid, {
-        state: 'FIRST_DEFENDER_DELAY',
-        targetX: bx,
-        targetY: by,
-      })
-      continue
-    }
-
-    const myAnchor = blockTargets?.get?.(pid) || { x: px, y: py }
-    const attackDir = player.attackDir ?? (py < 525 ? 1 : -1)
-
-    // Cobertura y permuta en caso de salida del central
-    const presserIsDef = bestPresser && (bestPresser.line === 'DEF' || ['CB', 'DFC'].includes(bestPresser.tacticalRole || bestPresser.position))
-    if (
-      presserIsDef &&
-      isDefLine &&
-      presserAnchor &&
-      Math.abs(myAnchor.x - presserAnchor.x) < 22 * scaleMetersToPx
-    ) {
-      const coverX = myAnchor.x + 0.42 * (presserAnchor.x - myAnchor.x)
-      const coverY = myAnchor.y + (attackDir === 1 ? -2.5 : 2.5) * scaleMetersToPx
-      roles.set(pid, {
-        state: 'SECOND_DEFENDER_COVER',
-        targetX: coverX,
-        targetY: coverY,
-      })
-      continue
-    }
-
-    // Marcaje mixto goal-side
-    let dangerousRunner = null
-    let minRunnerDist = 8.5 * scaleMetersToPx
-
-    for (const opp of oppPlayers) {
-      const oppId = opp.id || opp.playerID
-      if (oppId === ballOwnerId || opp.role === 'GK' || opp.position === 'GK' || opp.redCard || opp.sentOff) continue
-      const ox = opp.x ?? (Array.isArray(opp.currentPOS) ? opp.currentPOS[0] : 0)
-      const oy = opp.y ?? (Array.isArray(opp.currentPOS) ? opp.currentPOS[1] : 0)
-      const dToAnchor = Math.hypot(ox - myAnchor.x, oy - myAnchor.y)
-      if (dToAnchor < minRunnerDist) {
-        minRunnerDist = dToAnchor
-        dangerousRunner = opp
-      }
-    }
-
-    if (dangerousRunner) {
-      const ox = dangerousRunner.x ?? (Array.isArray(dangerousRunner.currentPOS) ? dangerousRunner.currentPOS[0] : 0)
-      const oy = dangerousRunner.y ?? (Array.isArray(dangerousRunner.currentPOS) ? dangerousRunner.currentPOS[1] : 0)
-      const goalSideOffset = (attackDir === 1 ? -1.8 : 1.8) * scaleMetersToPx
-
-      roles.set(pid, {
-        state: 'MARKING_TIGHT',
-        targetX: 0.65 * ox + 0.35 * myAnchor.x,
-        targetY: oy + goalSideOffset,
-        markedOpponentId: dangerousRunner.id || dangerousRunner.playerID,
-      })
-    } else {
-      roles.set(pid, {
-        state: 'HOLDING_LINE_BALANCE',
-        targetX: myAnchor.x,
-        targetY: myAnchor.y,
-      })
-    }
-  }
-
-  return roles
 }

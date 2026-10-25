@@ -79,35 +79,35 @@ export function adjudicateFoul(referee, defender, attacker, foulContext = {}, rn
   // 2. Evaluación de ROJA DIRECTA (DOGSO o violencia desmedida)
   if (
     (foulContext.isLastManDOGSO && !foulContext.attemptedBallInBox) ||
-    severity > (0.94 - strictness * 0.05)
+    (severity >= 0.98 && foulContext.approachFromBehind && rng() < 0.10)
   ) {
     card = 'RED';
   }
   // 3. Evaluación de TARJETA AMARILLA
   else {
-    let yellowProb = 0.06; // Falta común tiene baja probabilidad base (6%)
+    let yellowProb = 0.11; // Falta común tiene probabilidad moderada (11%)
 
     // a) Falta Táctica / Cortar ataque prometedor (SPA)
     if (foulContext.isPromisingCounterAttack) {
-      yellowProb += 0.68;
+      yellowProb += 0.40;
     }
 
     // b) Entrada por detrás o temeraria
-    if (foulContext.approachFromBehind && severity > 0.55) {
-      yellowProb += 0.35;
+    if (foulContext.approachFromBehind && severity > 0.60) {
+      yellowProb += 0.25;
     }
 
     // c) Reiteración de faltas del mismo jugador (3 o más faltas acumuladas)
     const fouls = defender?.foulCount ?? 1;
     if (fouls >= 3) {
-      yellowProb += 0.28 * (fouls - 2);
+      yellowProb += 0.15 * (fouls - 2);
     }
 
-    yellowProb *= (0.8 + 0.4 * strictness);
+    yellowProb *= (0.75 + 0.35 * strictness);
 
-    // Si ya está amonestado, umbral un 25% más exigente para la expulsión por doble amarilla
+    // Si ya está amonestado, umbral exigente para la expulsión por doble amarilla
     if (isBooked) {
-      yellowProb *= 0.75;
+      yellowProb *= 0.08;
     }
 
     if (rng() < yellowProb) {

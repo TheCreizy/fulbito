@@ -301,57 +301,122 @@ console.log('  - Falta Táctica (SPA) sancionada correctamente con Tarjeta Amari
 console.log('✔ Fase 2.4: Arbitraje IFAB, disciplina y ventaja verificados exitosamente.\n')
 
 // -----------------------------------------------------------------------------
-// 8. SIMULACIÓN DE PARTIDO COMPLETO DE INTEGRACIÓN
+// 8. SIMULACIÓN DE PARTIDOS REALES END-TO-END (CALIBRACIÓN Y TELEMETRÍA 2.0)
 // -----------------------------------------------------------------------------
-console.log('=== TEST 8: SIMULACIÓN DE PARTIDO COMPLETO (INTEGRACIÓN END-TO-END) ===')
+console.log('=== TEST 8: SIMULACIÓN DE PARTIDOS REALES END-TO-END (CALIBRACIÓN Y TELEMETRÍA) ===')
 
 import { PLAYERS_DB } from '../src/data/playersDB.js'
+import { startSecondHalf } from '../src/engine/engine.js'
 
-const team1 = {
-  teamID: 'E1',
-  name: 'Boca Juniors',
-  players: PLAYERS_DB.slice(0, 11).map((p, idx) => ({
-    ...p,
-    playerID: `e1_${idx}`,
-    originPOS: [340, 50 + idx * 70],
-    currentPOS: [340, 50 + idx * 70],
-    intentPOS: [340, 50 + idx * 70],
-    injured: false,
-    fitness: 100,
-    stats: { goals: 0, assists: 0, shots: { total: 0, on: 0, off: 0 }, cards: { yellow: 0, red: 0 }, passes: { total: 0, on: 0, off: 0 }, tackles: { total: 0, on: 0, fouls: 0 } }
-  }))
-}
-
-const team2 = {
-  teamID: 'E2',
-  name: 'River Plate',
-  players: PLAYERS_DB.slice(11, 22).map((p, idx) => ({
-    ...p,
-    playerID: `e2_${idx}`,
-    originPOS: [340, 1000 - idx * 70],
-    currentPOS: [340, 1000 - idx * 70],
-    intentPOS: [340, 1000 - idx * 70],
-    injured: false,
-    fitness: 100,
-    stats: { goals: 0, assists: 0, shots: { total: 0, on: 0, off: 0 }, cards: { yellow: 0, red: 0 }, passes: { total: 0, on: 0, off: 0 }, tackles: { total: 0, on: 0, fouls: 0 } }
-  }))
+function buildSampleTeam(teamID, name, isTop) {
+  const pool = teamID === 'E1' ? PLAYERS_DB.slice(0, 11) : PLAYERS_DB.slice(11, 22)
+  return {
+    teamID,
+    name,
+    mentality: 'balanced',
+    initialMentality: 'balanced',
+    playStyle: 'balanced',
+    players: pool.map((p, idx) => {
+      const yPos = isTop ? 50 + idx * 75 : 1000 - idx * 75
+      return {
+        ...p,
+        playerID: `${teamID}_${idx}`,
+        originPOS: [340, yPos],
+        currentPOS: [340, yPos],
+        intentPOS: [340, yPos],
+        injured: false,
+        fitness: 100,
+        tackleCooldown: 0,
+        interceptCooldown: 0,
+        stats: {
+          goals: 0,
+          assists: 0,
+          shots: { total: 0, on: 0, off: 0 },
+          cards: { yellow: 0, red: 0 },
+          passes: { total: 0, on: 0, off: 0 },
+          tackles: { total: 0, on: 0, off: 0, fouls: 0, slides: 0, standing: 0 }
+        }
+      }
+    })
+  }
 }
 
 const pitchDetails = { pitchWidth: 680, pitchHeight: 1050 }
 
-async function runMatchIntegration() {
-  let match = await initiateGame(team1, team2, pitchDetails)
-  for (let i = 0; i < 500; i++) {
+let maxBallZRecorded = 0
+let defensiveStatesObserved = new Set()
+let ppmValuesObserved = []
+let facingAnglesObserved = []
+
+let totalFouls = 0
+let totalYellows = 0
+let totalReds = 0
+const MATCH_COUNT = 10
+const TICKS_PER_HALF = 1000
+
+for (let m = 0; m < MATCH_COUNT; m++) {
+  const t1 = buildSampleTeam('E1', 'Boca Juniors', true)
+  const t2 = buildSampleTeam('E2', 'River Plate', false)
+  let match = await initiateGame(t1, t2, pitchDetails)
+
+  // Primer tiempo (1000 ticks)
+  for (let i = 0; i < TICKS_PER_HALF; i++) {
     match = await playIteration(match)
+    const bz = match.ball.position[2] || 0
+    if (bz > maxBallZRecorded) maxBallZRecorded = bz
+
+    for (const p of [...match.kickOffTeam.players, ...match.secondTeam.players]) {
+      if (p.defensiveState) defensiveStatesObserved.add(p.defensiveState)
+      if (typeof p.pressurePPM === 'number') ppmValuesObserved.push(p.pressurePPM)
+      if (typeof p.facingAngle === 'number') facingAnglesObserved.push(p.facingAngle)
+    }
   }
-  console.log(`  - 500 iteraciones ejecutadas. iterationCount del motor: ${match.iterationCount}`)
-  assert.ok((match.iterationCount || 0) >= 400, `iterationCount esperado >= 400, obtenido: ${match.iterationCount}`)
-  assert.ok(Array.isArray(match.ball.position))
-  console.log(`  - Marcador: ${match.kickOffTeam.name} ${match.kickOffTeamStatistics.goals} - ${match.secondTeamStatistics.goals} ${match.secondTeam.name}`)
-  console.log('✔ Test de Integración: Simulación fluida completada.')
+
+  // Segundo tiempo
+  match = await startSecondHalf(match)
+  for (let i = 0; i < TICKS_PER_HALF; i++) {
+    match = await playIteration(match)
+    const bz = match.ball.position[2] || 0
+    if (bz > maxBallZRecorded) maxBallZRecorded = bz
+
+    for (const p of [...match.kickOffTeam.players, ...match.secondTeam.players]) {
+      if (p.defensiveState) defensiveStatesObserved.add(p.defensiveState)
+      if (typeof p.pressurePPM === 'number') ppmValuesObserved.push(p.pressurePPM)
+      if (typeof p.facingAngle === 'number') facingAnglesObserved.push(p.facingAngle)
+    }
+  }
+
+  const matchFouls = (match.kickOffTeamStatistics?.fouls || 0) + (match.secondTeamStatistics?.fouls || 0)
+  const matchYellows = match.kickOffTeam.players.reduce((sum, p) => sum + (p.stats.cards?.yellow || 0), 0) +
+                       match.secondTeam.players.reduce((sum, p) => sum + (p.stats.cards?.yellow || 0), 0)
+  const matchReds = match.kickOffTeam.players.reduce((sum, p) => sum + (p.stats.cards?.red || 0), 0) +
+                    match.secondTeam.players.reduce((sum, p) => sum + (p.stats.cards?.red || 0), 0)
+
+  totalFouls += matchFouls
+  totalYellows += matchYellows
+  totalReds += matchReds
 }
 
-await runMatchIntegration()
+const avgFouls = totalFouls / MATCH_COUNT
+const avgYellows = totalYellows / MATCH_COUNT
+const avgReds = totalReds / MATCH_COUNT
+
+console.log(`  - Promedio de Faltas por partido en ${MATCH_COUNT} encuentros: ${avgFouls.toFixed(1)} (esperado: 12 - 24)`)
+console.log(`  - Promedio de Tarjetas Amarillas por partido: ${avgYellows.toFixed(2)} (esperado: 1.5 - 4.5)`)
+console.log(`  - Promedio de Tarjetas Rojas por partido: ${avgReds.toFixed(2)} (esperado: < 0.25)`)
+console.log(`  - Altura máxima Z alcanzada por la pelota en juego real: ${maxBallZRecorded.toFixed(1)}px (esperado: > 15px)`)
+console.log(`  - Estados defensivos observados en jugadores reales: ${[...defensiveStatesObserved].join(', ')}`)
+console.log(`  - Muestras de PPM y FacingAngle registradas en tiempo real: ${ppmValuesObserved.length} registros`)
+
+assert.ok(avgFouls >= 10 && avgFouls <= 26, `Promedio de faltas ${avgFouls} fuera del rango calibrado [10, 26]`)
+assert.ok(avgYellows >= 1.0 && avgYellows <= 5.0, `Promedio de amarillas ${avgYellows} fuera del rango calibrado [1.0, 5.0]`)
+assert.ok(avgReds < 0.35, `Promedio de rojas ${avgReds} excede el límite máximo de 0.35`)
+assert.ok(maxBallZRecorded > 15, `La pelota no alcanzó elevación aérea en 2.5D (máx Z=${maxBallZRecorded})`)
+assert.ok(defensiveStatesObserved.has('FIRST_DEFENDER_DELAY') || defensiveStatesObserved.has('SECOND_DEFENDER_COVER') || defensiveStatesObserved.has('HOLDING_LINE_BALANCE'), 'No se registraron estados defensivos del contrato de 3 defensores')
+assert.ok(ppmValuesObserved.length > 500, 'PPM no se calculó en tiempo real para los futbolistas')
+assert.ok(facingAnglesObserved.length > 500, 'facingAngle no se actualizó dinámicamente en tiempo real')
+
+console.log('✔ Test 8: Simulación End-to-End validada al 100% con métricas de calibración IFAB y física continua.\n')
 
 console.log('\n======================================================================')
 console.log('=== ¡TODAS LAS ESPECIFICACIONES DE FASE 1 Y 2 VERIFICADAS AL 100%! ===')

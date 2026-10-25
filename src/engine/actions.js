@@ -1,6 +1,8 @@
 import * as common from './common.js'
 import * as setPositions from './setPositions.js'
 import { getPlayStyleConfig } from '../data/formations.js'
+import { resolveBallCarrierEngagement } from './ballContest.js'
+import { adjudicateFoul, getDefenderRestraintMultiplier } from './officiating/referee.js'
 
 export function selectAction(possibleActions) {
   let goodActions = []
@@ -833,30 +835,33 @@ export function resolveTackle(player, team, opposition, matchDetails) {
   player.stats.tackles.total++
   player.slideRecoveryTicks = 0 // Entrada de pie: el jugador NO se tira al piso
 
-  const foulProb = calculateFoulProbability(player, thatPlayer, false)
-  if (common.getRandomNumber(1, 100) <= foulProb) {
-    setFoul(matchDetails, team, player, thatPlayer)
-    return true
+  const [pitchWidth, pitchHeight] = matchDetails.pitchSize || [680, 1050]
+  const isTopDef = (player.originPOS?.[1] ?? 500) < (pitchHeight / 2)
+  const defGoalY = isTopDef ? 0 : pitchHeight
+  const isInsideOwnPenaltyBox = Math.abs(player.currentPOS[1] - defGoalY) < 170 && Math.abs(player.currentPOS[0] - (pitchWidth / 2)) < 200
+
+  const matchContext = {
+    isInsidePenaltyBox: isInsideOwnPenaltyBox,
+    isCounterAttack: opposition.gamePhase === 'AttackingTransition',
+    isLastManDOGSO: false,
+    referee: matchDetails.referee || { strictness: 0.52 },
   }
 
-  const tackleScore = calcTackleScore(player.skill, 5, player)
-  const retentionScore = calcRetentionScore(thatPlayer.skill, 5)
+  const contest = resolveBallCarrierEngagement(player, thatPlayer, matchDetails.ball, matchContext)
+  matchDetails.lastContestOutcome = contest.outcome
 
-  if (tackleScore > retentionScore) {
-    // ENTRADA LIMPIA DE PIE:
-    // Modelo open-football KEPT_AT_CONTACT (70% retención limpia en los pies, 30% desvío/punteo)
+  if (contest.outcome === 'DELAY_JOCKEY') {
+    thatPlayer.speedModifier = Math.min(thatPlayer.speedModifier || 1.0, 0.75)
+    matchDetails.iterationLog.push(`Delay and jockeying by ${player.name} contains ${thatPlayer.name}`)
+    return false
+  }
+
+  if (contest.outcome === 'CLEAN_BODY_WIN') {
     player.stats.tackles.on++
     player.stats.tackles.standing = (player.stats.tackles.standing || 0) + 1
     setInjury(matchDetails, thatPlayer, player, false)
-
-    if (common.getRandomNumber(1, 100) <= 70) {
-      setSuccessTackle(matchDetails, team, opposition, player, thatPlayer, tackleDetails)
-    } else {
-      setPostTackleKnockedBall(matchDetails, team, opposition, player, thatPlayer, false)
-      setPostTacklePosition(matchDetails, player, thatPlayer, tackleDetails.increment)
-      matchDetails.iterationLog.push(`Standing tackle by ${player.name} pokes the ball away cleanly!`)
-    }
-
+    setSuccessTackle(matchDetails, team, opposition, player, thatPlayer, tackleDetails)
+    matchDetails.iterationLog.push(`Physical body contest won cleanly by ${player.name} against ${thatPlayer.name}!`)
     if (Array.isArray(matchDetails.events)) {
       matchDetails.events.push({
         type: 'standingTackle',
@@ -872,7 +877,44 @@ export function resolveTackle(player, team, opposition, matchDetails) {
     return false
   }
 
-  // Entrada de pie fallida: no roba el balón pero permanece de pie (no queda congelado en el piso)
+  if (contest.outcome === 'CLEAN_TACKLE_WIN') {
+    player.stats.tackles.on++
+    player.stats.tackles.standing = (player.stats.tackles.standing || 0) + 1
+    setInjury(matchDetails, thatPlayer, player, false)
+    if (common.getRandomNumber(1, 100) <= 75) {
+      setSuccessTackle(matchDetails, team, opposition, player, thatPlayer, tackleDetails)
+    } else {
+      setPostTackleKnockedBall(matchDetails, team, opposition, player, thatPlayer, false)
+      setPostTacklePosition(matchDetails, player, thatPlayer, tackleDetails.increment)
+      matchDetails.iterationLog.push(`Standing tackle by ${player.name} pokes the ball away cleanly!`)
+    }
+    if (Array.isArray(matchDetails.events)) {
+      matchDetails.events.push({
+        type: 'standingTackle',
+        outcome: 'won',
+        teamID: team.teamID,
+        teamName: team.name,
+        playerName: player.name,
+        victimName: thatPlayer.name,
+        iteration: matchDetails.iterationCount || 0,
+        half: matchDetails.half
+      })
+    }
+    return false
+  }
+
+  if (contest.outcome === 'FOUL') {
+    const decision = contest.decision || adjudicateFoul(matchContext.referee, player, thatPlayer, matchContext)
+    if (decision.advantagePlayed) {
+      matchDetails.iterationLog.push(`Advantage played after foul by ${player.name} on ${thatPlayer.name}`)
+      return false
+    }
+    matchDetails.lastAdjudicatedCard = decision.card
+    setFoul(matchDetails, team, player, thatPlayer)
+    return true
+  }
+
+  // Entrada de pie fallida limpia: no roba el balón pero permanece de pie
   player.stats.tackles.off++
   setInjury(matchDetails, player, thatPlayer, false)
   setPostTacklePosition(matchDetails, thatPlayer, player, tackleDetails.increment)
@@ -895,27 +937,28 @@ export function resolveSlide(player, team, opposition, matchDetails) {
   player.stats.tackles.total++
   player.stats.tackles.slides = (player.stats.tackles.slides || 0) + 1
 
-  const foulProb = calculateFoulProbability(player, thatPlayer, true)
-  if (common.getRandomNumber(1, 100) <= foulProb) {
-    // Al cometer falta barriendo queda unos instantes en el piso
-    player.slideRecoveryTicks = 3
-    player.stunnedTicks = 3
-    setFoul(matchDetails, team, player, thatPlayer)
-    return true
+  const [pitchWidth, pitchHeight] = matchDetails.pitchSize || [680, 1050]
+  const isTopDef = (player.originPOS?.[1] ?? 500) < (pitchHeight / 2)
+  const defGoalY = isTopDef ? 0 : pitchHeight
+  const isInsideOwnPenaltyBox = Math.abs(player.currentPOS[1] - defGoalY) < 170 && Math.abs(player.currentPOS[0] - (pitchWidth / 2)) < 200
+
+  const matchContext = {
+    isInsidePenaltyBox: isInsideOwnPenaltyBox,
+    isCounterAttack: opposition.gamePhase === 'AttackingTransition',
+    isLastManDOGSO: false,
+    referee: matchDetails.referee || { strictness: 0.52 },
   }
 
-  const tackleScore = calcTackleScore(player.skill, 6, player)
-  const retentionScore = calcRetentionScore(thatPlayer.skill, 5)
+  const restraint = getDefenderRestraintMultiplier(player, isInsideOwnPenaltyBox, false)
+  const slideSkill = ((player.skill?.tackling || 70) * 0.7 + (player.skill?.agility || 70) * 0.3) / 100
+  const evadeSkill = ((thatPlayer.skill?.agility || 70) * 0.6 + (thatPlayer.skill?.control || 70) * 0.4) / 100
+  const margin = slideSkill - evadeSkill + (Math.random() - 0.5) * 0.35
 
-  if (tackleScore > retentionScore) {
-    // BARRIDA EXITOSA:
-    // Corta la jugada barriendo el césped. Se levanta tras 3 ticks de recuperación
+  if (margin >= 0.05) {
     player.slideRecoveryTicks = 3
     player.stats.tackles.on++
     setInjury(matchDetails, thatPlayer, player, true)
-
-    // En barridas al piso: 25% retiene directamente, 75% barre la pelota suelta o al lateral/córner
-    if (common.getRandomNumber(1, 100) <= 25) {
+    if (Math.random() <= 0.35) {
       setSuccessTackle(matchDetails, team, opposition, player, thatPlayer, tackleDetails)
       matchDetails.iterationLog.push(`Spectacular slide tackle won by: ${player.name}`)
     } else {
@@ -923,7 +966,6 @@ export function resolveSlide(player, team, opposition, matchDetails) {
       setPostTacklePosition(matchDetails, player, thatPlayer, tackleDetails.increment)
       matchDetails.iterationLog.push(`Slide tackle by: ${player.name} knocks the ball loose!`)
     }
-
     if (Array.isArray(matchDetails.events)) {
       matchDetails.events.push({
         type: 'slideTackle',
@@ -939,14 +981,42 @@ export function resolveSlide(player, team, opposition, matchDetails) {
     return false
   }
 
-  // BARRIDA FALLIDA:
-  // Se tiró al piso a destiempo, le erró y queda congelado en el piso 5 ticks (expuesto)
+  // Falta al barrer
+  const foulProb = Math.min(0.78, Math.max(0.35, (0.58 - 0.16 * slideSkill) * restraint))
+  if (Math.random() < foulProb) {
+    player.slideRecoveryTicks = 3
+    player.stunnedTicks = 3
+    const decision = adjudicateFoul(matchContext.referee, player, thatPlayer, {
+      ...matchContext,
+      severity: Math.min(1.0, 0.45 + Math.abs(margin))
+    })
+    if (decision.advantagePlayed) {
+      return false
+    }
+    matchDetails.lastAdjudicatedCard = decision.card
+    setFoul(matchDetails, team, player, thatPlayer)
+    return true
+  }
+
   player.slideRecoveryTicks = 5
   player.stunnedTicks = 5
   player.stats.tackles.off++
   setInjury(matchDetails, player, thatPlayer, true)
   setPostTacklePosition(matchDetails, thatPlayer, player, tackleDetails.increment + 2)
   matchDetails.iterationLog.push(`Missed slide tackle by: ${player.name} (exposed on ground!)`)
+  if (Array.isArray(matchDetails.events)) {
+    matchDetails.events.push({
+      type: 'slideTackle',
+      outcome: 'missed',
+      teamID: team.teamID,
+      teamName: team.name,
+      playerName: player.name,
+      victimName: thatPlayer.name,
+      iteration: matchDetails.iterationCount || 0,
+      half: matchDetails.half
+    })
+  }
+  return false
 
   if (Array.isArray(matchDetails.events)) {
     matchDetails.events.push({

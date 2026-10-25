@@ -41,6 +41,41 @@ export const SHAPE_CONFIG = {
 }
 
 /**
+ * Resuelve la línea táctica ('GK', 'DEF', 'MID', 'ATT') respetando estrictamente
+ * la nomenclatura nativa de Fulbito sin alterar las posiciones de la base de datos.
+ */
+export function resolvePlayerLine(player) {
+  if (!player) return 'ATT'
+  if (player.line) {
+    const l = String(player.line).toUpperCase()
+    if (l === 'GK' || l === 'POR') return 'GK'
+    if (l === 'DEF') return 'DEF'
+    if (l === 'MID' || l === 'ME') return 'MID'
+    if (l === 'ATT' || l === 'DEL') return 'ATT'
+  }
+  const pos = String(player.position || '').toUpperCase()
+  const role = String(player.tacticalRole || '').toUpperCase()
+  const val = role || pos
+
+  if (val === 'GK' || val === 'POR' || pos === 'GK' || pos === 'POR') return 'GK'
+  if (
+    ['DEF', 'DFC', 'LD', 'LI', 'LTI', 'LTD', 'LIB', 'LÍBERO', 'CAD', 'CAI', 'CB', 'RB', 'LB', 'RWB', 'LWB', 'SW', 'STOP I', 'STOP D'].includes(val) ||
+    ['DEF', 'DFC', 'LD', 'LI', 'LTI', 'LTD', 'LIB', 'LÍBERO', 'CAD', 'CAI', 'CB', 'RB', 'LB'].includes(pos)
+  ) return 'DEF'
+  if (
+    ['ME', 'MCD', 'MC', 'MCO', 'MD', 'MI', 'MP', 'MID', 'VOL', 'ENG', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'PIVOT'].includes(val) ||
+    ['ME', 'MCD', 'MC', 'MCO', 'MD', 'MI', 'MP', 'MID'].includes(pos)
+  ) return 'MID'
+  return 'ATT'
+}
+
+export function isPivotRole(player) {
+  if (!player) return false
+  const role = String(player.tacticalRole || player.position || '').toUpperCase()
+  return ['MCD', 'VOL', 'CDM', 'PIVOT', 'CENTRAL_DEF_MID'].includes(role)
+}
+
+/**
  * Configuraciones canónicas de Bloque Defensivo (Fase 2 Fulbito 2.0 / open_football_engine)
  */
 export const BLOCK_CONFIGS = {
@@ -129,8 +164,7 @@ export function computeDefensiveBlockTargets(teamPlayers, opponents, ball, pitch
   })
 
   const defenders = (teamPlayers || []).filter(p => {
-    const role = p.tacticalRole || p.position
-    return (p.line === 'DEF' || ['CB', 'LB', 'RB', 'DFC', 'LI', 'LD'].includes(role)) && !p.redCard && !p.sentOff
+    return resolvePlayerLine(p) === 'DEF' && !p.redCard && !p.sentOff
   })
 
   const needPivotDrop = advancedOpponents.length >= defenders.length
@@ -138,11 +172,11 @@ export function computeDefensiveBlockTargets(teamPlayers, opponents, ball, pitch
   const targets = new Map()
 
   for (const player of (teamPlayers || [])) {
-    if (player.role === 'GK' || player.position === 'GK' || player.redCard || player.sentOff) continue
+    const line = resolvePlayerLine(player)
+    if (line === 'GK' || player.redCard || player.sentOff) continue
 
-    const role = player.tacticalRole || player.position
-    const isDefender = player.line === 'DEF' || ['CB', 'LB', 'RB', 'DFC', 'LI', 'LD', 'LÍBERO', 'STOP I', 'STOP D'].includes(role)
-    const isMidfielder = player.line === 'MID' || ['CDM', 'CM', 'CAM', 'LM', 'RM', 'VOL', 'MC', 'ENG'].includes(role)
+    const isDefender = line === 'DEF'
+    const isMidfielder = line === 'MID'
 
     let baseU = player.formationBaseU
     let baseV = player.formationBaseV
@@ -160,7 +194,7 @@ export function computeDefensiveBlockTargets(teamPlayers, opponents, ball, pitch
     if (isDefender) {
       targetU = finalBacklineU
     } else if (isMidfielder) {
-      if (needPivotDrop && (role === 'CDM' || role === 'VOL' || player.tacticalRole === 'PIVOT')) {
+      if (needPivotDrop && isPivotRole(player)) {
         targetU = finalBacklineU + 0.02
       } else {
         targetU = Math.min(cfg.confrontationU, finalBacklineU + cfg.lineSpacingU)
@@ -793,15 +827,153 @@ export function assignDefensivePlanWithIncumbency(defendingTeam, attackingTeam, 
     { attackDir: isTopTeam ? 1 : -1, blockHeight: defendingTeam.tactics?.blockHeight || 'medium' }
   )
 
+  const engagementRoles = assignDefensiveEngagementRoles(
+    defendingTeam,
+    attackingTeam,
+    matchDetails.ball,
+    blockTargets,
+    10.0
+  )
+
+  for (const player of defendingTeam.players) {
+    const roleData = engagementRoles.get(player.playerID) || engagementRoles.get(player.id)
+    if (roleData) {
+      player.defensiveState = roleData.state
+    }
+  }
+
   defendingTeam.defensivePlan = {
     duties,
     presserID: bestPresser?.playerID,
     coverID: bestCover?.playerID,
     markerMap,
     blockTargets,
+    engagementRoles,
     triggerActive: blockTargets.values().next().value?.triggerActive || false,
     lastUpdateIter: matchDetails.iterationCount || 0
   }
 
   return defendingTeam.defensivePlan
+}
+
+/**
+ * Asigna el Contrato de Emparejamiento Defensivo (Fase 2.2 Fulbito 2.0 / open_football_engine)
+ * - 1.er Defensor: Presión/Delay exclusivo hacia el balón (FIRST_DEFENDER_DELAY)
+ * - 2.os Defensores: Cobertura diagonal y permutas al cruzar línea (SECOND_DEFENDER_COVER)
+ * - 3.os Defensores: Marcaje estrecho goal-side (MARKING_TIGHT) o equilibrio sincronizado (HOLDING_LINE_BALANCE)
+ */
+export function assignDefensiveEngagementRoles(defendingTeam, opponents, ball, blockTargets, scaleMetersToPx = 10.0) {
+  const roles = new Map()
+  const defPlayers = Array.isArray(defendingTeam) ? defendingTeam : (defendingTeam?.players || [])
+  const oppPlayers = Array.isArray(opponents) ? opponents : (opponents?.players || [])
+
+  const activeFieldPlayers = defPlayers.filter(p => {
+    const line = resolvePlayerLine(p)
+    return line !== 'GK' && p.position !== 'GK' && !p.redCard && !p.sentOff
+  })
+
+  const bx = ball?.x ?? (Array.isArray(ball?.position) ? ball.position[0] : (ball?.[0] ?? 340))
+  const by = ball?.y ?? (Array.isArray(ball?.position) ? ball.position[1] : (ball?.[1] ?? 525))
+  const ballOwnerId = ball?.ownerId ?? ball?.Player
+
+  // 1. Elegir al 1.er Defensor con contrato exclusivo
+  let bestPresser = null
+  let bestScore = Infinity
+
+  for (const player of activeFieldPlayers) {
+    const px = player.x ?? (Array.isArray(player.currentPOS) ? player.currentPOS[0] : 0)
+    const py = player.y ?? (Array.isArray(player.currentPOS) ? player.currentPOS[1] : 0)
+    const distToBall = Math.hypot(bx - px, by - py)
+
+    const pid = player.id || player.playerID
+    const anchor = blockTargets?.get?.(pid) || { x: px, y: py }
+    const distFromAnchor = Math.hypot(bx - anchor.x, by - anchor.y)
+
+    const isCB = resolvePlayerLine(player) === 'DEF' && ['CB', 'DFC', 'LÍBERO', 'LIB', 'STOP I', 'STOP D'].includes(String(player.tacticalRole || player.position).toUpperCase())
+    const centralPenalty = (isCB && distFromAnchor > 11 * scaleMetersToPx) ? 85 : 0
+    const score = distToBall + 0.45 * distFromAnchor + centralPenalty
+
+    if (score < bestScore) {
+      bestScore = score
+      bestPresser = player
+    }
+  }
+
+  const presserPid = bestPresser ? (bestPresser.id || bestPresser.playerID) : null
+  const presserAnchor = presserPid ? blockTargets?.get?.(presserPid) : null
+
+  for (const player of activeFieldPlayers) {
+    const pid = player.id || player.playerID
+    const px = player.x ?? (Array.isArray(player.currentPOS) ? player.currentPOS[0] : 0)
+    const py = player.y ?? (Array.isArray(player.currentPOS) ? player.currentPOS[1] : 0)
+    const line = resolvePlayerLine(player)
+    const isDefLine = line === 'DEF'
+
+    if (bestPresser && pid === presserPid) {
+      roles.set(pid, {
+        state: 'FIRST_DEFENDER_DELAY',
+        targetX: bx,
+        targetY: by,
+      })
+      continue
+    }
+
+    const myAnchor = blockTargets?.get?.(pid) || { x: px, y: py }
+    const attackDir = player.attackDir ?? (py < 525 ? 1 : -1)
+
+    // Cobertura y permuta en caso de salida del central
+    const presserIsDef = bestPresser && resolvePlayerLine(bestPresser) === 'DEF'
+    if (
+      presserIsDef &&
+      isDefLine &&
+      presserAnchor &&
+      Math.abs(myAnchor.x - presserAnchor.x) < 22 * scaleMetersToPx
+    ) {
+      const coverX = myAnchor.x + 0.42 * (presserAnchor.x - myAnchor.x)
+      const coverY = myAnchor.y + (attackDir === 1 ? -2.5 : 2.5) * scaleMetersToPx
+      roles.set(pid, {
+        state: 'SECOND_DEFENDER_COVER',
+        targetX: coverX,
+        targetY: coverY,
+      })
+      continue
+    }
+
+    // Marcaje mixto goal-side
+    let dangerousRunner = null
+    let minRunnerDist = 8.5 * scaleMetersToPx
+
+    for (const opp of oppPlayers) {
+      const oppId = opp.id || opp.playerID
+      if (oppId === ballOwnerId || opp.role === 'GK' || opp.position === 'GK' || opp.redCard || opp.sentOff) continue
+      const ox = opp.x ?? (Array.isArray(opp.currentPOS) ? opp.currentPOS[0] : 0)
+      const oy = opp.y ?? (Array.isArray(opp.currentPOS) ? opp.currentPOS[1] : 0)
+      const dToAnchor = Math.hypot(ox - myAnchor.x, oy - myAnchor.y)
+      if (dToAnchor < minRunnerDist) {
+        minRunnerDist = dToAnchor
+        dangerousRunner = opp
+      }
+    }
+
+    if (dangerousRunner) {
+      const ox = dangerousRunner.x ?? (Array.isArray(dangerousRunner.currentPOS) ? dangerousRunner.currentPOS[0] : 0)
+      const oy = dangerousRunner.y ?? (Array.isArray(dangerousRunner.currentPOS) ? dangerousRunner.currentPOS[1] : 0)
+      const goalSideOffset = (attackDir === 1 ? -1.8 : 1.8) * scaleMetersToPx
+
+      roles.set(pid, {
+        state: 'MARKING_TIGHT',
+        targetX: 0.65 * ox + 0.35 * myAnchor.x,
+        targetY: oy + goalSideOffset,
+        markedOpponentId: dangerousRunner.id || dangerousRunner.playerID,
+      })
+    } else {
+      roles.set(pid, {
+        state: 'HOLDING_LINE_BALANCE',
+        targetX: myAnchor.x,
+        targetY: myAnchor.y,
+      })
+    }
+  }
+
+  return roles
 }
