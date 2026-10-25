@@ -11,7 +11,10 @@ import {
 } from "./modifiers.js";
 import { getFormationCoordinates } from "../data/formations.js";
 import { updateTeamCoachDirectives } from "./coachAI.js";
-import { getTacticalZone18, getVerticalLane } from "./space/pitchZones.js";
+import { getTacticalZone18, getVerticalLane, getZoneXThreat, DEFAULT_PITCH_BOUNDS } from "./space/pitchZones.js";
+import { computePlayerPressure } from "./space/pressureMap.js";
+import { computeDefensiveBlockTargets, assignDefensiveEngagementRoles } from "./teamShape.js";
+import { assignOffensiveSupportRoles } from "./tactics/offensiveShape.js";
 
 export async function initiateGame(team1, team2, pitchDetails) {
   validate.validateArguments(team1, team2, pitchDetails);
@@ -41,6 +44,102 @@ export async function initiateGame(team1, team2, pitchDetails) {
   matchDetails.kickOffTeam = kickOffTeam;
   matchDetails.secondTeam = secondTeam;
   return matchDetails;
+}
+
+export function updateSpatialAndTacticalTelemetry(matchDetails) {
+  if (!matchDetails || !matchDetails.kickOffTeam || !matchDetails.secondTeam) return;
+
+  const { kickOffTeam, secondTeam, ball } = matchDetails;
+  const pitchBounds = matchDetails.pitchSize
+    ? { width: matchDetails.pitchSize[0], height: matchDetails.pitchSize[1] }
+    : DEFAULT_PITCH_BOUNDS;
+  const halfwayY = pitchBounds.height / 2;
+
+  const isTopKo = (kickOffTeam.players?.[0]?.originPOS?.[1] ?? 0) < halfwayY;
+  const isTopSt = (secondTeam.players?.[0]?.originPOS?.[1] ?? 0) < halfwayY;
+
+  // 1. Telemetría individual, cooldowns y presión para ambos equipos
+  const updatePlayerTelemetry = (p, isTop, opponents) => {
+    if (!common.isOnPitch(p)) return;
+
+    // Cooldowns (dueño único por tick)
+    if ((p.tackleCooldown || 0) > 0) p.tackleCooldown--;
+    if ((p.interceptCooldown || 0) > 0) p.interceptCooldown--;
+    if (typeof p.speedModifier === "number" && p.speedModifier < 1.0) {
+      p.speedModifier = Math.min(1.0, p.speedModifier + 0.05);
+    }
+
+    const attackDir = isTop ? 1 : -1;
+    const px = Array.isArray(p.currentPOS) ? p.currentPOS[0] : (p.x ?? 340);
+    const py = Array.isArray(p.currentPOS) ? p.currentPOS[1] : (p.y ?? 525);
+
+    p.x = px;
+    p.y = py;
+    p.attackDir = attackDir;
+
+    p.zone18 = getTacticalZone18([px, py], pitchBounds, attackDir);
+    p.lane = getVerticalLane([px, py], pitchBounds, attackDir);
+    p.zoneXThreat = getZoneXThreat(px, py, pitchBounds, attackDir);
+
+    if (typeof p.facingAngle !== "number") {
+      p.facingAngle = isTop ? Math.PI / 2 : -Math.PI / 2;
+    }
+
+    const press = computePlayerPressure(p, opponents, 10.0);
+    p.pressurePPM = press.totalPressure;
+  };
+
+  for (const p of kickOffTeam.players) {
+    updatePlayerTelemetry(p, isTopKo, secondTeam.players);
+  }
+  for (const p of secondTeam.players) {
+    updatePlayerTelemetry(p, isTopSt, kickOffTeam.players);
+  }
+
+  // 2. Determinar equipo atacante y defensor
+  const currentTeamWithBall = ball.withTeam || ball.lastTouch?.teamID;
+  const attackingTeam = currentTeamWithBall === kickOffTeam.teamID
+    ? kickOffTeam
+    : (currentTeamWithBall === secondTeam.teamID ? secondTeam : null);
+  const defendingTeam = attackingTeam === kickOffTeam
+    ? secondTeam
+    : (attackingTeam === secondTeam ? kickOffTeam : null);
+
+  if (attackingTeam && defendingTeam) {
+    // Fase 2: Contrato defensivo (1er, 2do y 3er defensor)
+    const isTopDef = (defendingTeam.players?.[0]?.originPOS?.[1] ?? 0) < halfwayY;
+    const blockTargets = computeDefensiveBlockTargets(defendingTeam.players, attackingTeam.players, ball, pitchBounds, { attackDir: isTopDef ? 1 : -1 });
+    const defRoles = assignDefensiveEngagementRoles(defendingTeam.players, attackingTeam.players, ball, blockTargets);
+    for (const p of defendingTeam.players) {
+      if (common.isOnPitch(p)) {
+        const pId = p.id || p.playerID;
+        const roleInfo = defRoles.get(pId);
+        if (roleInfo) {
+          p.defensiveState = roleInfo.state;
+          p.defensiveTarget = roleInfo;
+        } else {
+          p.defensiveState = p.position === "GK" || p.role === "GK" ? "GOALKEEPER" : "HOLDING_LINE_BALANCE";
+          p.defensiveTarget = null;
+        }
+      }
+    }
+
+    // Fase 3: Roles y desmarques de apoyo ofensivo
+    const offRoles = assignOffensiveSupportRoles(attackingTeam, defendingTeam, ball, pitchBounds);
+    for (const p of attackingTeam.players) {
+      if (common.isOnPitch(p)) {
+        const pId = p.id || p.playerID;
+        const offInfo = offRoles.get(pId);
+        if (offInfo) {
+          p.offensiveState = offInfo.state;
+          p.offensiveTarget = offInfo;
+        } else {
+          p.offensiveState = p.hasBall ? "BALL_CARRIER" : (p.position === "GK" || p.role === "GK" ? "GOALKEEPER" : "SUPPORT");
+          p.offensiveTarget = null;
+        }
+      }
+    }
+  }
 }
 
 export function syncPrevSnapshot(matchDetails) {
@@ -137,22 +236,8 @@ export async function playIteration(matchDetails) {
   checkSeriousInjurySubstitutions(matchDetails, kickOffTeam, "kickOffTeam");
   checkSeriousInjurySubstitutions(matchDetails, secondTeam, "secondTeam");
 
-  // Actualizar 18 Zonas Tácticas y 5 Carriles Verticales para los 22 jugadores
-  const halfwayY = matchDetails.pitchSize[1] / 2;
-  const isTopKo = (kickOffTeam.players?.[0]?.originPOS?.[1] ?? 0) < halfwayY;
-  const isTopSt = (secondTeam.players?.[0]?.originPOS?.[1] ?? 0) < halfwayY;
-  for (const p of kickOffTeam.players) {
-    if (common.isOnPitch(p)) {
-      p.zone18 = getTacticalZone18(p.currentPOS, matchDetails.pitchSize, isTopKo ? 1 : -1);
-      p.lane = getVerticalLane(p.currentPOS, matchDetails.pitchSize, isTopKo ? 1 : -1);
-    }
-  }
-  for (const p of secondTeam.players) {
-    if (common.isOnPitch(p)) {
-      p.zone18 = getTacticalZone18(p.currentPOS, matchDetails.pitchSize, isTopSt ? 1 : -1);
-      p.lane = getVerticalLane(p.currentPOS, matchDetails.pitchSize, isTopSt ? 1 : -1);
-    }
-  }
+  // Actualizar telemetría táctica, PPM, cooldowns y contratos defensivo/ofensivo
+  updateSpatialAndTacticalTelemetry(matchDetails);
 
   // Contabilizar posesión en tiempo real y transiciones de posesión (open-football model)
   const currentTeamWithBall =

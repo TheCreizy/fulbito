@@ -3,6 +3,7 @@ import * as setPositions from './setPositions.js'
 import * as actions from './actions.js'
 import { getPlayStyleConfig } from '../data/formations.js'
 import { BALL_PHYSICS, kickBall25D, predictBallLanding, updateBallPhysics25D } from './ball/ballPhysics.js'
+import { evaluateBestPassOption } from './evaluators/passEvaluator.js'
 
 export { BALL_PHYSICS, kickBall25D, predictBallLanding, updateBallPhysics25D }
 
@@ -923,7 +924,15 @@ export function throughBall(matchDetails, team, player) {
     return ballPassed(matchDetails, team, player)
   }
   candidates.sort((a, b) => tballScoreOption(b, aTop, ballPos, maxDist, styleCfg) - tballScoreOption(a, aTop, ballPos, maxDist, styleCfg))
-  const targetPlayer = candidates[0]
+  const bestPass = evaluateBestPassOption(player, team, opposition, { width: pitchWidth, height: pitchHeight })
+  let targetPlayer = candidates[0]
+  if (bestPass && bestPass.teammate) {
+    const matched = candidates.find(p => p.playerID === (bestPass.teammate.id || bestPass.teammate.playerID))
+    if (matched) {
+      targetPlayer = matched
+      matchDetails.iterationLog.push(`Utility AI through ball to: ${targetPlayer.name}`)
+    }
+  }
   matchDetails.iterationLog.push(`through ball target: ${targetPlayer.name}`)
 
   // Gestión de Pared ("One-Two Wall Pass")
@@ -1597,7 +1606,19 @@ export function ballPassed(matchDetails, team, player) {
   const aTop = player.originPOS[1] > (pitchHeight / 2)
   const dir = aTop ? -1 : 1
   reachable.sort((a, b) => passScoreOption(b, aTop, ballPos, maxDist, styleCfg, pitchWidth, player, matchDetails) - passScoreOption(a, aTop, ballPos, maxDist, styleCfg, pitchWidth, player, matchDetails))
-  const targetPlayer = reachable[0]
+
+  // Utility AI de pases: Evaluar mejor opción según Delta xThreat, triangulación y rupturas
+  const bestPass = evaluateBestPassOption(player, team, opposition, { width: pitchWidth, height: pitchHeight })
+  let targetPlayer = reachable[0]
+
+  if (bestPass && bestPass.teammate && !player.isKickoffPass && !matchDetails.isThrowIn) {
+    const matched = reachable.find(p => p.playerID === (bestPass.teammate.id || bestPass.teammate.playerID))
+    if (matched) {
+      targetPlayer = matched
+      matchDetails.iterationLog.push(`Utility AI target: ${targetPlayer.name} (${bestPass.type})`)
+    }
+  }
+
   matchDetails.iterationLog.push(`Target selected: ${targetPlayer.name}`)
 
   const passDist = common.distance(ballPos, targetPlayer.position)
@@ -1606,6 +1627,10 @@ export function ballPassed(matchDetails, team, player) {
   const isFromWingToWing = (ballPos[0] < 220 && targetPlayer.position[0] > (pitchWidth - 220)) ||
                            (ballPos[0] > (pitchWidth - 220) && targetPlayer.position[0] < 220)
   const isSwitchOfPlay = !matchDetails.isThrowIn && player.position !== 'GK' && horizontalSpan >= 230 && isFromWingToWing
+  if (isSwitchOfPlay) {
+    matchDetails.ball.vz = 2.6
+    matchDetails.ball.z = 1.0
+  }
 
   // Gestión de Pared ("One-Two Wall Pass")
   if (

@@ -48,7 +48,7 @@ export function decideMovement(closestPlayer, team, opp, matchDetails) {
       let action
       if (lastTouchPlayer && ballRecentlyKicked && ballMoving) action = 'wait'
       else {
-        action = actions.selectAction(possibleActions)
+        action = actions.selectAction(possibleActions, thisPlayer, team, opp, matchDetails)
         action = checkProvidedAction(matchDetails, thisPlayer, action, team)
       }
 
@@ -155,8 +155,15 @@ export function decideMovement(closestPlayer, team, opp, matchDetails) {
         withTeam === team.teamID &&
         thisPlayer.position !== 'GK'
       ) {
-        // Solo sprint si tiene un desmarque activo (carrera diagonal o pared)
-        if (thisPlayer.offBallRun && thisPlayer.offBallRun.untilIteration > (matchDetails.iterationCount || 0)) {
+        if (thisPlayer.offensiveTarget) {
+          thisPlayer.intentPOS = [thisPlayer.offensiveTarget.targetX, thisPlayer.offensiveTarget.targetY]
+          const isSprintState = ['OVERLAPPING', 'UNDERLAPPING', 'RUNNING_IN_BEHIND'].includes(thisPlayer.offensiveState) ||
+                                (typeof thisPlayer.offensiveState === 'string' && thisPlayer.offensiveState.startsWith('BOX_ZONE_'))
+          if (isSprintState) {
+            action = 'sprint'
+            thisPlayer.offensiveSpeedBonus = 1.15
+          }
+        } else if (thisPlayer.offBallRun && thisPlayer.offBallRun.untilIteration > (matchDetails.iterationCount || 0)) {
           action = 'sprint'
         }
       } else {
@@ -194,11 +201,17 @@ export function decideMovement(closestPlayer, team, opp, matchDetails) {
 
         if (needsRecoverySprint) {
           action = 'sprint'
-        } else if ((!withPlayer || withTeam !== team.teamID) && closestPlayer.name === thisPlayer.name) {
-          // El jugador más cercano de cada equipo busca activamente la pelota suelta o presiona al portador rival
+        } else if ((!withPlayer || withTeam !== team.teamID) && (closestPlayer.name === thisPlayer.name || thisPlayer.defensiveState === 'FIRST_DEFENDER_DELAY')) {
+          // El 1er defensor o jugador más cercano presiona al portador rival
           if (action !== 'tackle' && action !== 'slide' && action !== 'intercept') action = 'sprint'
           ballToPlayerX = closestPlayerActionBallX(ballToPlayerX)
           ballToPlayerY = closestPlayerActionBallY(ballToPlayerY)
+        } else if (withTeam !== team.teamID && thisPlayer.position !== 'GK' && thisPlayer.defensiveTarget) {
+          // 2do y 3er defensor (SECOND_DEFENDER_COVER, MARKING_TIGHT, HOLDING_LINE_BALANCE)
+          thisPlayer.intentPOS = [thisPlayer.defensiveTarget.targetX, thisPlayer.defensiveTarget.targetY]
+          if (thisPlayer.defensiveState === 'SECOND_DEFENDER_COVER') {
+            action = 'sprint'
+          }
         } else if (
           team.gamePhase === 'DefensiveTransition' &&
           (!withPlayer || withTeam !== team.teamID) &&
@@ -341,12 +354,6 @@ export function movePlayers(moves, team, opp, matchDetails) {
   const controlRadius = 12
   const challengeRadius = 22
 
-  // Decrementar cooldowns en cada tick
-  for (const p of team.players) {
-    if ((p.tackleCooldown || 0) > 0) p.tackleCooldown--
-    if ((p.interceptCooldown || 0) > 0) p.interceptCooldown--
-  }
-
   for (const thisPlayerMove of moves) {
     const thisPlayer = thisPlayerMove.player
     if (!common.isOnPitch(thisPlayer)) continue
@@ -420,11 +427,11 @@ export function movePlayers(moves, team, opp, matchDetails) {
         matchDetails = completeSlide(matchDetails, thisPlayer, team, opp)
       } else if (samePositionAsBall) {
         // Contacto directo cuerpo a cuerpo (< 8px): el defensor siempre disputa
-        const autoChallengeChance = isAttacker ? 45 : (isDefenderOrMid ? 95 : 80)
+        const autoChallengeChance = isAttacker ? 55 : (isDefenderOrMid ? 96 : 85)
         if (common.getRandomNumber(0, 100) < autoChallengeChance) {
           matchDetails = completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, opp)
         }
-      } else if (!isAttacker && common.getRandomNumber(0, 100) < (isDefenderOrMid ? 94 : 78)) {
+      } else if (common.getRandomNumber(0, 100) < (isDefenderOrMid ? 96 : 72)) {
         // En zona de disputa (< 22px), el defensor mete la pierna aunque viniera corriendo con 'run'/'sprint'
         matchDetails = completeTackleWhenCloseNoBall(matchDetails, thisPlayer, team, opp)
       } else if (withPlayer === false && xPosition && yPosition) {
@@ -825,6 +832,16 @@ function getSmartDribbleMove(matchDetails, player, step, opposition, team) {
   const distToGoalY = side === 'bottom' ? player.currentPOS[1] : (pitchHeight - player.currentPOS[1])
   const playStyle = team?.playStyle || 'balanced'
 
+  // Breakaway Override: si tiene camino libre hacia el arco rival, avanza recto a máxima velocidad sin girar atrás
+  if (player.lastShotEval?.isBreakaway) {
+    const goalX = 340
+    const goalY = side === 'bottom' ? 10 : pitchHeight - 10
+    const dxGoal = goalX - player.currentPOS[0]
+    const dyGoal = goalY - player.currentPOS[1]
+    const dist = Math.hypot(dxGoal, dyGoal) || 1
+    return [Math.round((dxGoal / dist) * step), Math.round((dyGoal / dist) * step)]
+  }
+
   // Determinar el carril objetivo (desiredX) según el rol, la zona, la personalidad y la congestión rival
   let desiredX = player.originPOS[0]
   // 1. Jugadores de banda (extremos LM/RM, laterales desbordando o en canal lateral):
@@ -922,7 +939,7 @@ export function getRunMovement(matchDetails, player, ballX, ballY, team, opposit
   }
   let step = player.skill.agility >= 80 ? 3 : 2
   const tempo = team?.coachState?.coefficients?.tempoMultiplier || 1.0
-  step *= tempo
+  step *= tempo * (player.offensiveSpeedBonus || 1.0)
   if (player.hasBall) {
     const carrierTicks = (matchDetails.ball.lastCarrierID === player.playerID) ? (matchDetails.ball.carrierTicks || 1) : 1
     const distToGoalY = (player.originPOS[1] > matchDetails.pitchSize[1] / 2) ? player.currentPOS[1] : (matchDetails.pitchSize[1] - player.currentPOS[1])
@@ -975,7 +992,7 @@ export function getSprintMovement(matchDetails, player, ballX, ballY, team, oppo
   const tempo = team?.coachState?.coefficients?.tempoMultiplier || 1.0
   const step = (player.fitness < 45
     ? Math.max(3.5, baseStep * (0.60 + ((player.fitness - 20) / 25) * 0.40))
-    : baseStep) * tempo
+    : baseStep) * tempo * (player.offensiveSpeedBonus || 1.0)
 
   if (player.hasBall) {
     return getSmartDribbleMove(matchDetails, player, step, opposition, team)

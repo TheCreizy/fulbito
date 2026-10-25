@@ -142,7 +142,10 @@ export function computeDefensiveBlockTargets(teamPlayers, opponents, ball, pitch
   const ballU = attackDir === 1 ? rawLong : 1.0 - rawLong
   const ballV = attackDir === 1 ? rawTrans : 1.0 - rawTrans
 
-  const ballCarrier = opponents?.find?.(o => (o.id || o.playerID) === (ball?.ownerId || ball?.Player))
+  const oppList = Array.isArray(opponents) ? opponents : (opponents?.players || [])
+  const teamList = Array.isArray(teamPlayers) ? teamPlayers : (teamPlayers?.players || [])
+
+  const ballCarrier = oppList.find(o => (o.id || o.playerID) === (ball?.ownerId || ball?.Player))
   const triggerActive = evaluatePressingTrigger(ballCarrier, ball, bounds, attackDir)
 
   // 1. Línea de Restricción dinámica sincronizada
@@ -154,7 +157,7 @@ export function computeDefensiveBlockTargets(teamPlayers, opponents, ball, pitch
   const deltaV = cfg.basculationK * (ballV - 0.5)
 
   // 3. Regla del Hombre Libre (Spare Man / +1)
-  const advancedOpponents = (opponents || []).filter(o => {
+  const advancedOpponents = oppList.filter(o => {
     if (o.role === 'GK' || o.position === 'GK' || o.redCard || o.sentOff) return false
     const oy = o.y ?? (Array.isArray(o.currentPOS) ? o.currentPOS[1] : 0)
     const ox = o.x ?? (Array.isArray(o.currentPOS) ? o.currentPOS[0] : 0)
@@ -163,7 +166,7 @@ export function computeDefensiveBlockTargets(teamPlayers, opponents, ball, pitch
     return oppU < finalBacklineU + 0.14
   })
 
-  const defenders = (teamPlayers || []).filter(p => {
+  const defenders = teamList.filter(p => {
     return resolvePlayerLine(p) === 'DEF' && !p.redCard && !p.sentOff
   })
 
@@ -171,7 +174,7 @@ export function computeDefensiveBlockTargets(teamPlayers, opponents, ball, pitch
 
   const targets = new Map()
 
-  for (const player of (teamPlayers || [])) {
+  for (const player of teamList) {
     const line = resolvePlayerLine(player)
     if (line === 'GK' || player.redCard || player.sentOff) continue
 

@@ -3,8 +3,28 @@ import * as setPositions from './setPositions.js'
 import { getPlayStyleConfig } from '../data/formations.js'
 import { resolveBallCarrierEngagement } from './ballContest.js'
 import { adjudicateFoul, getDefenderRestraintMultiplier } from './officiating/referee.js'
+import { evaluateShotAndBreakaway } from './evaluators/shotEvaluator.js'
+import { evaluateBestPassOption } from './evaluators/passEvaluator.js'
 
-export function selectAction(possibleActions) {
+export function selectAction(possibleActions, player, team, opposition, matchDetails) {
+  if (player && player.hasBall && team && opposition) {
+    const pitchBounds = matchDetails?.pitchSize
+      ? { width: matchDetails.pitchSize[0], height: matchDetails.pitchSize[1] }
+      : undefined
+    const shotEval = evaluateShotAndBreakaway(player, team, opposition, pitchBounds)
+    player.lastShotEval = shotEval
+
+    if (shotEval.recommendation === 'SHOOT_NOW') {
+      return 'shoot'
+    }
+    if (shotEval.recommendation === 'EXTRA_PASS') {
+      return 'pass'
+    }
+    if (shotEval.recommendation === 'BREAKAWAY_DRIBBLE' || (shotEval.isBreakaway && shotEval.distPx > 145)) {
+      return 'sprint'
+    }
+  }
+
   let goodActions = []
   for (const thisAction of possibleActions) {
     const pts = Math.max(0, Math.round(thisAction.points || 0))
@@ -13,6 +33,13 @@ export function selectAction(possibleActions) {
   }
   if (goodActions[0] == null) return 'wait'
   return goodActions[common.getRandomNumber(0, goodActions.length - 1)]
+}
+
+export const selectActions = selectAction
+
+export function findPossibility(player, team, opposition, matchDetails) {
+  const [pitchWidth, pitchHeight] = matchDetails?.pitchSize || [680, 1050]
+  return evaluateBestPassOption(player, team, opposition, { width: pitchWidth, height: pitchHeight })
 }
 
 export function findPossActions(player, team, opposition, ballX, ballY, matchDetails) {

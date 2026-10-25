@@ -21,6 +21,15 @@ export const LANE_NAMES = {
 };
 
 // Matriz de Amenaza Esperada (xThreat) para las 18 Zonas
+export const DEFAULT_PITCH_BOUNDS = {
+  minX: 0,
+  minY: 0,
+  maxX: 680,
+  maxY: 1050,
+  width: 680,
+  height: 1050,
+};
+
 export const ZONE_XTHREAT = {
   1: 0.01,  2: 0.015, 3: 0.015, // Iniciación baja
   4: 0.02,  5: 0.03,  6: 0.03,  // Salida y contención

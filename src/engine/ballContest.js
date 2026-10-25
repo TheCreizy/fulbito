@@ -157,7 +157,7 @@ export function resolveBallCarrierEngagement(defender, attacker, ball, matchCont
     }
 
     // Carga lateral ilícita / empujón cuando el atacante gana la posición
-    if (bodyScoreDef < bodyScoreAtt - 0.03 && rng() < 0.45 * (1.15 - defAgi)) {
+    if (bodyScoreDef < bodyScoreAtt - 0.02 && rng() < 0.52 * (1.15 - defAgi)) {
       defender.tackleCooldown = 6;
       const decision = adjudicateFoul(matchContext.referee, defender, attacker, {
         isInsidePenaltyBox: matchContext.isInsidePenaltyBox,
@@ -179,7 +179,7 @@ export function resolveBallCarrierEngagement(defender, attacker, ball, matchCont
   );
 
   // Probabilidad de intentar la entrada al balón
-  const attemptTackleProb = 0.92 * (0.55 + 0.45 * defPer) * restraint;
+  const attemptTackleProb = 0.94 * (0.55 + 0.45 * defPer) * restraint;
   if (rng() > attemptTackleProb) {
     attacker.speedModifier = Math.min(attacker.speedModifier || 1.0, 0.72); // Frenado táctico (Delay)
     return { outcome: 'DELAY_JOCKEY' };
@@ -210,8 +210,8 @@ export function resolveBallCarrierEngagement(defender, attacker, ball, matchCont
 
   // El atacante eludió el tackle: evaluar si hubo infracción (zancadilla o arrastre)
   const foulContactProb = Math.min(
-    0.85,
-    Math.max(0.48, (0.72 - 0.18 * defTac + (approachFromBehind ? 0.22 : 0)) * restraint)
+    0.88,
+    Math.max(0.55, (0.78 - 0.18 * defTac + (approachFromBehind ? 0.22 : 0)) * restraint)
   );
 
   if (rng() < foulContactProb) {
