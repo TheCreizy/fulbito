@@ -7,6 +7,7 @@ import { calculateInterceptMovement, steerTowardsTarget } from './steering.js'
 import { resolvePlayerLine, isPivotRole, assignDefensiveEngagementRoles } from './teamShape.js'
 import { computePlayerPressure } from './space/pressureMap.js'
 import { tryInterceptLooseBall } from './ballContest.js'
+import { hasTrait } from './player/effectiveSkill.js'
 
 export { resolvePlayerLine, isPivotRole, assignDefensiveEngagementRoles }
 
@@ -244,6 +245,29 @@ export function decideMovement(closestPlayer, team, opp, matchDetails) {
             common.distance(thisPlayer.currentPOS, matchDetails.ball.targetPOS) < 110
           ) {
             action = 'sprint'
+          }
+        } else if (thisPlayer.position === 'GK') {
+          // Trait: SWEEPER_KEEPER (Arquero Líbero)
+          const [pitchWidth, pitchHeight] = matchDetails.pitchSize || [680, 1050]
+          const isTopTeamDef = thisPlayer.originPOS[1] < (pitchHeight / 2)
+          const isSweeper = hasTrait(thisPlayer, 'SWEEPER_KEEPER')
+
+          if (isSweeper) {
+            const ownGoalY = isTopTeamDef ? 0 : pitchHeight
+            const ballDistToGoal = Math.abs(position[1] - ownGoalY)
+            const ballInSweeperZone = ballDistToGoal < 280 && Math.abs(position[0] - pitchWidth / 2) < 220
+            const isThroughOrLoose = (!withPlayer && matchDetails.ball.ballOverIterations.length > 0) ||
+              (matchDetails.ball.isPendingPass && (matchDetails.ball.kickType === 'through' || matchDetails.ball.type === 'THROUGH'))
+
+            if (isThroughOrLoose && ballInSweeperZone && (!withTeam || withTeam !== team.teamID)) {
+              // Reacción anticipada 25% más rápida para cortar balones profundos
+              action = 'intercept'
+              thisPlayer.intentPOS = [position[0], position[1]]
+            } else if (withTeam === team.teamID) {
+              // Acompañar el bloque alto posicionándose 18px más adelantado
+              const advanceY = isTopTeamDef ? 18 : -18
+              thisPlayer.intentPOS = [thisPlayer.originPOS[0], thisPlayer.originPOS[1] + advanceY]
+            }
           }
         }
       }

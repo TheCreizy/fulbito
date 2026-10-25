@@ -46,8 +46,9 @@ export function tryInterceptLooseBall(player, ball, scaleMetersToPx = 10.0) {
   const tac = (player.skill?.tackling ?? player.tackling ?? 70) / 100;
   const per = (player.skill?.perception ?? player.perception ?? 70) / 100;
   const chem = player.chemistryMultiplier || 1.0;
+  const sweeperBonus = (isGK && hasTrait(player, 'SWEEPER_KEEPER')) ? 1.35 : 1.0;
 
-  const interceptRadiusPx = (1.25 * scaleMetersToPx) * (0.60 + 0.15 * agi + 0.15 * tac + 0.10 * per) * chem;
+  const interceptRadiusPx = (1.25 * scaleMetersToPx) * (0.60 + 0.15 * agi + 0.15 * tac + 0.10 * per) * chem * sweeperBonus;
   const dist = Math.hypot(ballPos.x - pPos.x, ballPos.y - pPos.y);
 
   if (dist <= interceptRadiusPx) {

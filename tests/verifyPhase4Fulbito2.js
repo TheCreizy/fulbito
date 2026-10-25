@@ -22,7 +22,7 @@ import {
 import { updatePlayerCognition } from '../src/engine/player/cognition.js'
 import { evaluateBestPassOption } from '../src/engine/evaluators/passEvaluator.js'
 import { evaluateShotAndBreakaway, SHOT_QUALITY } from '../src/engine/evaluators/shotEvaluator.js'
-import { resolveBallCarrierEngagement } from '../src/engine/ballContest.js'
+import { resolveBallCarrierEngagement, tryInterceptLooseBall } from '../src/engine/ballContest.js'
 import { PLAYERS_DB } from '../src/data/playersDB.js'
 
 console.log('======================================================================')
@@ -135,6 +135,13 @@ const ballWinner = createPlayer(5, 'Javier Mascherano', 'ME', 340, 750, 340, 750
 inferPlayerTraits(ballWinner)
 console.log(`  - Traits de Mascherano:`, ballWinner.activeTraits)
 assert.ok(hasTrait(ballWinner, PLAYER_TRAITS.BALL_WINNER), 'Mascherano debe ser inferido como BALL_WINNER')
+
+const sweeperGK = createPlayer(1, 'Emiliano Martínez', 'GK', 340, 50, 340, 50, {
+  skill: { perception: 84, passing: 78, agility: 80 }
+})
+inferPlayerTraits(sweeperGK)
+console.log(`  - Traits de Dibu Martínez:`, sweeperGK.activeTraits)
+assert.ok(hasTrait(sweeperGK, PLAYER_TRAITS.SWEEPER_KEEPER), 'Dibu Martínez debe ser inferido como SWEEPER_KEEPER')
 
 // Habilidad efectiva escalada por química y traits
 playmaker.chemistryMultiplier = 1.10
@@ -249,7 +256,13 @@ console.log(`  - 100 Disputas BALL_WINNER vs SPEED_DRIBBLER: Quites limpios = ${
 assert.ok(cleanWins > 20, 'Un recuperador de élite debe lograr quites limpios')
 assert.ok(fouls < 50, 'El rasgo BALL_WINNER reduce la comisión de faltas')
 
-console.log('✔ Test 5: Duelos con rasgos validados exitosamente.\n')
+// Verificación de radio de intercepción ampliado para SWEEPER_KEEPER
+const gkBall = { x: 340, y: 62, position: [340, 62, 0], velocity: [0, 1, 0], vx: 0, vy: 1, z: 0 }
+const swept = tryInterceptLooseBall(sweeperGK, gkBall)
+console.log(`  - SWEEPER_KEEPER corte de balón dividido: resultado = ${swept}`)
+assert.strictEqual(typeof swept, 'boolean', 'El arquero líbero debe poder cortar balones divididos con radio ampliado')
+
+console.log('✔ Test 5: Duelos y barridas con rasgos validados exitosamente.\n')
 
 // -------------------------------------------------------------------------
 // TEST 6: SIMULACIÓN END-TO-END DE PARTIDO CON QUÍMICA Y COGNICIÓN

@@ -57,3 +57,13 @@
   6. **Suite de Verificación:** Se creó `tests/verifyPhase4Fulbito2.js` validando los 6 pilares de Fase 4 y se añadió `"test:phase4"` al pipeline general de pruebas.
 * **Por qué (Justificación Técnica/Táctica):** Dota a los jugadores de individualidad y cerebro futbolístico, diferenciando con precisión a los organizadores cerebrales, finalizadores letales y recuperadores de balón, conectando la química de plantilla con el rendimiento físico y técnico sin alterar las bases de datos fijas ni romper la arquitectura React.
 * **Estado de Tests:** 15/15 suites de prueba verificadas al 100% con `npm test` (0 errores).
+
+### [2026-10-25] - Fase 4: Pulido de Auditoría, Sweeper Keeper y Limpieza de Roles
+* **Archivos tocados:** `src/engine/playerMovement.js`, `src/engine/actions.js`, `src/engine/ballContest.js`, `src/engine/teamShape.js`, `src/engine/officiating/referee.js`, `tests/verifyPhase4Fulbito2.js`
+* **Qué se hizo:**
+  1. **Comportamiento activo de Sweeper Keeper (`SWEEPER_KEEPER`):** En `playerMovement.js`, el arquero con este rasgo se posiciona $18\text{ px}$ más adelantado acompañando al bloque en fase con posesión, y reacciona de forma anticipada ante pases filtrados (`THROUGH`) o balones divididos en su tercio defensivo transitando a `action = 'intercept'`. En `ballContest.js`, se le otorgó un $+35\%$ en radio de corte e intercepción de balón suelto. En `actions.js`, se configuró la distribución para priorizar pases filtrados y salida asociativa sobre despejes ciegos.
+  2. **Limpieza de cálculo defensivo en `teamShape.js`:** En `assignDefensivePlanWithIncumbency`, se eliminó la recalculación duplicada de roles defensivos y anclajes cuando ya fueron provistos dinámicamente por `updateSpatialAndTacticalTelemetry` en `engine.js`.
+  3. **Calibración IFAB estricta:** En `referee.js`, la Ley de la Ventaja se condicionó estrictamente a que el equipo atacante conserve el balón con espacio (`attackerTeamKeepsBallWithSpace === true`), manteniendo las faltas y tarjetas en los rangos IFAB estándar.
+  4. **Suite de verificación:** Se expandió `tests/verifyPhase4Fulbito2.js` validando la inferencia y el corte de balón dividido del `SWEEPER_KEEPER`.
+* **Por qué (Justificación Técnica/Táctica):** Resuelve los 3 puntos señalados en el dictamen forense de Fase 4, activando el rasgo del arquero líbero en el movimiento espacial y la toma de decisiones, eliminando redundancias de cálculo en el motor defensivo y asegurando fidelidad reglamentaria IFAB.
+* **Estado de Tests:** 15/15 suites de prueba verificadas al 100% con `npm test` (0 fallos).

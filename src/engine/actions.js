@@ -318,15 +318,23 @@ function computeBaseCarrierDecision(matchDetails, player, team, opposition, env)
 
   // 1. Arquero con pelota
   if (position === 'GK') {
+    const isSweeper = hasTrait(player, 'SWEEPER_KEEPER')
     // Reglas 13 y 16 IFAB: en saque de meta o pelota parada, el arquero NO puede salir conduciendo (0 en run y sprint).
     // Opciones reglamentarias: salida corta por bajo (pass) o saque largo de volea/despeje (boot / throughBall)
     if (matchDetails.ball?.isRestart && matchDetails.ball?.Player === player.playerID) {
       const isDirectStyle = team?.playStyle === 'direct' || team?.playStyle === 'longBall'
-      const bootWeight = isDirectStyle ? 55 : 30
-      const passWeight = isDirectStyle ? 45 : 70
+      const bootWeight = isDirectStyle ? (isSweeper ? 30 : 55) : (isSweeper ? 15 : 30)
+      const passWeight = 100 - bootWeight
       return [0, 0, passWeight, 0, 0, 0, 0, 0, 0, 0, bootWeight, 0]
     }
-    if (env.nearestOppDist < 28) return [0, 0, 35, 0, 0, 0, 0, 0, 0, 35, 30, 0]
+    if (env.nearestOppDist < 28) {
+      if (isSweeper) return [0, 12, 58, 0, 0, 0, 0, 0, 0, 18, 12, 0]
+      return [0, 0, 35, 0, 0, 0, 0, 0, 0, 35, 30, 0]
+    }
+    if (isSweeper) {
+      // Prioriza pases filtrados precisos en transición D->A y construcción asociativa
+      return [0, 28, 68, 0, 0, 0, 0, 4, 0, 0, 0, 0]
+    }
     return [0, 12, 74, 0, 0, 0, 0, 6, 0, 8, 0, 0]
   }
 

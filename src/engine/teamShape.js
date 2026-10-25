@@ -822,26 +822,32 @@ export function assignDefensivePlanWithIncumbency(defendingTeam, attackingTeam, 
     width: pitchWidth,
     height: pitchHeight
   }
-  const blockTargets = computeDefensiveBlockTargets(
-    defendingTeam.players,
-    attackingTeam.players,
-    matchDetails.ball,
-    pitchBounds,
-    { attackDir: isTopTeam ? 1 : -1, blockHeight: defendingTeam.tactics?.blockHeight || 'medium' }
-  )
+  let blockTargets = defendingTeam.defensivePlan?.blockTargets
+  let engagementRoles = defendingTeam.defensivePlan?.engagementRoles
 
-  const engagementRoles = assignDefensiveEngagementRoles(
-    defendingTeam,
-    attackingTeam,
-    matchDetails.ball,
-    blockTargets,
-    10.0
-  )
+  // Si no existen aún o no se han computado, los calculamos; de lo contrario preservamos los del tick
+  if (!blockTargets || !engagementRoles) {
+    blockTargets = computeDefensiveBlockTargets(
+      defendingTeam.players,
+      attackingTeam.players,
+      matchDetails.ball,
+      pitchBounds,
+      { attackDir: isTopTeam ? 1 : -1, blockHeight: defendingTeam.tactics?.blockHeight || 'medium' }
+    )
 
-  for (const player of defendingTeam.players) {
-    const roleData = engagementRoles.get(player.playerID) || engagementRoles.get(player.id)
-    if (roleData) {
-      player.defensiveState = roleData.state
+    engagementRoles = assignDefensiveEngagementRoles(
+      defendingTeam,
+      attackingTeam,
+      matchDetails.ball,
+      blockTargets,
+      10.0
+    )
+
+    for (const player of defendingTeam.players) {
+      const roleData = engagementRoles.get(player.playerID) || engagementRoles.get(player.id)
+      if (roleData) {
+        player.defensiveState = roleData.state
+      }
     }
   }
 
@@ -852,7 +858,7 @@ export function assignDefensivePlanWithIncumbency(defendingTeam, attackingTeam, 
     markerMap,
     blockTargets,
     engagementRoles,
-    triggerActive: blockTargets.values().next().value?.triggerActive || false,
+    triggerActive: blockTargets?.values?.().next()?.value?.triggerActive || false,
     lastUpdateIter: matchDetails.iterationCount || 0
   }
 
