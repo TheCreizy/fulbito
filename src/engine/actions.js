@@ -5,6 +5,7 @@ import { resolveBallCarrierEngagement } from './ballContest.js'
 import { adjudicateFoul, getDefenderRestraintMultiplier } from './officiating/referee.js'
 import { evaluateShotAndBreakaway } from './evaluators/shotEvaluator.js'
 import { evaluateBestPassOption } from './evaluators/passEvaluator.js'
+import { hasTrait } from './player/effectiveSkill.js'
 
 export function selectAction(possibleActions, player, team, opposition, matchDetails) {
   if (player && player.hasBall && team && opposition) {
@@ -22,6 +23,23 @@ export function selectAction(possibleActions, player, team, opposition, matchDet
     }
     if (shotEval.recommendation === 'BREAKAWAY_DRIBBLE' || (shotEval.isBreakaway && shotEval.distPx > 145)) {
       return 'sprint'
+    }
+    if (shotEval.recommendation === 'HOLD_OR_PASS') {
+      const bestPass = evaluateBestPassOption(player, team, opposition, pitchBounds)
+      if (bestPass?.type === 'THROUGH' && bestPass.utility > 0.35) {
+        const tbAct = possibleActions.find(a => a.name === 'throughBall')
+        if (tbAct) tbAct.points = (tbAct.points || 0) + 45
+      }
+    }
+
+    if (hasTrait(player, 'SPEED_DRIBBLER')) {
+      const isTopTeam = player.originPOS ? player.originPOS[1] < (pitchBounds?.height || 1050) / 2 : (player.attackDir === 1)
+      const py = player.currentPOS ? player.currentPOS[1] : (player.y || 525)
+      const inFinalThird = isTopTeam ? (py > 650) : (py < 400)
+      if (inFinalThird) {
+        const sprintAct = possibleActions.find(a => a.name === 'sprint' || a.name === 'run')
+        if (sprintAct) sprintAct.points = (sprintAct.points || 0) + 20
+      }
     }
   }
 
@@ -869,7 +887,7 @@ export function resolveTackle(player, team, opposition, matchDetails) {
 
   const matchContext = {
     isInsidePenaltyBox: isInsideOwnPenaltyBox,
-    isCounterAttack: opposition.gamePhase === 'AttackingTransition',
+    isCounterAttack: opposition.gamePhase === 'AttackingTransition' && Math.abs((thatPlayer.currentPOS?.[1] ?? 525) - (isTopDef ? 1050 : 0)) < 420,
     isLastManDOGSO: false,
     referee: matchDetails.referee || { strictness: 0.52 },
   }
@@ -971,7 +989,7 @@ export function resolveSlide(player, team, opposition, matchDetails) {
 
   const matchContext = {
     isInsidePenaltyBox: isInsideOwnPenaltyBox,
-    isCounterAttack: opposition.gamePhase === 'AttackingTransition',
+    isCounterAttack: opposition.gamePhase === 'AttackingTransition' && Math.abs((thatPlayer.currentPOS?.[1] ?? 525) - (isTopDef ? 1050 : 0)) < 420,
     isLastManDOGSO: false,
     referee: matchDetails.referee || { strictness: 0.52 },
   }

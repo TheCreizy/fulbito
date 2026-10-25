@@ -85,25 +85,25 @@ export function adjudicateFoul(referee, defender, attacker, foulContext = {}, rn
   }
   // 3. Evaluación de TARJETA AMARILLA
   else {
-    let yellowProb = 0.11; // Falta común tiene probabilidad moderada (11%)
+    let yellowProb = 0.08; // Falta común tiene probabilidad equilibrada (8%)
 
     // a) Falta Táctica / Cortar ataque prometedor (SPA)
     if (foulContext.isPromisingCounterAttack) {
-      yellowProb += 0.40;
+      yellowProb += 0.32;
     }
 
     // b) Entrada por detrás o temeraria
     if (foulContext.approachFromBehind && severity > 0.60) {
-      yellowProb += 0.25;
+      yellowProb += 0.18;
     }
 
     // c) Reiteración de faltas del mismo jugador (3 o más faltas acumuladas)
     const fouls = defender?.foulCount ?? 1;
     if (fouls >= 3) {
-      yellowProb += 0.15 * (fouls - 2);
+      yellowProb += 0.08 * (fouls - 2);
     }
 
-    yellowProb *= (0.75 + 0.35 * strictness);
+    yellowProb *= (0.75 + 0.25 * strictness);
 
     // Si ya está amonestado, umbral exigente para la expulsión por doble amarilla
     if (isBooked) {

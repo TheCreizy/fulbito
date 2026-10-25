@@ -7,6 +7,7 @@
  */
 
 import { getDefenderRestraintMultiplier, adjudicateFoul } from './officiating/referee.js';
+import { hasTrait } from './player/effectiveSkill.js';
 
 function getPos(entity) {
   if (!entity) return { x: 0, y: 0 };
@@ -191,8 +192,14 @@ export function resolveBallCarrierEngagement(defender, attacker, ball, matchCont
     defender.stats.tackles.total = (defender.stats.tackles.total || 0) + 1;
   }
 
-  const tackleSkill = 0.65 * defTac + 0.35 * defPer - (approachFromBehind ? 0.20 : 0);
-  const evadeSkill = 0.55 * attCon + 0.45 * attAgi;
+  let tackleSkill = 0.65 * defTac + 0.35 * defPer - (approachFromBehind ? 0.20 : 0);
+  if (hasTrait(defender, 'BALL_WINNER')) {
+    tackleSkill *= 1.15;
+  }
+  let evadeSkill = 0.55 * attCon + 0.45 * attAgi;
+  if (hasTrait(attacker, 'SPEED_DRIBBLER')) {
+    evadeSkill *= 1.15;
+  }
   const margin = tackleSkill - evadeSkill + (rng() - 0.5) * 0.30;
 
   if (margin >= 0.0) {
@@ -209,10 +216,13 @@ export function resolveBallCarrierEngagement(defender, attacker, ball, matchCont
   }
 
   // El atacante eludió el tackle: evaluar si hubo infracción (zancadilla o arrastre)
-  const foulContactProb = Math.min(
-    0.88,
-    Math.max(0.55, (0.78 - 0.18 * defTac + (approachFromBehind ? 0.22 : 0)) * restraint)
+  const baseFoulContactProb = Math.min(
+    0.72,
+    Math.max(0.40, (0.60 - 0.18 * defTac + (approachFromBehind ? 0.20 : 0)) * restraint)
   );
+  const foulContactProb = hasTrait(defender, 'BALL_WINNER')
+    ? baseFoulContactProb * 0.70
+    : baseFoulContactProb;
 
   if (rng() < foulContactProb) {
     const severity = Math.min(1.0, Math.abs(margin) + (approachFromBehind ? 0.25 : 0));

@@ -1273,7 +1273,9 @@ export function setIntentPosition(matchDetails, closestPlayer = null) {
 
 function setLooseintentPOS(matchDetails, thisTeam, closestPlayer) {
   const { ball } = matchDetails
-  buildTeamShape(matchDetails, thisTeam, false)
+  if (!thisTeam.teamShape?.anchors) {
+    buildTeamShape(matchDetails, thisTeam, false)
+  }
   const anchors = thisTeam.teamShape?.anchors || {}
 
   for (const player of thisTeam.players) {
@@ -1319,7 +1321,9 @@ function setDefenceRelativePos(matchDetails, defendingTeam, closestPlayer, attac
   const goalDirY = isTopTeam ? -1 : 1
 
   // 1. Construir Bloque Deslizante TeamShape con limitador de velocidad BLOCK_SPEED
-  buildTeamShape(matchDetails, defendingTeam, false)
+  if (!defendingTeam.teamShape?.anchors) {
+    buildTeamShape(matchDetails, defendingTeam, false)
+  }
   const anchors = defendingTeam.teamShape?.anchors || {}
 
   // 2. Asignar Plan Defensivo (Press, Cover, Mark, HoldZone) con Incumbency Bonus
@@ -1533,7 +1537,9 @@ export function setAttackRelativePos(matchDetails, kickingTeam, defendingTeam) {
   const wingCrossSituation = distBallToGoalY < 320 && (ballOnLeftWing || ballOnRightWing)
 
   // 1. Construir Bloque Deslizante de Ataque (TeamShape)
-  buildTeamShape(matchDetails, kickingTeam, true)
+  if (!kickingTeam.teamShape?.anchors) {
+    buildTeamShape(matchDetails, kickingTeam, true)
+  }
   const anchors = kickingTeam.teamShape?.anchors || {}
 
   // 2. Construir AttackPlan con Roles Exclusivos e Incumbency Bonus (BoxSlots + WidePlan)

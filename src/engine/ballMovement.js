@@ -4,6 +4,7 @@ import * as actions from './actions.js'
 import { getPlayStyleConfig } from '../data/formations.js'
 import { BALL_PHYSICS, kickBall25D, predictBallLanding, updateBallPhysics25D } from './ball/ballPhysics.js'
 import { evaluateBestPassOption } from './evaluators/passEvaluator.js'
+import { getEffectiveSkill, hasTrait as hasPlayerTrait } from './player/effectiveSkill.js'
 
 export { BALL_PHYSICS, kickBall25D, predictBallLanding, updateBallPhysics25D }
 
@@ -514,7 +515,7 @@ export function shotMade(matchDetails, team, player) {
   matchDetails.ball.lastTouch.bodyPart = bodyPart
   const isHeader = bodyPart === 'head'
   const isVolley = ['stomach', 'back', 'chest', 'shoulder'].includes(bodyPart)
-  const hasTrait = (t) => Array.isArray(player.traits) && player.traits.includes(t)
+  const hasTrait = (t) => (Array.isArray(player.traits) && player.traits.includes(t)) || hasPlayerTrait(player, t)
   if (isHeader) {
     matchDetails.iterationLog.push(`Header Shot by: ${player.name}`)
     const headBoost = (hasTrait('cabeceador_nato') || hasTrait('artillero_area') || (Number(player.skill.jumping) || 70) >= 80) ? 1.15 : 1.0
@@ -522,6 +523,10 @@ export function shotMade(matchDetails, team, player) {
   } else if (isVolley) {
     matchDetails.iterationLog.push(`Volley Shot by: ${player.name}`)
     shotPower = Math.max(distToGoalLine + 25, shotPower * 0.92)
+  }
+
+  if (hasPlayerTrait(player, 'LONG_SHOT_SPECIALIST') || hasPlayerTrait(player, 'PLAYMAKER') || hasTrait('canonero_media_distancia')) {
+    matchDetails.ball.spinZ = (matchDetails.ball.spinZ || 0) + 0.12
   }
 
   matchDetails.ball.lastShotDistance = distToGoalLine
@@ -1687,7 +1692,9 @@ export function ballPassed(matchDetails, team, player) {
     aimY = Math.max(35, Math.min(pitchHeight - 35, aimY + dir * 24))
   }
 
-  const accuracyFactor = Math.max(0.02, (100 - player.skill.passing) / 100)
+  const effectivePassing = getEffectiveSkill(player, 'passing')
+  const visionMod = 1.0 + (player.cognition?.visionBonus || 0)
+  const accuracyFactor = Math.max(0.01, (1.0 - effectivePassing) / visionMod)
   const spread = Math.min(9, passDist * 0.065 * accuracyFactor)
 
   const targetX = Math.max(42, Math.min(pitchWidth - 42, aimX + common.getRandomNumber(-spread, spread)))

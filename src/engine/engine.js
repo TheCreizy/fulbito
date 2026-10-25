@@ -15,6 +15,8 @@ import { getTacticalZone18, getVerticalLane, getZoneXThreat, DEFAULT_PITCH_BOUND
 import { computePlayerPressure } from "./space/pressureMap.js";
 import { computeDefensiveBlockTargets, assignDefensiveEngagementRoles } from "./teamShape.js";
 import { assignOffensiveSupportRoles } from "./tactics/offensiveShape.js";
+import { computeSquadChemistryMultipliers } from "./player/effectiveSkill.js";
+import { updatePlayerCognition } from "./player/cognition.js";
 
 export async function initiateGame(team1, team2, pitchDetails) {
   validate.validateArguments(team1, team2, pitchDetails);
@@ -41,6 +43,8 @@ export async function initiateGame(team1, team2, pitchDetails) {
   }
   kickOffTeam.initialMentality = kickOffTeam.mentality || "balanced";
   secondTeam.initialMentality = secondTeam.mentality || "balanced";
+  computeSquadChemistryMultipliers(kickOffTeam);
+  computeSquadChemistryMultipliers(secondTeam);
   matchDetails.kickOffTeam = kickOffTeam;
   matchDetails.secondTeam = secondTeam;
   return matchDetails;
@@ -50,6 +54,15 @@ export function updateSpatialAndTacticalTelemetry(matchDetails) {
   if (!matchDetails || !matchDetails.kickOffTeam || !matchDetails.secondTeam) return;
 
   const { kickOffTeam, secondTeam, ball } = matchDetails;
+  matchDetails.currentTick = (matchDetails.currentTick || 0) + 1;
+
+  if (!kickOffTeam.players?.[0]?.chemistryMultiplier) {
+    computeSquadChemistryMultipliers(kickOffTeam);
+  }
+  if (!secondTeam.players?.[0]?.chemistryMultiplier) {
+    computeSquadChemistryMultipliers(secondTeam);
+  }
+
   const pitchBounds = matchDetails.pitchSize
     ? { width: matchDetails.pitchSize[0], height: matchDetails.pitchSize[1] }
     : DEFAULT_PITCH_BOUNDS;
@@ -59,7 +72,7 @@ export function updateSpatialAndTacticalTelemetry(matchDetails) {
   const isTopSt = (secondTeam.players?.[0]?.originPOS?.[1] ?? 0) < halfwayY;
 
   // 1. Telemetría individual, cooldowns y presión para ambos equipos
-  const updatePlayerTelemetry = (p, isTop, opponents) => {
+  const updatePlayerTelemetry = (p, isTop, opponents, ownTeam) => {
     if (!common.isOnPitch(p)) return;
 
     // Cooldowns (dueño único por tick)
@@ -87,13 +100,16 @@ export function updateSpatialAndTacticalTelemetry(matchDetails) {
 
     const press = computePlayerPressure(p, opponents, 10.0);
     p.pressurePPM = press.totalPressure;
+
+    // Proceso Cognitivo-Perceptivo (Scanning, Memoria, Lapsos bajo presión)
+    updatePlayerCognition(p, ownTeam, opponents, matchDetails.currentTick);
   };
 
   for (const p of kickOffTeam.players) {
-    updatePlayerTelemetry(p, isTopKo, secondTeam.players);
+    updatePlayerTelemetry(p, isTopKo, secondTeam.players, kickOffTeam);
   }
   for (const p of secondTeam.players) {
-    updatePlayerTelemetry(p, isTopSt, kickOffTeam.players);
+    updatePlayerTelemetry(p, isTopSt, kickOffTeam.players, secondTeam);
   }
 
   // 2. Determinar equipo atacante y defensor

@@ -113,9 +113,12 @@ export function toRelativeUV(arg1, arg2, arg3, arg4) {
     v = attackDir === 1 ? rawTrans : 1.0 - rawTrans;
   }
 
+  const validU = Number.isFinite(u) ? u : 0.5;
+  const validV = Number.isFinite(v) ? v : 0.5;
+
   return {
-    u: Math.max(0, Math.min(0.9999, u)),
-    v: Math.max(0, Math.min(0.9999, v)),
+    u: Math.max(0, Math.min(0.9999, validU)),
+    v: Math.max(0, Math.min(0.9999, validV)),
   };
 }
 
@@ -126,8 +129,10 @@ export function fromRelativeUV(u, v, pitchBounds, attackDir = 1) {
   const bounds = normalizePitchBounds(pitchBounds);
   const isVertical = bounds.height > bounds.width;
 
-  const clampedU = Math.max(0, Math.min(0.9999, u));
-  const clampedV = Math.max(0, Math.min(0.9999, v));
+  const validU = Number.isFinite(u) ? u : 0.5;
+  const validV = Number.isFinite(v) ? v : 0.5;
+  const clampedU = Math.max(0, Math.min(0.9999, validU));
+  const clampedV = Math.max(0, Math.min(0.9999, validV));
 
   if (isVertical) {
     const rawLong = attackDir === 1 ? clampedU : 1.0 - clampedU;
@@ -149,9 +154,9 @@ export function fromRelativeUV(u, v, pitchBounds, attackDir = 1) {
  */
 export function getTacticalZone18(arg1, arg2, arg3, arg4) {
   const { u, v } = toRelativeUV(arg1, arg2, arg3, arg4);
-  const row = Math.min(5, Math.max(0, Math.floor(u * 6))); // 0..5
-  const col = Math.min(2, Math.max(0, Math.floor(v * 3))); // 0..2
-  return ZONE_MATRIX[row][col];
+  const row = Math.min(5, Math.max(0, Math.floor((Number.isFinite(u) ? u : 0.5) * 6))); // 0..5
+  const col = Math.min(2, Math.max(0, Math.floor((Number.isFinite(v) ? v : 0.5) * 3))); // 0..2
+  return ZONE_MATRIX[row]?.[col] ?? 14;
 }
 
 /**

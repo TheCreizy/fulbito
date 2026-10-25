@@ -1,13 +1,22 @@
 // src/engine/evaluators/passEvaluator.js
-import { getZoneXThreat, getVerticalLane, toRelativeUV, DEFAULT_PITCH_BOUNDS } from '../space/pitchZones.js';
+import { getZoneXThreat, getVerticalLane, toRelativeUV, getTacticalZone18, DEFAULT_PITCH_BOUNDS } from '../space/pitchZones.js';
 import { computePlayerPressure } from '../space/pressureMap.js';
 import { raycastCorridor } from '../space/raycast.js';
+import { hasTrait } from '../player/effectiveSkill.js';
 
 function getPlayerCoords(p) {
   if (!p) return { x: 340, y: 525 };
-  if (Array.isArray(p)) return { x: p[0], y: p[1] };
-  if (Array.isArray(p.currentPOS)) return { x: p.currentPOS[0], y: p.currentPOS[1] };
-  return { x: p.x ?? 340, y: p.y ?? 525 };
+  if (Array.isArray(p)) {
+    const x = typeof p[0] === 'number' ? p[0] : 340;
+    const y = typeof p[1] === 'number' ? p[1] : 525;
+    return { x, y };
+  }
+  if (Array.isArray(p.currentPOS)) {
+    const x = typeof p.currentPOS[0] === 'number' ? p.currentPOS[0] : 340;
+    const y = typeof p.currentPOS[1] === 'number' ? p.currentPOS[1] : 525;
+    return { x, y };
+  }
+  return { x: (typeof p.x === 'number' ? p.x : 340), y: (typeof p.y === 'number' ? p.y : 525) };
 }
 
 /**
@@ -16,8 +25,18 @@ function getPlayerCoords(p) {
  */
 export function evaluateBestPassOption(passer, ownTeam, opposition, pitchBounds = DEFAULT_PITCH_BOUNDS) {
   const passerId = passer.id || passer.playerID;
-  const teammates = (ownTeam?.players || []).filter(m => (m.id || m.playerID) !== passerId && !m.redCard && !m.sentOff);
-  const opponents = opposition?.players || [];
+  const teammates = (ownTeam?.players || []).filter(m => {
+    const mid = m.id || m.playerID;
+    if (!mid || mid === passerId) return false;
+    if (m.redCard || m.sentOff) return false;
+    if (Array.isArray(m.currentPOS) && (m.currentPOS[0] === 'NP' || typeof m.currentPOS[0] !== 'number')) return false;
+    return true;
+  });
+  const opponents = (opposition?.players || []).filter(o => {
+    if (o.redCard || o.sentOff) return false;
+    if (Array.isArray(o.currentPOS) && (o.currentPOS[0] === 'NP' || typeof o.currentPOS[0] !== 'number')) return false;
+    return true;
+  });
   if (!teammates.length) return null;
 
   const passerCoords = getPlayerCoords(passer);
@@ -100,9 +119,33 @@ export function evaluateBestPassOption(passer, ownTeam, opposition, pitchBounds 
       if (offState.startsWith('BOX_ZONE_')) tacticalBonus += 0.35;
       if (isLongSwitch && targetPPM < 0.25) tacticalBonus += 0.20; // Cambio de orientación al lado débil libre
 
-      // 5. Penalización por orientación corporal difícil del pasador
+      // Trait: PLAYMAKER (+0.18 en THROUGH o SWITCH hacia zonas de peligro)
+      const candZone = getTacticalZone18([cand.x, cand.y], pitchBounds, attackDir);
+      const isDangerZone = [10, 12, 14, 16, 17, 18].includes(candZone);
+      if (hasTrait(passer, 'PLAYMAKER') && (cand.type === 'THROUGH' || isLongSwitch) && isDangerZone) {
+        tacticalBonus += 0.18;
+      }
+
+      // Combinación de Tercer Hombre (+0.14) si el receptor está en zona central/peligro y un 3er compañero ataca el espacio
+      if ([10, 11, 12, 14].includes(candZone)) {
+        const hasThirdManRunner = teammates.some(t => {
+          const tid = t.id || t.playerID;
+          const mid = mate.id || mate.playerID;
+          if (tid === mid || tid === passerId) return false;
+          const tState = t.offensiveState || '';
+          if (!['RUNNING_IN_BEHIND', 'OVERLAPPING'].includes(tState)) return false;
+          const tc = getPlayerCoords(t);
+          return Math.hypot(tc.x - cand.x, tc.y - cand.y) <= 170;
+        });
+        if (hasThirdManRunner) {
+          tacticalBonus += 0.14;
+        }
+      }
+
+      // 5. Penalización por orientación corporal difícil del pasador (reducida 75% si tiene pre-escaneo cognitivo)
       const facingDiff = Math.abs(Math.atan2(Math.sin(passAngle - (passer.facingAngle || forwardAngle)), Math.cos(passAngle - (passer.facingAngle || forwardAngle))));
-      const bodyOrientationPenalty = facingDiff > 2.1 ? 0.16 : 0;
+      const penaltyBase = facingDiff > 2.1 ? 0.16 : 0;
+      const bodyOrientationPenalty = passer.cognition?.isPreScanned ? penaltyBase * 0.25 : penaltyBase;
 
       const interceptRisk = corridor.isClear ? 0.0 : (isLongSwitch ? 0.15 : 0.45);
 

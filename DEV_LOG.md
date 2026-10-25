@@ -42,3 +42,18 @@
   6. Se creó la suite `tests/verifyPhase3Fulbito2.js` y se incorporó al runner principal de `package.json`.
 * **Por qué (Justificación Técnica/Táctica):** Erradica definitivamente las conductas anómalas en el último tercio (delanteros que frenaban o pasaban atrás teniendo camino libre de gol, laterales que no subían y falta de desmarques coordinados en centros), dotando a la ofensiva de variedad, inteligencia geométrica y realismo visual.
 * **Estado de Tests:** 14/14 suites de prueba verificadas al 100% con `npm test` (0 fallos históricos y todas las especificaciones de Fase 3 aprobadas).
+
+### [2026-10-25] - Fase 4: Cognición Perceptiva, Química de Plantilla, Traits y Pulido Táctico
+* **Archivos tocados:** `src/engine/player/effectiveSkill.js`, `src/engine/player/cognition.js`, `src/engine/evaluators/passEvaluator.js`, `src/engine/evaluators/shotEvaluator.js`, `src/engine/actions.js`, `src/engine/ballContest.js`, `src/engine/ballMovement.js`, `src/engine/engine.js`, `src/engine/setPositions.js`, `src/engine/space/pitchZones.js`, `src/engine/officiating/referee.js`, `package.json`, `tests/verifyPhase4Fulbito2.js`
+* **Qué se hizo:**
+  1. **Pulido de Fase 3:** Se optimizó `setPositions.js` eliminando llamadas redundantes a `buildTeamShape` cuando los anclajes ya estaban calculados en el tick, y se potenció el pase filtrado (`throughBall`) en `actions.js` cuando `bestPass.type === 'THROUGH' && bestPass.utility > 0.35`.
+  2. **Proceso Perceptivo-Cognitivo:** Se creó `src/engine/player/cognition.js`, gobernando el escaneo visual cervical dinámico ($T_{scan} \in [3, 18]$ ticks según percepción y agilidad), el estado de pre-escaneo (`isPreScanned`) y la generación de micro-lapsos cognitivos por estrés bajo presión extrema ($PPM > 0.60$).
+  3. **Química de Plantilla Real:** Se implementó `computeSquadChemistryMultipliers` en `effectiveSkill.js`, mapeando vínculos de Club, Nacionalidad y Liga en $\mu_{chem} \in [0.85, 1.15]$, con compatibilidad total para Leyendas/Ídolos universales ($\mu_{chem} = 1.15$).
+  4. **Catálogo e Inferencia de Rasgos (Traits):** Se implementaron `PLAYER_TRAITS` (`PLAYMAKER`, `CLINICAL_FINISHER`, `LONG_SHOT_SPECIALIST`, `SPEED_DRIBBLER`, `BALL_WINNER`, `SWEEPER_KEEPER`) y la función `getEffectiveSkill(player, stat)` aplicando $\mu_{chem}$, traits y compostura.
+  5. **Integración en Evaluadores y Loop en Vivo:**
+     - `passEvaluator.js`: Se integró la bonificación de Playmaker (+0.18 a zonas de peligro), combinaciones de 3.er hombre (+0.14) y mitigación del 75% de penalización por orientación física si el pasador cuenta con `isPreScanned`.
+     - `shotEvaluator.js`: Se incorporó el bonus de `CLINICAL_FINISHER` (+15% xG en ocasiones claras) y el gatillo en Zona 14 para `LONG_SHOT_SPECIALIST` hasta 285px.
+     - `ballContest.js` y `ballMovement.js`: Se vincularon `BALL_WINNER` (+15% tackle, -30% faltas), `SPEED_DRIBBLER` (+15% evasión), efecto Magnus con rotación $spinZ$ en tiros lejanos y precisión de pase modulada por visión cognitiva.
+  6. **Suite de Verificación:** Se creó `tests/verifyPhase4Fulbito2.js` validando los 6 pilares de Fase 4 y se añadió `"test:phase4"` al pipeline general de pruebas.
+* **Por qué (Justificación Técnica/Táctica):** Dota a los jugadores de individualidad y cerebro futbolístico, diferenciando con precisión a los organizadores cerebrales, finalizadores letales y recuperadores de balón, conectando la química de plantilla con el rendimiento físico y técnico sin alterar las bases de datos fijas ni romper la arquitectura React.
+* **Estado de Tests:** 15/15 suites de prueba verificadas al 100% con `npm test` (0 errores).

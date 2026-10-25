@@ -1,6 +1,7 @@
 // src/engine/evaluators/shotEvaluator.js
 import { raycastCorridor } from '../space/raycast.js';
 import { getTacticalZone18, toRelativeUV, DEFAULT_PITCH_BOUNDS } from '../space/pitchZones.js';
+import { getEffectiveSkill, hasTrait } from '../player/effectiveSkill.js';
 
 export const SHOT_QUALITY = {
   CLEAR_CUT: 'CLEAR_CUT_CHANCE',     // xG >= 0.32
@@ -76,13 +77,19 @@ export function evaluateShotAndBreakaway(player, ownTeam, opposition, pitchBound
   const ppm = player.pressurePPM || 0;
   const blockerPenalty = Math.pow(0.70, corridor.blockerCount);
   const pressureFactor = Math.max(0.45, 1.0 - 0.35 * ppm);
-  const shootSkill = ((player.stats?.shooting || player.skill?.shooting || player.shooting || 75) / 100);
+  const shootSkill = getEffectiveSkill(player, 'shooting');
 
-  const xG = Math.max(0.005, Math.min(0.92, baseXG * blockerPenalty * pressureFactor * gkOutBonus * (0.8 + 0.35 * shootSkill)));
+  let xG = Math.max(0.005, Math.min(0.92, baseXG * blockerPenalty * pressureFactor * gkOutBonus * (0.8 + 0.35 * shootSkill)));
 
   let quality = SHOT_QUALITY.SPECULATIVE;
-  if (xG >= 0.32) quality = SHOT_QUALITY.CLEAR_CUT;
-  else if (xG >= 0.07) quality = SHOT_QUALITY.HALF_CHANCE;
+  if (xG >= 0.32) {
+    quality = SHOT_QUALITY.CLEAR_CUT;
+    if (hasTrait(player, 'CLINICAL_FINISHER')) {
+      xG = Math.min(0.96, xG * 1.15); // +15% de efectividad en ocasiones manifiestas de gol
+    }
+  } else if (xG >= 0.07) {
+    quality = SHOT_QUALITY.HALF_CHANCE;
+  }
 
   // 5. Detección de BREAKAWAY OVERRIDE (Mano a Mano / Camino Libre)
   const { u } = toRelativeUV(px, py, pitchBounds, attackDir);
@@ -131,7 +138,9 @@ export function evaluateShotAndBreakaway(player, ownTeam, opposition, pitchBound
     recommendation = distPx <= 145 ? 'SHOOT_NOW' : 'BREAKAWAY_DRIBBLE';
   } else if (quality === SHOT_QUALITY.HALF_CHANCE && distPx <= 195 && corridor.blockerCount <= 1) {
     recommendation = 'SHOOT_NOW';
-  } else if (zone18 === 14 && corridor.isClear && shootSkill >= 0.80 && ppm < 0.35 && distPx <= 265) {
+  } else if (zone18 === 14 && corridor.isClear && distPx <= 285 &&
+             ((hasTrait(player, 'LONG_SHOT_SPECIALIST') && shootSkill >= 0.76 && ppm < 0.42) ||
+              (shootSkill >= 0.80 && ppm < 0.35 && distPx <= 265))) {
     // Especialista de media distancia en Zona 14 (Balcón del área) con cono de tiro despejado
     recommendation = 'SHOOT_NOW';
   }
