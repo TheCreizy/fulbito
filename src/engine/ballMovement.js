@@ -5,8 +5,10 @@ import { getPlayStyleConfig } from '../data/formations.js'
 import { BALL_PHYSICS, kickBall25D, predictBallLanding, updateBallPhysics25D } from './ball/ballPhysics.js'
 import { evaluateBestPassOption } from './evaluators/passEvaluator.js'
 import { getEffectiveSkill, hasTrait as hasPlayerTrait } from './player/effectiveSkill.js'
+import { resolveAerialDuel, resolveGoalkeeperSave25D } from './ball/ballContest25D.js'
+import { evaluateDribbleDuel1v1, shouldAttemptDribble } from './evaluators/duelEvaluator.js'
 
-export { BALL_PHYSICS, kickBall25D, predictBallLanding, updateBallPhysics25D }
+export { BALL_PHYSICS, kickBall25D, predictBallLanding, updateBallPhysics25D, resolveAerialDuel, resolveGoalkeeperSave25D, evaluateDribbleDuel1v1, shouldAttemptDribble }
 
 export function getSecondLastDefender(defendingTeam, attackingTop, pitchHeight) {
   const activeDefenders = (defendingTeam?.players || []).filter(common.isOnPitch)
@@ -131,13 +133,22 @@ export function executeGoalkeeperSave(matchDetails, goalie, goalieTeam, currentB
   const ballX = currentBallPos[0]
   const isLeftCorner = ballX < (pitchWidth / 2)
 
-  // Desglose de atajadas inspirado en save.rs de Open Football:
-  // - 36% Parry al córner (la pelota es desviada por arriba del travesaño o contra el poste)
-  // - 30% Rebote al área chica / punto penal (balón suelto en zona caliente)
-  // - 34% Embolsada limpia (el arquero retiene el balón en sus manos)
-  const roll = common.getRandomNumber(1, 100)
+  // Desglose de atajadas balísticas 2.5D de Fulbito 2.2 (§7.2):
+  // - PARRY_SAFE: Desvío al córner o línea exterior
+  // - REBOUND_DANGER: Rebote vivo disputable en el área chica
+  // - CLEAN_CATCH: Embolsada limpia y retención
+  const save25D = resolveGoalkeeperSave25D(
+    goalie,
+    matchDetails.ball,
+    matchDetails.ball?.lastShotPower || 75,
+    {
+      screenedShot: !!matchDetails.ball?.screenedShot,
+      hasSplitStep: goalie.fsm?.currentState === 'GK_SPLIT_STEP' || !!goalie.hasSplitStep,
+      isOneOnOne: !!matchDetails.ball?.isOneOnOne
+    }
+  )
 
-  if (roll <= 36) {
+  if (save25D.outcome === 'PARRY_SAFE') {
     matchDetails.iterationLog.push(`Magnificent save by ${goalie.name}! Ball tipped out for a corner`)
     if (Array.isArray(matchDetails.events)) {
       matchDetails.events.push({
@@ -171,7 +182,7 @@ export function executeGoalkeeperSave(matchDetails, goalie, goalieTeam, currentB
     goalie.hasBall = false
     matchDetails.endIteration = true
     return matchDetails
-  } else if (roll <= 66) {
+  } else if (save25D.outcome === 'REBOUND_DANGER') {
     const reboundTypeRoll = common.getRandomNumber(1, 100)
     let reboundPower = 40
     let targetX = goalie.currentPOS[0]
@@ -931,7 +942,13 @@ export function throughBall(matchDetails, team, player) {
   candidates.sort((a, b) => tballScoreOption(b, aTop, ballPos, maxDist, styleCfg) - tballScoreOption(a, aTop, ballPos, maxDist, styleCfg))
   const bestPass = evaluateBestPassOption(player, team, opposition, { width: pitchWidth, height: pitchHeight })
   let targetPlayer = candidates[0]
-  if (bestPass && bestPass.teammate) {
+  if (matchDetails.wallPass && matchDetails.wallPass.wallPartnerID === player.playerID && currentIter <= matchDetails.wallPass.expireIter) {
+    const returnPartner = candidates.find(p => p.playerID === matchDetails.wallPass.passerID)
+    if (returnPartner) {
+      targetPlayer = returnPartner
+      matchDetails.iterationLog.push(`Wall pass return through ball: ${targetPlayer.name}`)
+    }
+  } else if (bestPass && bestPass.teammate) {
     const matched = candidates.find(p => p.playerID === (bestPass.teammate.id || bestPass.teammate.playerID))
     if (matched) {
       targetPlayer = matched
@@ -1616,7 +1633,13 @@ export function ballPassed(matchDetails, team, player) {
   const bestPass = evaluateBestPassOption(player, team, opposition, { width: pitchWidth, height: pitchHeight })
   let targetPlayer = reachable[0]
 
-  if (bestPass && bestPass.teammate && !player.isKickoffPass && !matchDetails.isThrowIn) {
+  if (matchDetails.wallPass && matchDetails.wallPass.wallPartnerID === player.playerID && currentIter <= matchDetails.wallPass.expireIter) {
+    const returnPartner = reachable.find(p => p.playerID === matchDetails.wallPass.passerID)
+    if (returnPartner) {
+      targetPlayer = returnPartner
+      matchDetails.iterationLog.push(`Wall pass return target: ${targetPlayer.name}`)
+    }
+  } else if (bestPass && bestPass.teammate && !player.isKickoffPass && !matchDetails.isThrowIn) {
     const matched = reachable.find(p => p.playerID === (bestPass.teammate.id || bestPass.teammate.playerID))
     if (matched) {
       targetPlayer = matched
@@ -1659,11 +1682,10 @@ export function ballPassed(matchDetails, team, player) {
     matchDetails.wallPass = null
   } else if (
     !isSwitchOfPlay &&
-    passDist >= 40 &&
-    passDist <= 165 &&
-    forwardDelta >= 15 &&
-    !targetPlayer.isMarked &&
-    ['CAM', 'ST', 'LM', 'RM', 'CM', 'LB', 'RB', 'LWB', 'RWB'].includes(player.tacticalRole || player.position)
+    passDist >= 25 &&
+    passDist <= 220 &&
+    forwardDelta >= -15 &&
+    ['CAM', 'ST', 'LM', 'RM', 'CM', 'LB', 'RB', 'LWB', 'RWB', 'EXT', 'VOL I', 'VOL D', 'ENG (10)', '8 MIX'].includes(player.tacticalRole || player.position)
   ) {
     matchDetails.wallPass = {
       passerID: player.playerID,
@@ -1671,13 +1693,13 @@ export function ballPassed(matchDetails, team, player) {
       wallPartnerID: targetPlayer.playerID,
       wallPartnerName: targetPlayer.name,
       startIter: currentIter,
-      expireIter: currentIter + 22
+      expireIter: currentIter + 38
     }
     player.offBallRun = {
       type: 'wallReturnRun',
       targetX: Math.max(30, Math.min(pitchWidth - 30, targetPlayer.position[0] + (targetPlayer.position[0] >= player.currentPOS[0] ? 35 : -35))),
       targetY: Math.max(30, Math.min(pitchHeight - 30, targetPlayer.position[1] + (dir * 75))),
-      untilIteration: currentIter + 22
+      untilIteration: currentIter + 38
     }
     player.intentPOS = [player.offBallRun.targetX, player.offBallRun.targetY]
   }

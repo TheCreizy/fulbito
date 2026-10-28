@@ -123,7 +123,70 @@ export const FORMATIONS = {
       { index: 9, role: 'EXT', label: 'EXT D', pos: [555, 395] },
       { index: 10, role: 'ST', label: '9 ÁREA', pos: [340, 495] }
     ]
+  },
+  '3-4-3': {
+    id: '3-4-3',
+    name: '3-4-3 Total / Holandés',
+    defaultPlayStyle: 'wingPlay',
+    description: 'Tres defensores atrás, rombo o línea de 4 en el medio y tres delanteros fijando amplitud.',
+    slots: [
+      { index: 0, role: 'GK', label: 'ARQ', pos: [340, 30] },
+      { index: 1, role: 'CB', label: 'STOP I', pos: [190, 145] },
+      { index: 2, role: 'CB', label: 'LÍBERO', pos: [340, 130] },
+      { index: 3, role: 'CB', label: 'STOP D', pos: [490, 145] },
+      { index: 4, role: 'LM', label: 'CARR I', pos: [85, 310] },
+      { index: 5, role: 'CM', label: 'MC I', pos: [255, 300] },
+      { index: 6, role: 'CM', label: 'MC D', pos: [425, 300] },
+      { index: 7, role: 'RM', label: 'CARR D', pos: [595, 310] },
+      { index: 8, role: 'EXT', label: 'EXT I', pos: [100, 470] },
+      { index: 9, role: 'ST', label: '9 ÁREA', pos: [340, 495] },
+      { index: 10, role: 'EXT', label: 'EXT D', pos: [580, 470] }
+    ]
+  },
+  '4-1-4-1': {
+    id: '4-1-4-1',
+    name: '4-1-4-1 Bloque Posicional',
+    defaultPlayStyle: 'tikiTaka',
+    description: 'Pivote ancla único protegiendo a la zaga y línea de cuatro volantes de presión y llegada.',
+    slots: [
+      { index: 0, role: 'GK', label: 'ARQ', pos: [340, 30] },
+      { index: 1, role: 'LB', label: 'LI', pos: [95, 165] },
+      { index: 2, role: 'CB', label: 'DFC', pos: [250, 145] },
+      { index: 3, role: 'CB', label: 'DFC', pos: [430, 145] },
+      { index: 4, role: 'RB', label: 'LD', pos: [585, 165] },
+      { index: 5, role: 'CDM', label: 'ANCLA (5)', pos: [340, 255] },
+      { index: 6, role: 'LM', label: 'VOL I', pos: [110, 350] },
+      { index: 7, role: 'CM', label: 'INT I', pos: [255, 345] },
+      { index: 8, role: 'CM', label: 'INT D', pos: [425, 345] },
+      { index: 9, role: 'RM', label: 'VOL D', pos: [570, 350] },
+      { index: 10, role: 'ST', label: 'DC', pos: [340, 495] }
+    ]
+  },
+  '5-4-1': {
+    id: '5-4-1',
+    name: '5-4-1 Cerrojo / Muralla',
+    defaultPlayStyle: 'directCounter',
+    description: 'Máxima densidad defensiva: líbero, dos stoppers, dos carrileros y doble línea de contención.',
+    slots: [
+      { index: 0, role: 'GK', label: 'ARQ', pos: [340, 30] },
+      { index: 1, role: 'LB', label: 'CAR I', pos: [85, 185] },
+      { index: 2, role: 'CB', label: 'STOP I', pos: [210, 140] },
+      { index: 3, role: 'CB', label: 'LÍBERO', pos: [340, 120] },
+      { index: 4, role: 'CB', label: 'STOP D', pos: [470, 140] },
+      { index: 5, role: 'RB', label: 'CAR D', pos: [595, 185] },
+      { index: 6, role: 'LM', label: 'MI', pos: [115, 315] },
+      { index: 7, role: 'CM', label: 'MC I', pos: [260, 295] },
+      { index: 8, role: 'CM', label: 'MC D', pos: [420, 295] },
+      { index: 9, role: 'RM', label: 'MD', pos: [565, 315] },
+      { index: 10, role: 'ST', label: '9 AISLADO', pos: [340, 480] }
+    ]
   }
+}
+
+export const FORMATION_FAMILIES = {
+  THREE_DEF: ['3-4-3', '3-5-2'],
+  FOUR_DEF: ['4-4-2', '4-3-1-2', '4-3-3', '4-2-3-1', '4-1-4-1'],
+  FIVE_DEF: ['5-3-2', '5-4-1']
 }
 
 export const PLAY_STYLES = {

@@ -67,3 +67,66 @@
   4. **Suite de verificación:** Se expandió `tests/verifyPhase4Fulbito2.js` validando la inferencia y el corte de balón dividido del `SWEEPER_KEEPER`.
 * **Por qué (Justificación Técnica/Táctica):** Resuelve los 3 puntos señalados en el dictamen forense de Fase 4, activando el rasgo del arquero líbero en el movimiento espacial y la toma de decisiones, eliminando redundancias de cálculo en el motor defensivo y asegurando fidelidad reglamentaria IFAB.
 * **Estado de Tests:** 15/15 suites de prueba verificadas al 100% con `npm test` (0 fallos).
+
+### [2026-10-27] - Fase 5 a 9 (Plan Maestro 2.2): Migración Documental Integral y Arquitectura de Contexto Fulbito 2.2
+* **Archivos tocados:** `Rediseño del Motor Fulbito 2.md`, `AGENTS.md`, `design-paterns.md`, `notas_analisis_proyecto(old).md`, `.agent/skills/graphical-apps-development/SKILL.md`, `.cursor/rules/graphical-apps-development.mdc`, `DEV_LOG.md`
+* **Qué se hizo:**
+  1. Se refactorizó `Rediseño del Motor Fulbito 2.md` bajo el estándar `llm.md/tech-docs` integrando el 100% de la especificación de `UPDATE FULBITO 2.2.md` (Fases 5 a 9: Continuum de 4 Fases y `steering.js` biomecánico, HFSM de 61 estados por línea con histéresis y exclusión de celdas, disputas 2.5D aéreas/atajadas/regate 1v1/córners/penales psicológicos, 15 Roles + 3 Duties en familias de 3-4-5 defensas, y motor semántico DSS de 14 dimensiones y 20 estrategias canónicas).
+  2. Se reestructuró `AGENTS.md` aplicando *Progressive Disclosure* (tabla de enrutamiento de contexto por directorio, protocolo de memoria persistente entre sesiones de Antigravity, presupuesto compacto `<6 KB` para garantizar inlining permanente y preservación estricta de invariantes de UI, base de datos y coordenadas `(u, v)`).
+  3. Se limpió y actualizó `design-paterns.md` a Fulbito 2.2 (eliminando el bloque markdown anidado malformado y sincronizando las rutas reales de `src/engine/`).
+  4. Se purgó de `.cursor/rules/graphical-apps-development.mdc` una regla ajena (`Pyllments` en Python) reemplazándola por los contratos reales de Model-View y coordenadas normalizadas de Fulbito 2.2, en sincronía con `.agent/skills/graphical-apps-development/SKILL.md`.
+* **Por qué (Justificación Técnica/Táctica):** Elimina el *drift* documental entre el código real (`819eaa0`) y los documentos de diseño, previene el fenómeno *Lost-in-the-Middle* en agentes mediante tablas declarativas de alta densidad y deja trazada con precisión milimétrica la hoja de ruta de las Fases 5 a 9 sin contradicciones ni referencias a archivos inexistentes.
+* **Estado de Tests:** 15/15 suites de prueba verificadas al 100% con `npm test`.
+
+### [2026-10-28] - Fase 5 (Fulbito 2.2): Continuum Táctico de 4 Fases, Transiciones (Gegenpressing / Contraataque) y Cinemática Biomecánica
+* **Archivos tocados:** `src/engine/core/rng.js`, `src/engine/core/matchContext.js`, `src/engine/steering.js`, `src/engine/engine.js`, `src/engine/playerMovement.js`, `src/engine/evaluators/passEvaluator.js`, `tests/verifyPhase5Fulbito2.js`, `package.json`, `Rediseño del Motor Fulbito 2.md`, `DEV_LOG.md`
+* **Qué se hizo:**
+  1. Se creó `src/engine/core/rng.js` con utilidades matemáticas deterministas (`clamp`, `lerp`, `smoothstep`, `normalizeAngle`, `angleDiff`, `rotateAngleTowards`, `randomNormalClamped`).
+  2. Se implementó `src/engine/core/matchContext.js` con la máquina de estados de las **4 Fases del Continuum Táctico** (`ORGANIZACION_OFENSIVA`, `TRANSICION_ATAQUE_DEFENSA`, `ORGANIZACION_DEFENSIVA`, `TRANSICION_DEFENSA_ATAQUE`):
+     - **Transición A$\rightarrow$D (ventana de 6s / 120 ticks):** Evalúa el punto de pérdida $u_{loss} \ge 0.45$ y cercanía de $\ge 3$ jugadores propios en un radio de $18\text{ m}$ ($180\text{ px}$); dispara `COUNTER_PRESSING` (*Gegenpressing*) durante `100 ticks` ($5\text{ s}$) cazando al portador con los 3 más cercanos, o `INTENSIVE_RETREAT` (`TRACKING_BACK`) hacia las anclas de bloque.
+     - **Transición D$\rightarrow$A (ventana de 8s / 160 ticks):** Calcula el **Índice de Desorden Rival** (`computeOpponentDisorderIndex`) al recuperar la pelota y activa `FAST_COUNTER` (multiplicando $\times 1.80$ la utilidad de pases verticales/filtrados en `passEvaluator.js` y penalizando pases horizontales) o `CONSOLIDATE_POSSESSION` (priorizando pases de seguridad al pivote/central libre).
+  3. Se actualizó `src/engine/steering.js` incorporando las 4 mecánicas biomecánicas de Fulbito 2.2:
+     - **Rampa progresiva de sprint (`sprintRamp` $\in [0, 1]$):** $\Delta\text{ramp} = 0.065 + 0.055 \cdot \text{EffectiveSkill}(\text{agility})$ (~8-9 ticks al pico en explosivos vs ~11-12 ticks en pesados).
+     - **Penalización angular por giro $>90^\circ$ ($\mu_{turn}$):** $\mu_{turn} = 1.0 - (\Delta\theta/\pi)\cdot(0.65 - 0.35\cdot\text{EffectiveSkill}(\text{agility}))$ e interpolación suave de `player.facingAngle` con $\omega_{max} = 0.28 + 0.25\cdot\text{EffectiveSkill}(\text{agility})\text{ rad/tick}$.
+     - **Velocidad de conducción con balón ($\mu_{carry}$):** $\mu_{carry} = 0.84 + 0.12\cdot\text{EffectiveSkill}(\text{control}) + (\text{SPEED\_DRIBBLER} ? 0.04 : 0)$.
+     - **Esfuerzo por modalidad (`MOVEMENT_EFFORT`):** `WALKING` ($0.38\times$), `JOGGING_SHAPE` ($0.68\times$), `CRUISING_SUPPORT` ($0.85\times$), `SPRINTING` ($1.00\times$) y `SURGING_BURST` ($1.12\times$), conectados al drenaje proporcional de `player.fitness`.
+  4. Se conectaron `updateMatchContinuum` en `engine.js` y las mecánicas de transición y cinemática en `playerMovement.js` y `passEvaluator.js`.
+  5. Se creó la suite `tests/verifyPhase5Fulbito2.js` y se integró en `package.json`.
+* **Por qué (Justificación Técnica/Táctica):** Cumple el 100% de la Fase 5 definida en `UPDATE FULBITO 2.2.md`, dotando al partido de ritmo temporal real entre fases de posesión y transición e inercia física realista sin giros instantáneos de $180^\circ$ a máxima velocidad.
+* **Estado de Tests:** 16/16 suites de prueba verificadas al 100% (incluyendo `verifyPhase1And2Fulbito2.js`, `verifyPhase3Fulbito2.js`, `verifyPhase4Fulbito2.js` y `verifyPhase5Fulbito2.js`).
+
+### [2026-10-28] - Fase 6 (Fulbito 2.2): HFSM por Línea (61 Estados), Histéresis Anti-Jitter y Exclusión de Celdas
+* **Archivos tocados:** `src/engine/player/playerStateMachine.js`, `src/engine/player/strategies/goalkeeperStates.js`, `src/engine/player/strategies/defenderStates.js`, `src/engine/player/strategies/midfielderStates.js`, `src/engine/player/strategies/forwardStates.js`, `src/engine/space/pitchZones.js`, `src/engine/tactics/offensiveShape.js`, `src/engine/playerMovement.js`, `src/engine/engine.js`, `tests/verifyPhase6Fulbito2.js`, `package.json`, `Rediseño del Motor Fulbito 2.md`
+* **Qué se hizo:** Se implementó la HFSM completa de 61 estados por línea con histéresis anti-jitter (`minHoldTicks: 8–14`) y State Overrides de 1 tick (`LOOSE_BALL_CLAIM`, `BREAKAWAY_DRIBBLE`, `SET_PIECE_HOLD`), los estados tácticos avanzados (`FWD_PINNING_CB`, `FWD_FALSE_NINE_DROP`, `FWD_RUNNING_IN_BEHIND_ARC` con desmarque arqueado `ARCING_RUN` anti-offside, y la Estructura en Caja / *Square* `MID_BOX_HALF_SPACE`), y el resolvedor de exclusión de celdas idénticas `enforceRationalSpaceOccupation` en `pitchZones.js` para forzar triangulaciones diagonales de $30^\circ\text{ a }60^\circ$.
+* **Por qué (Justificación Técnica/Táctica):** Erradica el jitter o cambio caótico de decisiones tick a tick, evita la duplicación de jugadores en la misma coordenada táctica y garantiza que los delanteros nunca caminen de espaldas al caer en fuera de juego.
+* **Estado de Tests:** Suite `tests/verifyPhase6Fulbito2.js` aprobada al 100% y regresión F1–F6 sin fallos.
+
+### [2026-10-28] - Fase 7 (Fulbito 2.2): Disputas 2.5D, Regate 1v1 y Balón Parado / Penales Psicológicos
+* **Archivos tocados:** `src/engine/ball/ballContest25D.js`, `src/engine/evaluators/duelEvaluator.js`, `src/engine/setFreekicks.js`, `src/engine/ballMovement.js`, `src/engine/ballContest.js`, `src/engine/actions.js`, `src/engine/engine.js`, `tests/verifyPhase7Fulbito2.js`, `package.json`, `Rediseño del Motor Fulbito 2.md`
+* **Qué se hizo:**
+  1. Se implementó `resolveAerialDuel` con la fórmula $S_{aerial}$ ponderando altura normalizada, salto, fuerza, percepción y bono de carrera (+0.08), generando `HEADER_SHOT`, `FLICK_ON` o despeje defensivo orientado a bandas (`DEFENSIVE_CLEARANCE_WIDE`).
+  2. Se implementó `resolveGoalkeeperSave25D` evaluando Reach tridimensional $(Reach_{XY}, Reach_{Z})$, visión tapada por tráfico (`screenedShot`), bono de $+15\%$ por `GK_SPLIT_STEP` y los 3 desenlaces (`CLEAN_CATCH`, `PARRY_SAFE` a córner y `REBOUND_DANGER` vivo en Z17).
+  3. Se creó `duelEvaluator.js` con evaluación de regate 1v1 y finta biomecánica ($35^\circ\text{–}55^\circ$), dejando clavado al defensor con `interceptCooldown = 25` ticks.
+  4. Se estructuró el sistema mixto/zonal de córners defensivos (2 zonales en primer palo, 3 marcas individuales en penal/2do palo, 1 escudo en Z14 y 2 outlets de contra) y ofensivos con comba Magnus (`IN_SWINGER` vs `OUT_SWINGER`).
+  5. Se implementó el motor cognitivo de penales psicológicos `resolvePsychologicalPenalty` con bifurcación en `GOALKEEPER_DEPENDENT` (paradinha y lectura) vs `GOALKEEPER_INDEPENDENT` (potencia y colocación a postes).
+* **Por qué (Justificación Técnica/Táctica):** Integra la tercera dimensión en los balones parados y centros, individualiza las definiciones de penal entre ejecutores cerebrales y rematadores potentes, e introduce fintas reales en el uno contra uno.
+* **Estado de Tests:** Suite `tests/verifyPhase7Fulbito2.js` aprobada al 100%.
+
+### [2026-10-28] - Fase 8 (Fulbito 2.2): Genealogía de Sistemas (3, 4 y 5 DEF) y los 15 Roles + 3 Duties
+* **Archivos tocados:** `src/data/formations.js`, `src/engine/tactics/rolesAndDuties.js`, `src/engine/tactics/tacticalModel.js`, `tests/verifyPhase8Fulbito2.js`, `package.json`, `Rediseño del Motor Fulbito 2.md`
+* **Qué se hizo:**
+  1. Se expandió el catálogo de formaciones en `formations.js` con las 3 familias defensivas completas: 3 Defensas (`3-4-3`, `3-5-2`), 4 Defensas (`4-4-2`, `4-3-1-2`, `4-3-3`, `4-2-3-1`, `4-1-4-1`) y 5 Defensas (`5-3-2`, `5-4-1`), totalizando 9 sistemas con 11 slots coordinados.
+  2. Se creó `rolesAndDuties.js` con la taxonomía completa de los 15 Roles Funcionales de campo + 2 variantes de portería y los 3 Duties (`DEFEND`, `SUPPORT`, `ATTACK`), con validación de tareas permitidas y asignación automática por formación.
+  3. Se creó `tacticalModel.js` con alturas de bloque (`LOW_BLOCK` a 180px, `MID_BLOCK` a 290px, `HIGH_PRESS` a 420px), anchura (`COMPACT`, `BALANCED`, `WIDE`) y fluidez táctica.
+* **Por qué (Justificación Técnica/Táctica):** Permite representar fielmente cualquier escuela táctica del fútbol mundial (desde el catenaccio con líbero hasta el fútbol total holandés o el juego de posición contemporáneo) modulando el comportamiento espacial de cada jugador de forma determinista.
+* **Estado de Tests:** Suite `tests/verifyPhase8Fulbito2.js` aprobada al 100%.
+
+### [2026-10-28] - Fase 9 (Fulbito 2.2): Motor Semántico DSS (14 Dimensiones + 20 Estrategias) y CoachAI Adaptativo
+* **Archivos tocados:** `src/engine/tactics/semanticDSS.js`, `src/engine/coachAI.js`, `src/components/TacticsBoard.jsx`, `tests/verifyPhase9Fulbito2.js`, `package.json`, `Rediseño del Motor Fulbito 2.md`
+* **Qué se hizo:**
+  1. Se implementó `semanticDSS.js` con el espacio vectorial $V_{team}(t) \in [0, 1]^{14}$ (fuerza ofensiva, solidez defensiva, creatividad, velocidad de transición, presión, amplitud, compostura, energía residual en vivo, moral, gestión temporal, cohesión, base técnica, poderío físico/aéreo y química relacional).
+  2. Se programó el catálogo de las 20 Estrategias Canónicas y la métrica de distancia asimétrica $d_{adapt}$ con el buscador de afinidad óptima `findClosestCanonicalStrategy`.
+  3. Se implementó `evaluateSmartSubstitutions` en `coachAI.js` para gestionar sustituciones automáticas por fatiga crítica (`player.fitness < 45`), protección por tarjeta amarilla y ajustes tácticos respetando el límite IFAB de 5 cambios.
+  4. Se integraron las nuevas formaciones en `TacticsBoard.jsx` preservando el 100% de los contratos de la interfaz gráfica de usuario.
+* **Por qué (Justificación Técnica/Táctica):** Cierra el ciclo de inteligencia colectiva de Fulbito 2.2, dotando a los directores técnicos de adaptación dinámica basada en datos multidimensionales y sustituciones oportunas que reflejan el cansancio real de los partidos.
+* **Estado de Tests:** Suite `tests/verifyPhase9Fulbito2.js` aprobada al 100% y suite completa de regresión general (`npm test`, 19 suites) aprobada al 100% con 0 errores.

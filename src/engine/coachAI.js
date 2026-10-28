@@ -216,3 +216,77 @@ export function updateTeamCoachDirectives(matchDetails) {
       : cfg2.mentalityEquivalent
   }
 }
+
+/**
+ * Evalúa y ejecuta sustituciones inteligentes basadas en:
+ * 1. Fatiga crítica (player.fitness < 45)
+ * 2. Riesgo disciplinario (tarjeta amarilla y juego de corte)
+ * 3. Desajuste táctico
+ * 
+ * @param {Object} matchDetails - Estado del partido
+ * @param {Object} team - Equipo que evalúa sustituciones
+ * @param {Object} opposition - Rival
+ * @returns {{ substitutions: Array<{ outPlayer: Object, inPlayer: Object, reason: string }> }}
+ */
+export function evaluateSmartSubstitutions(matchDetails, team, opposition) {
+  if (!team || !Array.isArray(team.players)) return { substitutions: [] }
+
+  const currentIter = matchDetails?.iterationCount || 0
+  // Permitir evaluación a partir del minuto 55 (~1200 ticks) o si hay fatiga extrema (<40)
+  if (currentIter < 1100 && !team.players.some(p => p.fitness !== undefined && p.fitness < 40)) {
+    return { substitutions: [] }
+  }
+
+  team.substitutionsCount = team.substitutionsCount || 0
+  if (team.substitutionsCount >= 5) return { substitutions: [] }
+
+  const activeOutfield = team.players.filter(p => !p.sentOff && !p.subbedOut && p.position !== 'GK' && (p.currentPOS ? common.isOnPitch(p) : true))
+  const benchPlayers = (team.substitutes || []).filter(p => !p.hasPlayed && !p.sentOff)
+
+  if (benchPlayers.length === 0) return { substitutions: [] }
+
+  const substitutionsMade = []
+
+  // 1. Detección de jugador con fatiga crítica (fitness < 45)
+  const exhaustedPlayer = activeOutfield.find(p => (p.fitness !== undefined && p.fitness < 45))
+  if (exhaustedPlayer && team.substitutionsCount < 5) {
+    const replacement = benchPlayers.find(p => p.position === exhaustedPlayer.position && !p.hasPlayed) || benchPlayers.find(p => !p.hasPlayed)
+    if (replacement) {
+      executeSubstitution(team, exhaustedPlayer, replacement, 'FATIGUE_EXHAUSTION', matchDetails)
+      substitutionsMade.push({ outPlayer: exhaustedPlayer, inPlayer: replacement, reason: 'FATIGUE_EXHAUSTION' })
+    }
+  }
+
+  // 2. Detección de riesgo disciplinario (tarjeta amarilla)
+  if (team.substitutionsCount < 5) {
+    const cardedRiskPlayer = activeOutfield.find(p => (p.stats?.cards?.yellow >= 1) && !substitutionsMade.some(s => (s.outPlayer.playerID || s.outPlayer.id) === (p.playerID || p.id)))
+    if (cardedRiskPlayer) {
+      const replacement = benchPlayers.find(p => p.position === cardedRiskPlayer.position && !p.hasPlayed) || benchPlayers.find(p => !p.hasPlayed)
+      if (replacement) {
+        executeSubstitution(team, cardedRiskPlayer, replacement, 'TACTICAL_YELLOW_CARD_PROTECTION', matchDetails)
+        substitutionsMade.push({ outPlayer: cardedRiskPlayer, inPlayer: replacement, reason: 'TACTICAL_YELLOW_CARD_PROTECTION' })
+      }
+    }
+  }
+
+  return { substitutions: substitutionsMade }
+}
+
+function executeSubstitution(team, outPlayer, inPlayer, reason, matchDetails) {
+  outPlayer.hasBall = false
+  outPlayer.subbedOut = true
+  inPlayer.hasPlayed = true
+  inPlayer.currentPOS = outPlayer.currentPOS ? [...outPlayer.currentPOS] : [340, 500]
+  inPlayer.intentPOS = [...inPlayer.currentPOS]
+  inPlayer.fitness = 100
+
+  const outIdx = team.players.findIndex(p => (p.playerID || p.id) === (outPlayer.playerID || outPlayer.id))
+  if (outIdx !== -1) {
+    team.players[outIdx] = inPlayer
+  }
+  team.substitutionsCount = (team.substitutionsCount || 0) + 1
+
+  if (matchDetails?.iterationLog) {
+    matchDetails.iterationLog.push(`🔄 Sustitución en ${team.name}: Sale ${outPlayer.name}, entra ${inPlayer.name} (${reason})`)
+  }
+}

@@ -1,66 +1,72 @@
----
+# DESIGN-PATTERNS.md — Patrones de Diseño y Arquitectura (Fulbito 2.2)
 
-### 2. Archivo `DESIGN-PATTERNS.md`
-
-```markdown
-# DESIGN-PATTERNS.md — Patrones de Diseño y Arquitectura (Fulbito 2.0)
-
-Este documento define los patrones de software para refactorizar `src/engine/` en JavaScript (ES6)[cite: 7], adaptando la arquitectura de `engine`[cite: 8] y los modelos tácticos[cite: 1, 2, 9, 10]. Para ver las fórmulas matemáticas y el código detallado, remítete al **Documento Maestro** y a las **Guías de Fases**.
+> **Propósito:** Definir los 6 patrones arquitectónicos obligatorios en `src/engine/` (JavaScript ES6 Modules), alineados con `Rediseño del Motor Fulbito 2.md`, `UPDATE FULBITO 2.2.md` y el motor de referencia en Rust (`open_football_engine/`).
 
 ---
 
 ## 1. Pipeline Determinista por Tick (`Tick Driver Pattern`)
 
-El loop principal (`src/engine/engine.js`)[cite: 7] no debe contener lógica de negocio ni `if/else` tácticos. Actúa únicamente como un orquestador secuencial inspirado en `engine/tick/driver.rs`[cite: 8]:
+El loop principal (`src/engine/engine.js`) actúa como un orquestador secuencial sin lógica táctica acoplada (inspirado en `open_football_engine` `engine/tick/driver.rs`):
 
-1. **Context & Clock:** Actualiza reloj, fase de juego (las 4 fases del Continuum) y decaimiento de _cooldowns_[cite: 8, 10].
-2. **Spatial & Perception:** Actualiza grilla de 18 Zonas, 5 Carriles y el _Player Pressure Map_ (PPM)[cite: 4, 10].
-3. **Collective Plan (`teamShape`):** Calcula líneas de restricción/confrontación, basculación por centroide y compresión[cite: 1, 9, 10].
-4. **Agent Decision (HFSM):** Ejecuta el estado activo de cada uno de los 22 jugadores[cite: 8].
-5. **Kinematics & Ball 2.5D:** Integra velocidades, giros (`steering.js`) y trayectoria balística (`ballMovement.js`)[cite: 7, 8].
-6. **Contests & Officiating:** Resuelve intercepciones, duelos físicos, entradas y arbitraje[cite: 8].
+| Paso | Función / Módulo | Responsabilidad en el Tick |
+| :--- | :--- | :--- |
+| **1. Context & Clock** | `src/engine/core/matchContext.js` `[Fase 5]` + `engine.js` | Actualiza `currentTick`, la fase activa de las **4 Fases del Continuum** (`ORGANIZACION_OFENSIVA`, `TRANSICION_ATAQUE_DEFENSA`, `ORGANIZACION_DEFENSIVA`, `TRANSICION_DEFENSA_ATAQUE`), ventanas de *Gegenpressing* (100 ticks) / *Contraataque* (160 ticks) y decaimiento de cooldowns (`tackleCooldown`, `interceptCooldown`). |
+| **2. Spatial & Perception** | `src/engine/space/pitchZones.js`, `pressureMap.js`, `player/cognition.js` | Mapea coordenadas $(u, v)$, `zone18`, `lane`, `zoneXThreat`, calcula el *Player Pressure Map* (`pressurePPM` en 8 octantes) y actualiza el escaneo visual cervical (`updatePlayerCognition`, `isPreScanned`). |
+| **3. Collective Plan** | `src/engine/teamShape.js`, `tactics/offensiveShape.js` | Calcula líneas de restricción/confrontación, basculación por centroide, compresión, regla del $+1$ (*Spare Man*), contrato de 3 defensores y exclusión espacial de celdas (`enforceRationalSpaceOccupation` `[Fase 6]`). |
+| **4. Agent Decision (HFSM)** | `src/engine/player/playerStateMachine.js` `[Fase 6]` + `evaluators/*` | Ejecuta la máquina de estados por línea (`GK`, `DEF`, `MID`, `FWD`) con histéresis (`minHoldTicks: 8–14`) y *State Overrides* de 1 tick, más selección de acción con balón (`actions.js`). |
+| **5. Kinematics & Ball 2.5D** | `src/engine/steering.js` `[Fase 5]`, `playerMovement.js`, `ball/ballPhysics.js`, `ballMovement.js` | Aplica `sprintRamp`, inercia rotacional ($>90^\circ$ por `agility`), velocidad de conducción (`control`), esfuerzo (`movementEffort` drenando `player.fitness`) y trayectoria balística 2.5D ($x, y, z, v_z, \text{spinZ}$). |
+| **6. Contests & Officiating** | `src/engine/ballContest.js`, `ball/ballContest25D.js` `[Fase 7]`, `officiating/referee.js` | Resuelve intercepciones, carga física, tackles, duelos aéreos (`resolveAerialDuel`), atajadas 2.5D (`resolveGoalkeeperSave25D`) y arbitraje IFAB (Ley de la Ventaja, SPA, DOGSO). |
 
 ---
 
 ## 2. Máquina de Estados Finitos Jerárquica (HFSM) por Línea
 
-Reemplaza las funciones monolíticas de `playerMovement.js` y `actions.js`[cite: 7] por máquinas de estados desacopladas por línea (`GK`, `DEF`, `MID`, `FWD`), siguiendo el modelo de `player/strategies/` en `engine`[cite: 8]:
+Desacopla la toma de decisiones posicional en 4 módulos estratégicos (`src/engine/player/strategies/{goalkeeper,defender,midfielder,forward}States.js`) gobernados por `src/engine/player/playerStateMachine.js`:
 
-- **Regla de Estado Único:** Cada jugador tiene un único `state` activo por tick (ej. `HOLDING_LINE`, `SECOND_DEFENDER_COVER`, `OVERLAPPING`, `RUNNING_IN_BEHIND`, `BREAKAWAY_DRIBBLE`)[cite: 8].
-- **Overrides de Prioridad:** Situaciones críticas (balón suelto muy cercano, mano a mano libre o balón parado) actúan como _State Overrides_ (ver `states/overrides/` en `engine`)[cite: 8], cortocircuitando la fuerza elástica hacia la posición base de la formación para evitar que los delanteros retrocedan o frenen en un 1v1.
+- **Regla de Estado Único + Histéresis (`minHoldTicks`):** Cada jugador posee `player.fsm = { line, currentState, ticksInState, minHoldTicks, targetX, targetY, effortMode }`. Un estado ordinario se mantiene al menos `8 a 14 ticks` para evitar oscilaciones (*jitter*).
+- **Overrides de Prioridad (1 Tick):** Situaciones críticas (`LOOSE_BALL_CLAIM`, `BREAKAWAY_DRIBBLE`, `EMERGENCY_PRESS_STEP`, `SET_PIECE_HOLD`) interrumpen cualquier estado ordinario de inmediato y apagan las fuerzas elásticas hacia el ancla de formación (garantizando cero pasos atrás en el 1v1).
+- **Puente de Retrocompatibilidad:** `playerStateMachine.js` sincroniza `player.defensiveState` y `player.offensiveState` con los identificadores requeridos por las suites de Fases 1 a 4.
 
 ---
 
 ## 3. Contrato de Emparejamiento (`Coordinator / Mutex Pattern`)
 
-Las decisiones defensivas nunca las toma un jugador de forma aislada; las asigna un coordinador de línea (`assignDefensiveEngagementRoles` en Fase 2, inspirado en `states/engagement/` de `engine`)[cite: 8]:
+Las decisiones defensivas y de ocupación espacial las asigna un coordinador de línea (`assignDefensiveEngagementRoles` en `src/engine/teamShape.js` y `enforceRationalSpaceOccupation` en `src/engine/space/pitchZones.js`):
 
-- **Exclusividad del 1.er Defensor:** Solo un jugador obtiene el token de presión directa (`line_step` / _Delay_) sobre el poseedor del balón[cite: 1, 8, 10].
-- **Reacción en Cadena (2.º y 3.er Defensor):** La salida del 1.er Defensor obliga automáticamente a los compañeros adyacentes a entrar en estado de _Cobertura/Permuta_ y al lado débil a cerrarse en _Balance_, garantizando siempre la regla del $+1$ (_Spare Man_)[cite: 1, 9, 10].
+- **Exclusividad del 1.er Defensor (`FIRST_DEFENDER_DELAY`):** Solo un defensor por línea recibe el token (`activePresserId`) para salir a acosar al portador en *jockey*.
+- **Reacción en Cadena (2.º y 3.er Defensor):** La salida del 1.er defensor obliga a los adyacentes a entrar en `SECOND_DEFENDER_COVER` (reduciendo su separación lateral un $35\%$ para permuta) y al lado débil a cerrarse en `HOLDING_LINE_BALANCE` ($38\%$), preservando siempre la regla del $+1$ ($N_{def} = N_{att} + 1$, asistida por `MID_LAVOLPIANA_DROP` o `DEF_SWEEPER_COVER`).
+- **Exclusión Espacial Ofensiva:** Ningún par de atacantes sin balón puede ocupar la misma celda `(zone18, lane)` ni formar líneas llanas de $0^\circ / 180^\circ$ a menos de $11\text{ m}$ ($110\text{ px}$); el coordinador desplaza al soporte hacia el *Half-Space* libre escalonando $\pm 8\text{ m}$ para formar triángulos ($30^\circ\text{–}60^\circ$) y cajas (*Box*).
 
 ---
 
-## 4. Utility AI para Toma de Decisiones (`Evaluator Pattern`)
+## 4. Utility AI y Razonamiento en Espacio Semántico (`Evaluator & DSS Pattern`)
 
-Para dotar a los jugadores de visión y variedad, queda prohibido usar árboles `if/else` rígidos para elegir pases, tiros o regates. Se utiliza **Utility AI** (inspirado en `passing/evaluator.rs` y `forward_shot_decision.rs` de `engine`)[cite: 8]:
+Queda prohibido usar árboles `if/else` rígidos para elegir pases, tiros, regates o tácticas de entrenador:
 
-- Cada acción candidata recibe un puntaje continuo $U \in [0, 1]$ combinando ganancia espacial ($\Delta\text{xThreat}$ en las 18 Zonas), geometría (triángulos/diamantes en _Half-Spaces_), calidad de tiro (**xG**) y riesgo de intercepción/presión (PPM)[cite: 4, 5, 8, 10].
-- Para la IA del entrenador (`coachAI.js`)[cite: 7], se aplica el **Patrón de Distancia Semántica (DSS)**: comparar el vector de 14 macro-atributos del equipo ($V_{team}$) contra las 20 plantillas estratégicas ($V_{strategy}$) mediante distancia euclidiana ponderada por fatiga, marcador y minuto[cite: 2].
+- **Evaluadores de Jugador (`src/engine/evaluators/`):**
+  - `passEvaluator.js`: Maximiza utilidad continua combinando $\Delta\text{xThreat}$ en las 18 Zonas, libertad de presión ($1 - \text{PPM}$), geometría de triángulos/Tercer Hombre, bonificaciones de `PLAYMAKER` y multiplicador $\times 1.80$ en `FAST_COUNTER`.
+  - `shotEvaluator.js`: Modelo logístico de **xG** (`CLEAR_CUT >= 0.32`, `HALF_CHANCE >= 0.07`, `SPECULATIVE < 0.07`), *Breakaway Override*, cabezazos aéreos y definición `GK-Dependent` vs `GK-Independent`.
+  - `duelEvaluator.js` `[Fase 7]`: Evalúa vectores de finta ($35^\circ\text{–}55^\circ$) confrontando `control + agility` vs `agility + perception`.
+- **Distancia Semántica Adaptativa (`src/engine/tactics/semanticDSS.js` y `coachAI.js` `[Fase 9]`):**
+  - Agrega los 11 jugadores en el vector de **14 Macro-Atributos** $V_{team}(t) \in [0, 1]^{14}$ y selecciona la estrategia óptima entre las **20 Estrategias Canónicas** minimizando la distancia asimétrica $d_{adapt}(V_{team}, V_{strategy}^{(k)})$ ponderada por energía residual $A_8$ (`player.fitness`), minuto y marcador.
 
 ---
 
 ## 5. Decorador de Habilidad Efectiva (`Effective Skill Pattern`)
 
-Ninguna resolución de pase, tiro o duelo debe leer el atributo crudo del jugador directamente de `playersDB.js`[cite: 7]. Todo cálculo debe pasar por un calculador de habilidad efectiva (inspirado en `ops/skill/effective_skill.rs` y `traits_bias.rs` de `engine`)[cite: 8]:
+Ninguna resolución de pase, tiro, duelo o cinemática debe leer stats crudos (`1–100`) directamente de `src/data/playersDB.js`. Todo cálculo invoca `getEffectiveSkill(player, statName)` en `src/engine/player/effectiveSkill.js`:
 
-- `Atributo Efectivo = Atributo Base × Multiplicador de Química (0.85 a 1.15) × Factor de Fatiga × Penalización por Orientación Corporal / Presión (PPM) + Sesgo por Rasgo (Trait)`[cite: 4, 8, 9, 10].
+$$\text{EffectiveSkill} = \text{clamp}\left(\text{BaseNorm}_{[0.10, 0.99]} \times \mu_{chem} \times \mu_{fitness} \times \mu_{lapse} + \text{TraitBias}, 0.05, 0.99\right)$$
+
+- Donde $\mu_{chem} \in [0.85, 1.15]$ proviene de `computeSquadChemistryMultipliers(team)` y la compatibilidad al puesto natural / bonus de capitán se gestiona en `src/engine/modifiers.js`.
 
 ---
 
-## 6. Resolución Escalonada de Disputas (`Layered Contest Pattern`)
+## 6. Resolución Escalonada de Disputas 2D y 2.5D (`Layered Contest Pattern`)
 
-Para mantener el realismo estadístico, el contacto físico se evalúa en embudo (ver `ballContest.js` y `officiating/referee.js` en Fase 2, basados en `ball/contest/` de `engine`)[cite: 8]:
+El contacto físico se evalúa en embudo (`src/engine/ballContest.js`, `src/engine/ball/ballContest25D.js` `[Fase 7]` y `src/engine/officiating/referee.js`):
 
-1. **Intercepción / Bloqueo de línea** (0% faltas)[cite: 8, 9].
-2. **Contención (_Delay / Jockey_) y Carga Corporal (`body`)** (desgaste y robo limpio por fuerza/agilidad, $<5\%$ faltas)[cite: 1, 8, 9].
-3. **Entrada (_Tackle_) con Cooldown y Restricción (_Restraint_):** Filtrada previamente por `discipline.js` (reducción drástica de riesgo si el defensor ya tiene amarilla o está dentro del área penal)[cite: 1, 8].
+1. **Capa 1 — Intercepción y Bloqueo de Línea:** Basado en `perception` y `agility` (`0%` faltas, `interceptCooldown = 18`). En `SWEEPER_KEEPER`, $+35\%$ de radio de corte en balones divididos.
+2. **Capa 2 — Contención (*Jockey*) y Carga Corporal (`bodyContest`):** Desgaste de velocidad y disputa hombro con hombro por `strength` y `agility` (`<5%` faltas, `tackleCooldown = 10`).
+3. **Capa 3 — Entrada (`tackle`) con Cooldown y *Restraint*:** Filtrada por `getDefenderRestraintMultiplier` en `officiating/referee.js` (`-55%` riesgo con tarjeta amarilla previa, `-50%` dentro del área penal propia).
+4. **Capa 4 — Duelo Aéreo y Atajada 2.5D (`ballContest25D.js` `[Fase 7]`):** Cuando $8\text{ px} \le z \le 42\text{ px}$ cerca de `landingPoint`, confronta $S_{aerial}$ (cabezazo al arco, *flick-on* o despeje a banda); en el arco, `resolveGoalkeeperSave25D` discrimina entre `CLEAN_CATCH`, `PARRY_SAFE` y `REBOUND_DANGER`.

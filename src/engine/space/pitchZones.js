@@ -178,3 +178,91 @@ export function getZoneXThreat(arg1, arg2, arg3, arg4) {
   const zone = getTacticalZone18(arg1, arg2, arg3, arg4);
   return ZONE_XTHREAT[zone] || 0.02;
 }
+
+/**
+ * enforceRationalSpaceOccupation (Fase 6 — UPDATE FULBITO 2.2.md §6.3):
+ * Verifica la matriz de ocupación espacial de los atacantes sin balón:
+ * 1. Prohíbe que dos compañeros ocupen la misma celda (zone18, lane) simultáneamente.
+ * 2. Si dos atacantes están a menos de 11m (110px) sobre la misma línea horizontal o vertical respecto al portador
+ *    (ángulos llanos de 0° o 180° que permiten a un solo rival tapar a ambos), desplaza automáticamente al jugador de soporte
+ *    hacia el carril adyacente (Half-Space libre) y escalona su altura en +-8m (+-80px) para formar triángulos (30° a 60°).
+ */
+export function enforceRationalSpaceOccupation(attackingPlayers, ball, pitchBounds = DEFAULT_PITCH_BOUNDS, attackDir = 1) {
+  if (!Array.isArray(attackingPlayers) || attackingPlayers.length < 2) return;
+
+  const bounds = normalizePitchBounds(pitchBounds);
+  const ballX = Array.isArray(ball?.position) ? ball.position[0] : (ball?.x ?? 340);
+  const ballY = Array.isArray(ball?.position) ? ball.position[1] : (ball?.y ?? 525);
+
+  const activeAttackers = attackingPlayers.filter(p => {
+    if (!p || p.redCard || p.sentOff || p.hasBall) return false;
+    if (p.position === 'GK' || p.role === 'GK') return false;
+    if (Array.isArray(p.currentPOS) && (p.currentPOS[0] === 'NP' || typeof p.currentPOS[0] !== 'number')) return false;
+    return true;
+  });
+
+  const occupiedCells = new Map(); // key: `${zone18}_${lane}` -> player
+
+  for (let i = 0; i < activeAttackers.length; i++) {
+    const p1 = activeAttackers[i];
+    const targetX = p1.offensiveTarget?.targetX ?? (Array.isArray(p1.intentPOS) ? p1.intentPOS[0] : (p1.currentPOS?.[0] ?? 340));
+    const targetY = p1.offensiveTarget?.targetY ?? (Array.isArray(p1.intentPOS) ? p1.intentPOS[1] : (p1.currentPOS?.[1] ?? 525));
+
+    const uv1 = toRelativeUV(targetX, targetY, bounds, attackDir);
+    const z1 = getTacticalZone18([targetX, targetY], bounds, attackDir);
+    const l1 = getVerticalLane([targetX, targetY], bounds, attackDir);
+    const cellKey = `${z1}_${l1}`;
+
+    // Conflicto 1: Misma celda exacta
+    if (occupiedCells.has(cellKey)) {
+      const pPrev = occupiedCells.get(cellKey);
+      // El jugador de menor prioridad o soporte se desplaza a un Half-Space vecino
+      const shiftV = l1 === LANES.CENTER ? (uv1.v < 0.5 ? 0.30 : 0.70) : (l1 <= LANES.LEFT_HALF_SPACE ? 0.50 : 0.50);
+      const shiftU = Math.min(0.92, Math.max(0.15, uv1.u + (i % 2 === 0 ? 0.075 : -0.075)));
+      const newPos = fromRelativeUV(shiftU, shiftV, bounds, attackDir);
+
+      if (p1.offensiveTarget) {
+        p1.offensiveTarget.targetX = Math.round(newPos.x);
+        p1.offensiveTarget.targetY = Math.round(newPos.y);
+        p1.offensiveTarget.adjustedByRationalSpace = true;
+      }
+      p1.intentPOS = [Math.round(newPos.x), Math.round(newPos.y)];
+      continue;
+    }
+
+    // Conflicto 2: Menos de 110px en línea llana respecto al balón
+    for (let j = 0; j < i; j++) {
+      const p2 = activeAttackers[j];
+      const p2TargetX = p2.offensiveTarget?.targetX ?? (Array.isArray(p2.intentPOS) ? p2.intentPOS[0] : (p2.currentPOS?.[0] ?? 340));
+      const p2TargetY = p2.offensiveTarget?.targetY ?? (Array.isArray(p2.intentPOS) ? p2.intentPOS[1] : (p2.currentPOS?.[1] ?? 525));
+
+      const dx = targetX - p2TargetX;
+      const dy = targetY - p2TargetY;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist < 110) {
+        const angBall1 = Math.atan2(targetY - ballY, targetX - ballX);
+        const angBall2 = Math.atan2(p2TargetY - ballY, p2TargetX - ballX);
+        const diffAng = Math.abs(angBall1 - angBall2);
+
+        // Alineación llana (casi colineales desde el balón: sombra de marca)
+        if (diffAng < 0.26 || Math.abs(diffAng - Math.PI) < 0.26) {
+          const shiftV = uv1.v < 0.5 ? Math.min(0.85, uv1.v + 0.18) : Math.max(0.15, uv1.v - 0.18);
+          const shiftU = Math.min(0.92, Math.max(0.15, uv1.u + (dy >= 0 ? 0.08 : -0.08)));
+          const shifted = fromRelativeUV(shiftU, shiftV, bounds, attackDir);
+
+          if (p1.offensiveTarget) {
+            p1.offensiveTarget.targetX = Math.round(shifted.x);
+            p1.offensiveTarget.targetY = Math.round(shifted.y);
+            p1.offensiveTarget.adjustedByTriangleGeometry = true;
+          }
+          p1.intentPOS = [Math.round(shifted.x), Math.round(shifted.y)];
+          break;
+        }
+      }
+    }
+
+    occupiedCells.set(cellKey, p1);
+  }
+}
+

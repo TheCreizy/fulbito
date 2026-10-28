@@ -187,17 +187,34 @@ export function assignOffensiveSupportRoles(attackingTeam, defendingTeam, ball, 
       continue;
     }
 
-    // --- D. DELANTEROS SIN BALÓN: RUPTURA DIAGONAL AL ESPACIO E INTERACCIÓN CON OFFSIDE ---
+    // --- D. DELANTEROS SIN BALÓN: RUPTURA DIAGONAL, FIJACIÓN Y ARQUEO ANTI-OFFSIDE ---
     if (line === 'ATT') {
-      // El delantero ataca la línea de offside rival trazando una diagonal hacia el intervalo libre
-      const runU = safeOffsideU;
-      // Si el balón viene por banda, el extremo opuesto cierra al segundo palo y el 9 ataca el centro
+      const isFalseNine = player.tacticalRole === 'F9' || player.tacticalRole === 'CF';
+      const isLowBlock = (attackDir === 1 ? offsideUV.u > 0.78 : offsideUV.u < 0.22);
+
+      // 1. Falso 9 / Descenso entre líneas ante bloque bajo o rol específico
+      if (isFalseNine || (isLowBlock && (player.position === 'ST' || player.tacticalRole === 'ST'))) {
+        const dropU = Math.max(0.42, ballUV.u - 0.05);
+        const pt = fromRelativeUV(dropU, baseUV.v, pitchBounds, attackDir);
+        roles.set(pId, { state: 'HALF_SPACE_CREATING', targetX: pt.x, targetY: pt.y });
+        continue;
+      }
+
+      // 2. Ruptura diagonal con arqueo anti-offside (ARCING_RUN)
+      const isAtOffsideLine = baseUV.u >= safeOffsideU - 0.02;
+      player.isArcingOffside = isAtOffsideLine;
+
+      let runU = safeOffsideU;
       let runV = baseUV.v;
-      if (Math.abs(baseUV.v - 0.5) < 0.18) {
-        // Centrodelantero ("9"): se desmarca ligeramente en diagonal al punto ciego del central
+
+      if (isAtOffsideLine) {
+        // Arquea carrera horizontalmente sobre la zaga sin dar pasos hacia atrás
+        runV = baseUV.v < 0.5 ? Math.min(0.72, baseUV.v + 0.14) : Math.max(0.28, baseUV.v - 0.14);
+      } else if (Math.abs(baseUV.v - 0.5) < 0.18) {
+        // Centrodelantero ("9"): diagonal al punto ciego
         runV = 0.5 + (ballUV.v < 0.5 ? 0.08 : -0.08);
       } else {
-        // Extremo: si el lateral de su banda está haciendo OVERLAP, el extremo se mete al Half-Space interior
+        // Extremo: si el lateral de su banda hace OVERLAP, meterse al Half-Space
         const myFullbackOverlapping = (leftBack && roles.get(leftBack.id || leftBack.playerID)?.state === 'OVERLAPPING' && pCoords.x < 340) ||
                                       (rightBack && roles.get(rightBack.id || rightBack.playerID)?.state === 'OVERLAPPING' && pCoords.x >= 340);
         if (myFullbackOverlapping) {
@@ -206,7 +223,7 @@ export function assignOffensiveSupportRoles(attackingTeam, defendingTeam, ball, 
       }
 
       const pt = fromRelativeUV(runU, runV, pitchBounds, attackDir);
-      roles.set(pId, { state: 'RUNNING_IN_BEHIND', targetX: pt.x, targetY: pt.y });
+      roles.set(pId, { state: 'RUNNING_IN_BEHIND', targetX: pt.x, targetY: pt.y, isArcing: isAtOffsideLine });
     }
   }
 

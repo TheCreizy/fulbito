@@ -119,6 +119,30 @@ export function evaluateBestPassOption(passer, ownTeam, opposition, pitchBounds 
       if (offState.startsWith('BOX_ZONE_')) tacticalBonus += 0.35;
       if (isLongSwitch && targetPPM < 0.25) tacticalBonus += 0.20; // Cambio de orientación al lado débil libre
 
+      // Fase 5 (Continuum Táctico): Modulación de utilidad en Transición Defensa -> Ataque
+      const transitionSubMode = ownTeam?.transitionSubMode || passer.transitionState || 'NONE';
+      const isVerticalPass = deltaXT > 0.015 || cand.type === 'THROUGH' || angleDiffFromForward <= 1.05;
+      const isHorizontalOrBack = angleDiffFromForward > 1.35;
+      let transitionUtilityMultiplier = 1.0;
+
+      if (transitionSubMode === 'FAST_COUNTER') {
+        if (isVerticalPass) {
+          transitionUtilityMultiplier = ownTeam?.passUtilityMultiplier || 1.80;
+          if (cand.type === 'THROUGH') tacticalBonus += 0.25;
+        } else if (isHorizontalOrBack) {
+          tacticalBonus -= 0.22; // Penaliza pases horizontales lentos en contraataque
+        }
+      } else if (transitionSubMode === 'CONSOLIDATE_POSSESSION') {
+        // Prioriza Pase de Seguridad (Safety Pass) hacia pivote/central libre fuera de congestión
+        const mateLine = mate.position || mate.role || '';
+        const isSafePivotOrCB = ['CDM', 'CM', 'CB', 'DEF', 'ME', 'MCD', 'MC'].includes(mateLine);
+        if (cand.type === 'FOOT' && targetPPM < 0.25 && isSafePivotOrCB) {
+          tacticalBonus += 0.28;
+        } else if (cand.type === 'THROUGH' && targetPPM > 0.35) {
+          tacticalBonus -= 0.20;
+        }
+      }
+
       // Trait: PLAYMAKER (+0.18 en THROUGH o SWITCH hacia zonas de peligro)
       const candZone = getTacticalZone18([cand.x, cand.y], pitchBounds, attackDir);
       const isDangerZone = [10, 12, 14, 16, 17, 18].includes(candZone);
@@ -149,13 +173,17 @@ export function evaluateBestPassOption(passer, ownTeam, opposition, pitchBounds 
 
       const interceptRisk = corridor.isClear ? 0.0 : (isLongSwitch ? 0.15 : 0.45);
 
-      const utility =
+      const rawUtility =
         1.85 * deltaXT +
         geometryBonus +
         0.45 * (1.0 - targetPPM) +
         tacticalBonus -
         bodyOrientationPenalty -
         interceptRisk;
+
+      const utility = rawUtility > 0
+        ? rawUtility * transitionUtilityMultiplier
+        : rawUtility;
 
       if (utility > bestScore) {
         bestScore = utility;

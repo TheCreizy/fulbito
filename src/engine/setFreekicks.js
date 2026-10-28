@@ -1,4 +1,6 @@
 import * as common from './common.js'
+import { getEffectiveSkill, hasTrait } from './player/effectiveSkill.js'
+import { BALL_PHYSICS } from './ball/ballPhysics.js'
 
 export function isDefenderRole(role) {
   return ['CB', 'LB', 'RB', 'LWB', 'RWB', 'DFC', 'LÍBERO', 'STOP I', 'STOP D', 'LI', 'LD'].includes(role)
@@ -803,4 +805,299 @@ function setBottomLowerFinalQtrBylinePos(matchDetails, attack, defence, kickPlay
   }
   matchDetails.endIteration = true
   return matchDetails
+}
+
+
+// ============================================================================
+// FASE 7: CORNERS TÁCTICOS Y PENALES PSICOLÓGICOS (Fulbito 2.2 §7.4)
+// ============================================================================
+
+/**
+ * 7.4. Córners Defensivos (Sistema Mixto / Zonal)
+ * - 2 guardias zonales en el Primer Palo y área chica (Near Post Zonal Guards)
+ * - Los 3 defensores con mayor height + jumping + strength toman marca individual
+ * - 1 jugador en la medialuna (Zona 14) para bloqueo de rebote
+ * - 1-2 jugadores rápidos adelantados para transición defensiva -> ofensiva
+ */
+export function setupTacticalCornerMixedZonalDefence(matchDetails, defence, isTop) {
+  const [pitchWidth, pitchHeight] = matchDetails.pitchSize
+  const centreX = pitchWidth / 2
+  const toDefGoal = (x, depth) => [
+    Math.max(25, Math.min(pitchWidth - 25, x)),
+    isTop ? depth : (pitchHeight - depth)
+  ]
+
+  const defOutfield = defence.players.filter(p => common.isOnPitch(p) && p.position !== 'GK')
+  if (defOutfield.length === 0) return
+
+  // Arquero en la línea de meta
+  const gk = defence.players.find(p => p.position === 'GK' && common.isOnPitch(p))
+  if (gk) {
+    gk.currentPOS = toDefGoal(centreX, 10)
+    gk.intentPOS = gk.currentPOS.slice()
+  }
+
+  // Ordenar por poderío aéreo: height + jumping + strength
+  const aerialRanking = [...defOutfield].sort((a, b) => {
+    const scoreA = (Number(a.height) || 180) + (a.skill?.jumping || 70) + (a.skill?.strength || 70)
+    const scoreB = (Number(b.height) || 180) + (b.skill?.jumping || 70) + (b.skill?.strength || 70)
+    return scoreB - scoreA
+  })
+
+  // 1. Las 3 torres toman marca individual en punto penal y 2.º palo
+  const aerialMarkers = aerialRanking.slice(0, 3)
+  const aerialIds = new Set(aerialMarkers.map(p => p.playerID || p.id))
+
+  // 2. Jugadores rápidos para transición / contraataque
+  const remainingAfterAerial = defOutfield.filter(p => !aerialIds.has(p.playerID || p.id))
+  remainingAfterAerial.sort((a, b) => (Number(b.skill?.speed || 70) + Number(b.skill?.agility || 70)) - (Number(a.skill?.speed || 70) + Number(a.skill?.agility || 70)))
+  const outletPlayers = remainingAfterAerial.slice(0, 2)
+  const outletIds = new Set(outletPlayers.map(p => p.playerID || p.id))
+
+  // 3. El resto cubre: 2 en primer palo/área chica (Zonales) y 1 en la medialuna (Zona 14)
+  const remainingForZones = remainingAfterAerial.filter(p => !outletIds.has(p.playerID || p.id))
+  const nearPostGuards = remainingForZones.slice(0, 2)
+  const nearPostIds = new Set(nearPostGuards.map(p => p.playerID || p.id))
+  const zone14Blocker = remainingForZones.slice(2, 3)[0] || remainingForZones[0]
+  const zone14Id = zone14Blocker ? (zone14Blocker.playerID || zone14Blocker.id) : null
+
+  // Posicionamiento de cada grupo
+  // A. Guardias zonales en el 1er palo (área chica y poste)
+  if (nearPostGuards[0]) {
+    nearPostGuards[0].currentPOS = toDefGoal(centreX - 38, 25)
+    nearPostGuards[0].intentPOS = nearPostGuards[0].currentPOS.slice()
+    nearPostGuards[0].defensiveRole = 'NEAR_POST_ZONAL'
+  }
+  if (nearPostGuards[1]) {
+    nearPostGuards[1].currentPOS = toDefGoal(centreX - 25, 45)
+    nearPostGuards[1].intentPOS = nearPostGuards[1].currentPOS.slice()
+    nearPostGuards[1].defensiveRole = 'NEAR_POST_ZONAL'
+  }
+
+  // B. Marcas en punto penal y segundo palo
+  if (aerialMarkers[0]) {
+    aerialMarkers[0].currentPOS = toDefGoal(centreX, 105) // Punto penal
+    aerialMarkers[0].intentPOS = aerialMarkers[0].currentPOS.slice()
+    aerialMarkers[0].defensiveRole = 'MAN_MARK_PENALTY_SPOT'
+  }
+  if (aerialMarkers[1]) {
+    aerialMarkers[1].currentPOS = toDefGoal(centreX + 45, 75) // 2do palo
+    aerialMarkers[1].intentPOS = aerialMarkers[1].currentPOS.slice()
+    aerialMarkers[1].defensiveRole = 'MAN_MARK_FAR_POST'
+  }
+  if (aerialMarkers[2]) {
+    aerialMarkers[2].currentPOS = toDefGoal(centreX + 20, 95) // Zona de cruce
+    aerialMarkers[2].intentPOS = aerialMarkers[2].currentPOS.slice()
+    aerialMarkers[2].defensiveRole = 'MAN_MARK_CENTRE_BOX'
+  }
+
+  // C. Bloqueador en la medialuna (Zona 14)
+  if (zone14Blocker) {
+    zone14Blocker.currentPOS = toDefGoal(centreX, 175)
+    zone14Blocker.intentPOS = zone14Blocker.currentPOS.slice()
+    zone14Blocker.defensiveRole = 'ZONE_14_REBOUND_SHIELD'
+  }
+
+  // D. Jugadores de transición rápida adelantados
+  if (outletPlayers[0]) {
+    outletPlayers[0].currentPOS = toDefGoal(centreX - 70, Math.round(pitchHeight * 0.42))
+    outletPlayers[0].intentPOS = outletPlayers[0].currentPOS.slice()
+    outletPlayers[0].defensiveRole = 'COUNTER_OUTLET_WIDE'
+  }
+  if (outletPlayers[1]) {
+    outletPlayers[1].currentPOS = toDefGoal(centreX + 70, Math.round(pitchHeight * 0.42))
+    outletPlayers[1].intentPOS = outletPlayers[1].currentPOS.slice()
+    outletPlayers[1].defensiveRole = 'COUNTER_OUTLET_CENTRAL'
+  }
+
+  // Asignar los restantes
+  const assigned = new Set([...aerialIds, ...outletIds, ...nearPostIds, zone14Id].filter(Boolean))
+  for (const p of defOutfield) {
+    if (!assigned.has(p.playerID || p.id)) {
+      p.currentPOS = toDefGoal(centreX, 70)
+      p.intentPOS = p.currentPOS.slice()
+    }
+  }
+}
+
+/**
+ * 7.4. Córners Ofensivos
+ * Rutinas coordinadas con comba Magnus atacando:
+ * 1. Primer Palo, 2. Punto Penal, 3. Segundo Palo, 4. Borde del Área, más opción en corto.
+ */
+export function setupTacticalCornerAttacking(matchDetails, attack, cornerCoords, isTop) {
+  const [pitchWidth, pitchHeight] = matchDetails.pitchSize
+  const centreX = pitchWidth / 2
+  const toDefGoal = (x, depth) => [
+    Math.max(25, Math.min(pitchWidth - 25, x)),
+    isTop ? depth : (pitchHeight - depth)
+  ]
+
+  const isLeftCorner = cornerCoords[0] < pitchWidth / 2
+  // Determinación de In-swinger (curva hacia adentro) vs Out-swinger (curva abierta)
+  // según el perfil del ejecutante
+  const taker = attack.players.find(p => p.action === 'cross' || p.hasBall) || attack.players[1]
+  const takerFoot = taker?.preferredFoot || (isLeftCorner ? 'right' : 'left')
+  const isInSwinger = (isLeftCorner && takerFoot === 'right') || (!isLeftCorner && takerFoot === 'left')
+
+  if (!matchDetails.ball) matchDetails.ball = {}
+  matchDetails.ball.cornerDelivery = {
+    type: isInSwinger ? 'IN_SWINGER' : 'OUT_SWINGER',
+    magnusSpin: isInSwinger ? (isLeftCorner ? 1.0 : -1.0) : (isLeftCorner ? -1.0 : 1.0)
+  }
+
+  return {
+    isInSwinger,
+    nearPostZone: toDefGoal(centreX - (isLeftCorner ? 40 : -40), 60),
+    penaltySpotZone: toDefGoal(centreX, 105),
+    farPostZone: toDefGoal(centreX + (isLeftCorner ? 55 : -55), 75),
+    edgeBoxZone: toDefGoal(centreX, 180)
+  }
+}
+
+/**
+ * 7.4. Duelo Cognitivo de Penales (Goalkeeper-Dependent vs. Goalkeeper-Independent)
+ * 
+ * - GOALKEEPER_DEPENDENT (Paradinha / Lectura Perceptiva):
+ *   Elegido por pateadores con perception + control >= 82 o rasgos PLAYMAKER / CLINICAL_FINISHER.
+ *   Desacelera; si el arquero se vence antes de tiempo, asegura al palo opuesto con 94% de éxito.
+ *   Si el arquero tiene alta percepción y aguanta hasta el final, la menor potencia da mayor probabilidad de atajada.
+ * 
+ * - GOALKEEPER_INDEPENDENT (Potencia y Precisión Biomecánica):
+ *   Elegido por pateadores con alto shooting + strength / penalty_taking.
+ *   Remate violento a los ángulos o poste. Aun adivinando el lado, el arquero requiere superar un umbral alto.
+ * 
+ * @param {Object} kicker - Pateador
+ * @param {Object} goalkeeper - Arquero
+ * @param {Object} options - { rng }
+ * @returns {{
+ *   scored: boolean,
+ *   outcome: 'goal' | 'saved' | 'missed',
+ *   kickerName: string,
+ *   gkName: string,
+ *   kickerDir: string,
+ *   gkDir: string,
+ *   style: 'GOALKEEPER_DEPENDENT' | 'GOALKEEPER_INDEPENDENT',
+ *   details: Object
+ * }}
+ */
+export function resolvePsychologicalPenalty(kicker, goalkeeper, options = {}) {
+  const rng = options.rng || Math.random
+
+  const penSkill = Number(kicker.baseSkill?.penalty_taking || kicker.skill?.penalty_taking || 70)
+  const shootSkill = Number(kicker.baseSkill?.shooting || kicker.skill?.shooting || 70)
+  const controlSkill = Number(kicker.baseSkill?.control || kicker.skill?.control || 70)
+  const kickerPer = Number(kicker.baseSkill?.perception || kicker.skill?.perception || 70)
+
+  const gkSaving = Number(goalkeeper.baseSkill?.saving || goalkeeper.skill?.saving || 75)
+  const gkPer = Number(goalkeeper.baseSkill?.perception || goalkeeper.skill?.perception || 75)
+  const gkAgility = Number(goalkeeper.baseSkill?.agility || goalkeeper.skill?.agility || 75)
+  const gkJumping = Number(goalkeeper.baseSkill?.jumping || goalkeeper.skill?.jumping || 75)
+
+  // Selección de Estilo Psicológico
+  const hasPlaymakerTrait = hasTrait(kicker, 'PLAYMAKER') || hasTrait(kicker, 'CLINICAL_FINISHER')
+  const isHighPerceptionControl = (kickerPer + controlSkill) >= 152 || (kickerPer >= 80 && controlSkill >= 78)
+  const style = (hasPlaymakerTrait || isHighPerceptionControl)
+    ? 'GOALKEEPER_DEPENDENT'
+    : 'GOALKEEPER_INDEPENDENT'
+
+  const directions = ['left', 'center', 'right']
+
+  if (style === 'GOALKEEPER_DEPENDENT') {
+    // Arquero se vence antes de tiempo si no tiene paciencia/temple extremo (gkPer < 82)
+    const gkPatienceThreshold = 0.82
+    const gkPatienceRoll = (gkPer / 100) + (rng() - 0.5) * 0.20
+    const gkBitesFeint = gkPatienceRoll < gkPatienceThreshold
+
+    // Si el arquero se vence antes, elige un lado y el pateador lee su movimiento
+    const gkBiteDir = directions[Math.floor(rng() * 3)]
+    let kickerDir = 'center'
+    if (gkBiteDir === 'left') kickerDir = 'right'
+    else if (gkBiteDir === 'right') kickerDir = 'left'
+    else kickerDir = rng() < 0.5 ? 'left' : 'right'
+
+    if (gkBitesFeint) {
+      // 94% de efectividad por engaño total
+      const scored = rng() <= 0.94
+      return {
+        scored,
+        outcome: scored ? 'goal' : 'saved',
+        kickerName: kicker.name,
+        gkName: goalkeeper.name,
+        kickerDir,
+        gkDir: gkBiteDir,
+        style,
+        details: { gkBitesFeint: true, technique: 'PARADINHA_DECEPTION' }
+      }
+    } else {
+      // El arquero aguantó de pie hasta el final: la menor potencia del toque colocado permite mayor chance de parada
+      const gkDiveDir = kickerDir // Aguanta y va hacia el tiro
+      const saveChance = Math.min(68, Math.max(30, (gkSaving * 0.60 + gkPer * 0.40) - (controlSkill * 0.35)))
+      const isSaved = (rng() * 100) <= saveChance
+
+      return {
+        scored: !isSaved,
+        outcome: isSaved ? 'saved' : 'goal',
+        kickerName: kicker.name,
+        gkName: goalkeeper.name,
+        kickerDir,
+        gkDir: gkDiveDir,
+        style,
+        details: { gkBitesFeint: false, technique: 'GK_HELD_GROUND' }
+      }
+    }
+  } else {
+    // GOALKEEPER_INDEPENDENT: Potencia y precisión biomecánica
+    const chosenDir = directions[Math.floor(rng() * 3)]
+    const gkDiveDir = directions[Math.floor(rng() * 3)]
+
+    // Puntería a los ángulos o postes (penSkill + shootSkill)
+    const accuracyChance = Math.min(94, 55 + penSkill * 0.32 + shootSkill * 0.12)
+    const accuracyRoll = rng() * 100
+
+    if (accuracyRoll > accuracyChance) {
+      return {
+        scored: false,
+        outcome: 'missed',
+        kickerName: kicker.name,
+        gkName: goalkeeper.name,
+        kickerDir: chosenDir,
+        gkDir: gkDiveDir,
+        style,
+        details: { accuracyRoll, accuracyChance, technique: 'POWER_MISSED_WIDE' }
+      }
+    }
+
+    const sameSide = chosenDir === gkDiveDir
+    if (sameSide) {
+      // Umbral alto de exigencia biomecánica para el arquero: saving + jumping + agility
+      const gkAthleticPower = (gkSaving * 0.45 + gkJumping * 0.35 + gkAgility * 0.20)
+      const shotDifficulty = (penSkill * 0.55 + shootSkill * 0.45)
+      const saveThreshold = 18 + (gkAthleticPower - shotDifficulty) * 0.50
+      const isSaved = (rng() * 100) <= Math.min(58, Math.max(14, saveThreshold))
+
+      return {
+        scored: !isSaved,
+        outcome: isSaved ? 'saved' : 'goal',
+        kickerName: kicker.name,
+        gkName: goalkeeper.name,
+        kickerDir: chosenDir,
+        gkDir: gkDiveDir,
+        style,
+        details: { sameSide: true, technique: 'POWER_CORNER_SAVE_CHALLENGE' }
+      }
+    } else {
+      // Arquero fue al lado equivocado: gol asegurado ante tiro potente al arco
+      return {
+        scored: true,
+        outcome: 'goal',
+        kickerName: kicker.name,
+        gkName: goalkeeper.name,
+        kickerDir: chosenDir,
+        gkDir: gkDiveDir,
+        style,
+        details: { sameSide: false, technique: 'POWER_WRONG_WAY' }
+      }
+    }
+  }
 }

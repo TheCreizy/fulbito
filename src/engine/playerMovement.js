@@ -3,7 +3,13 @@ import * as ballMovement from './ballMovement.js'
 import * as setPositions from './setPositions.js'
 import * as actions from './actions.js'
 import { isCaptainOnPitch, updatePlayerEffectiveSkills } from './modifiers.js'
-import { calculateInterceptMovement, steerTowardsTarget } from './steering.js'
+import {
+  calculateInterceptMovement,
+  steerTowardsTarget,
+  updatePlayerSprintRamp,
+  computeCarrySpeedMultiplier,
+  resolveMovementEffort
+} from './steering.js'
 import { resolvePlayerLine, isPivotRole, assignDefensiveEngagementRoles } from './teamShape.js'
 import { computePlayerPressure } from './space/pressureMap.js'
 import { tryInterceptLooseBall } from './ballContest.js'
@@ -202,15 +208,25 @@ export function decideMovement(closestPlayer, team, opp, matchDetails) {
 
         if (needsRecoverySprint) {
           action = 'sprint'
+        } else if (
+          thisPlayer.transitionState === 'COUNTER_PRESSING' &&
+          (!withPlayer || withTeam !== team.teamID) &&
+          thisPlayer.position !== 'GK'
+        ) {
+          // Fase 5 (Gegenpressing / Counter-Press 5s): Los 3 jugadores más cercanos cazan al poseedor y cierran líneas a máxima intensidad
+          if (action !== 'tackle' && action !== 'slide' && action !== 'intercept') action = 'sprint'
+          ballToPlayerX = closestPlayerActionBallX(ballToPlayerX)
+          ballToPlayerY = closestPlayerActionBallY(ballToPlayerY)
+          thisPlayer.intentPOS = [position[0], position[1]]
         } else if ((!withPlayer || withTeam !== team.teamID) && (closestPlayer.name === thisPlayer.name || thisPlayer.defensiveState === 'FIRST_DEFENDER_DELAY')) {
           // El 1er defensor o jugador más cercano presiona al portador rival
           if (action !== 'tackle' && action !== 'slide' && action !== 'intercept') action = 'sprint'
           ballToPlayerX = closestPlayerActionBallX(ballToPlayerX)
           ballToPlayerY = closestPlayerActionBallY(ballToPlayerY)
         } else if (withTeam !== team.teamID && thisPlayer.position !== 'GK' && thisPlayer.defensiveTarget) {
-          // 2do y 3er defensor (SECOND_DEFENDER_COVER, MARKING_TIGHT, HOLDING_LINE_BALANCE)
+          // 2do y 3er defensor (SECOND_DEFENDER_COVER, MARKING_TIGHT, HOLDING_LINE_BALANCE) o TRACKING_BACK en transición
           thisPlayer.intentPOS = [thisPlayer.defensiveTarget.targetX, thisPlayer.defensiveTarget.targetY]
-          if (thisPlayer.defensiveState === 'SECOND_DEFENDER_COVER') {
+          if (thisPlayer.defensiveState === 'SECOND_DEFENDER_COVER' || thisPlayer.transitionState === 'TRACKING_BACK') {
             action = 'sprint'
           }
         } else if (
@@ -273,11 +289,12 @@ export function decideMovement(closestPlayer, team, opp, matchDetails) {
       }
       if (action === 'sprint' || action === 'intercept') {
         thisPlayer.isSprinting = true
-        thisPlayer.sprintMomentum = Math.min(1.0, (thisPlayer.sprintMomentum || 0) + 0.25)
+        updatePlayerSprintRamp(thisPlayer, true)
       } else {
         thisPlayer.isSprinting = false
-        thisPlayer.sprintMomentum = Math.max(0, (thisPlayer.sprintMomentum || 0) - 0.25)
+        updatePlayerSprintRamp(thisPlayer, false)
       }
+      resolveMovementEffort(thisPlayer, action)
       const move = getMovement(thisPlayer, action, opp, ballToPlayerX, ballToPlayerY, matchDetails, team)
       teamActions.push({ player: thisPlayer, action, move })
     }
@@ -658,9 +675,14 @@ function completeMovement(matchDetails, currentPOS, move, player = null) {
       player.vx = actualMoveX
       player.vy = actualMoveY
       const isTopTeam = (player.originPOS?.[1] ?? 500) < (matchDetails.pitchSize[1] / 2)
-      player.facingAngle = Math.hypot(actualMoveX, actualMoveY) > 0.05
-        ? Math.atan2(actualMoveY, actualMoveX)
-        : (isTopTeam ? Math.PI / 2 : -Math.PI / 2)
+      if (Math.hypot(actualMoveX, actualMoveY) > 0.05) {
+        const moveAngle = Math.atan2(actualMoveY, actualMoveX)
+        if (typeof player.facingAngle !== 'number') {
+          player.facingAngle = moveAngle
+        }
+      } else if (typeof player.facingAngle !== 'number') {
+        player.facingAngle = isTopTeam ? Math.PI / 2 : -Math.PI / 2
+      }
       player.x = currentPOS[0]
       player.y = currentPOS[1]
     }
@@ -950,14 +972,16 @@ function getSmartDribbleMove(matchDetails, player, step, opposition, team) {
 
 export function getRunMovement(matchDetails, player, ballX, ballY, team, opposition) {
   player.isSprinting = false
-  player.sprintMomentum = Math.max(0, (player.sprintMomentum || 0) - 0.25)
+  updatePlayerSprintRamp(player, false)
+  const effort = resolveMovementEffort(player, 'run')
   if (player.position !== 'GK' && player.fitness > 20) {
     const stamina = Number(player.skill?.stamina ?? player.skill?.resistencia ?? 75)
     const staminaMod = Math.max(0.68, Math.min(1.45, 1.0 - (stamina - 75) * 0.012))
     const captainMultiplier = isCaptainOnPitch(team) ? 0.85 : 1.0
     const mentalityMultiplier = team?.mentality === 'offensive' ? 1.18 : (team?.mentality === 'defensive' ? 0.86 : 1.0)
     const ballCarrierDrain = player.hasBall ? 0.004 : 0.0
-    const drain = (0.015 + ballCarrierDrain) * staminaMod * captainMultiplier * mentalityMultiplier
+    const baseDrain = effort?.fitnessDrainRate ?? 0.015
+    const drain = (baseDrain + ballCarrierDrain) * staminaMod * captainMultiplier * mentalityMultiplier
     player.fitness = common.round(Math.max(20, player.fitness - drain), 4)
     if (matchDetails.iterationCount % 35 === 0) updatePlayerEffectiveSkills(player, team)
   }
@@ -965,6 +989,7 @@ export function getRunMovement(matchDetails, player, ballX, ballY, team, opposit
   const tempo = team?.coachState?.coefficients?.tempoMultiplier || 1.0
   step *= tempo * (player.offensiveSpeedBonus || 1.0)
   if (player.hasBall) {
+    step *= computeCarrySpeedMultiplier(player)
     const carrierTicks = (matchDetails.ball.lastCarrierID === player.playerID) ? (matchDetails.ball.carrierTicks || 1) : 1
     const distToGoalY = (player.originPOS[1] > matchDetails.pitchSize[1] / 2) ? player.currentPOS[1] : (matchDetails.pitchSize[1] - player.currentPOS[1])
     // Temporización y escaneo (open-football model): ritmo pausado en posesión para esperar desmarques
@@ -995,30 +1020,35 @@ export function getRunMovement(matchDetails, player, ballX, ballY, team, opposit
 
 export function getSprintMovement(matchDetails, player, ballX, ballY, team, opposition) {
   player.isSprinting = true
-  player.sprintMomentum = Math.min(1.0, (player.sprintMomentum || 0) + 0.25)
+  const ramp = updatePlayerSprintRamp(player, true)
+  const effort = resolveMovementEffort(player, 'sprint')
   if (player.position !== 'GK' && player.fitness > 20) {
     const stamina = Number(player.skill?.stamina ?? player.skill?.resistencia ?? 75)
     const staminaMod = Math.max(0.68, Math.min(1.45, 1.0 - (stamina - 75) * 0.012))
     const captainMultiplier = isCaptainOnPitch(team) ? 0.85 : 1.0
     const mentalityMultiplier = team?.mentality === 'offensive' ? 1.22 : (team?.mentality === 'defensive' ? 0.88 : 1.0)
     const ballCarrierDrain = player.hasBall ? 0.007 : 0.0
-    const drain = (0.038 + ballCarrierDrain) * staminaMod * captainMultiplier * mentalityMultiplier
+    const baseDrain = effort?.fitnessDrainRate ?? 0.038
+    const drain = (baseDrain + ballCarrierDrain) * staminaMod * captainMultiplier * mentalityMultiplier
     player.fitness = common.round(Math.max(20, player.fitness - drain), 4)
     if (matchDetails.iterationCount % 35 === 0) updatePlayerEffectiveSkills(player, team)
   }
-  // Sprint explosivo: 6.5 a 9.5 px/tick según agilidad
-  let baseStep = 6.5
-  if (player.skill.agility >= 94) baseStep = 9.5
-  else if (player.skill.agility >= 86) baseStep = 8.5
-  else if (player.skill.agility >= 76) baseStep = 7.5
-  else if (player.skill.agility < 65) baseStep = 5.5
+  // Sprint explosivo: 6.8 a 9.8 px/tick según agilidad, modulado por rampa biomecánica (sprintRamp) y effortMode
+  let baseStep = 7.2
+  if (player.skill.agility >= 94) baseStep = 9.8
+  else if (player.skill.agility >= 86) baseStep = 8.8
+  else if (player.skill.agility >= 75) baseStep = 7.8
+  else if (player.skill.agility < 65) baseStep = 5.8
 
+  const rampFactor = 0.82 + 0.18 * ramp
+  const effortMult = effort?.speedMultiplier ?? 1.0
   const tempo = team?.coachState?.coefficients?.tempoMultiplier || 1.0
-  const step = (player.fitness < 45
+  let step = (player.fitness < 45
     ? Math.max(3.5, baseStep * (0.60 + ((player.fitness - 20) / 25) * 0.40))
-    : baseStep) * tempo * (player.offensiveSpeedBonus || 1.0)
+    : baseStep) * rampFactor * effortMult * tempo * (player.offensiveSpeedBonus || 1.0)
 
   if (player.hasBall) {
+    step *= computeCarrySpeedMultiplier(player)
     return getSmartDribbleMove(matchDetails, player, step, opposition, team)
   }
 

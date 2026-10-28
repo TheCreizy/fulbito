@@ -1,5 +1,8 @@
 # Notas de Análisis del Proyecto: Juego de Fútbol (Simulador + Draft)
 
+> **Estado Documental:** `[HISTÓRICO / BASELINE FULBITO 1.0]`
+> *Nota de Enrutamiento (Fulbito 2.2):* Las reglas de producto de Modos Draft (\$250M / 16 rondas), FUT Draft, estética "Fútbol de Primera / PC Fútbol" y relatos estilo Araujo y Macaya de este documento **siguen 100% vigentes**. Para la arquitectura interna actual del motor físico, táctico y de IA (`src/engine/`), consulta **`Rediseño del Motor Fulbito 2.md`** y **`UPDATE FULBITO 2.2.md`**.
+
 ## 1. Resumen del Objetivo General
 Construir una aplicación web de simulación de fútbol en 2D (estilo *Football Manager* clásico combinado con *Ultimate Team Draft* / *Auto-chess* y relatos argentinos estilo **Araujo y Macaya Márquez**), lista para desplegarse en un **hosting compartido de Hostinger**.
 

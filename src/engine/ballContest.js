@@ -8,6 +8,10 @@
 
 import { getDefenderRestraintMultiplier, adjudicateFoul } from './officiating/referee.js';
 import { hasTrait } from './player/effectiveSkill.js';
+import { resolveAerialDuel, resolveGoalkeeperSave25D, computeAerialScore } from './ball/ballContest25D.js';
+import { evaluateDribbleDuel1v1, shouldAttemptDribble } from './evaluators/duelEvaluator.js';
+
+export { resolveAerialDuel, resolveGoalkeeperSave25D, computeAerialScore, evaluateDribbleDuel1v1, shouldAttemptDribble };
 
 function getPos(entity) {
   if (!entity) return { x: 0, y: 0 };

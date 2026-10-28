@@ -5,6 +5,7 @@ import { resolveBallCarrierEngagement } from './ballContest.js'
 import { adjudicateFoul, getDefenderRestraintMultiplier } from './officiating/referee.js'
 import { evaluateShotAndBreakaway } from './evaluators/shotEvaluator.js'
 import { evaluateBestPassOption } from './evaluators/passEvaluator.js'
+import { shouldAttemptDribble } from './evaluators/duelEvaluator.js'
 import { hasTrait } from './player/effectiveSkill.js'
 
 export function selectAction(possibleActions, player, team, opposition, matchDetails) {
@@ -30,6 +31,12 @@ export function selectAction(possibleActions, player, team, opposition, matchDet
         const tbAct = possibleActions.find(a => a.name === 'throughBall')
         if (tbAct) tbAct.points = (tbAct.points || 0) + 45
       }
+    }
+
+    const closestDef = (opposition.players || []).find(common.isOnPitch)
+    if (closestDef && shouldAttemptDribble(player, closestDef, { zoneId: player.zoneId, isInsidePenaltyBox: player.isInsidePenaltyBox })) {
+      const runAct = possibleActions.find(a => a.name === 'run' || a.name === 'sprint')
+      if (runAct) runAct.points = (runAct.points || 0) + 25
     }
 
     if (hasTrait(player, 'SPEED_DRIBBLER')) {

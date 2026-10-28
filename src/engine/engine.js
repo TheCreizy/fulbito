@@ -17,6 +17,10 @@ import { computeDefensiveBlockTargets, assignDefensiveEngagementRoles } from "./
 import { assignOffensiveSupportRoles } from "./tactics/offensiveShape.js";
 import { computeSquadChemistryMultipliers } from "./player/effectiveSkill.js";
 import { updatePlayerCognition } from "./player/cognition.js";
+import { updateMatchContinuum } from "./core/matchContext.js";
+import { updatePlayerStateMachine } from "./player/playerStateMachine.js";
+import { enforceRationalSpaceOccupation } from "./space/pitchZones.js";
+import { resolvePsychologicalPenalty } from "./setFreekicks.js";
 
 export async function initiateGame(team1, team2, pitchDetails) {
   validate.validateArguments(team1, team2, pitchDetails);
@@ -47,6 +51,10 @@ export async function initiateGame(team1, team2, pitchDetails) {
   computeSquadChemistryMultipliers(secondTeam);
   matchDetails.kickOffTeam = kickOffTeam;
   matchDetails.secondTeam = secondTeam;
+
+  // Inicializar telemetría táctica y HFSM inicial para los 22 jugadores
+  updateSpatialAndTacticalTelemetry(matchDetails);
+
   return matchDetails;
 }
 
@@ -67,6 +75,9 @@ export function updateSpatialAndTacticalTelemetry(matchDetails) {
     ? { width: matchDetails.pitchSize[0], height: matchDetails.pitchSize[1] }
     : DEFAULT_PITCH_BOUNDS;
   const halfwayY = pitchBounds.height / 2;
+
+  // 0. Máquina de Estados de las 4 Fases del Continuum Táctico (Fase 5 — Fulbito 2.2)
+  updateMatchContinuum(matchDetails, pitchBounds);
 
   const isTopKo = (kickOffTeam.players?.[0]?.originPOS?.[1] ?? 0) < halfwayY;
   const isTopSt = (secondTeam.players?.[0]?.originPOS?.[1] ?? 0) < halfwayY;
@@ -154,6 +165,22 @@ export function updateSpatialAndTacticalTelemetry(matchDetails) {
           p.offensiveTarget = null;
         }
       }
+    }
+
+    // Fase 6 (Fulbito 2.2): Exclusión racional de celdas (zone18, lane) y triángulos
+    const isTopAtt = (attackingTeam.players?.[0]?.originPOS?.[1] ?? 0) < halfwayY;
+    enforceRationalSpaceOccupation(attackingTeam.players, ball, pitchBounds, isTopAtt ? 1 : -1);
+  }
+
+  // Fase 6 (Fulbito 2.2): Orquestador HFSM con histéresis anti-jitter para los 22 jugadores
+  for (const p of kickOffTeam.players) {
+    if (common.isOnPitch(p)) {
+      updatePlayerStateMachine(p, kickOffTeam, secondTeam, ball, matchDetails, pitchBounds);
+    }
+  }
+  for (const p of secondTeam.players) {
+    if (common.isOnPitch(p)) {
+      updatePlayerStateMachine(p, secondTeam, kickOffTeam, ball, matchDetails, pitchBounds);
     }
   }
 }
@@ -657,66 +684,9 @@ export function makeSubstitution(
 }
 
 /**
- * Simula un penal individual para la tanda de definición por penales post-alargue.
+ * Simula un penal individual para la tanda de definición por penales post-alargue,
+ * gobernado por el motor cognitivo de penales psicológicos 2.5D (Fulbito 2.2 §7.4).
  */
 export function simulateShootoutKick(kicker, goalkeeper) {
-  const penSkill = Number(
-    kicker.baseSkill?.penalty_taking || kicker.skill?.penalty_taking || 70,
-  );
-  const shootSkill = Number(
-    kicker.baseSkill?.shooting || kicker.skill?.shooting || 70,
-  );
-  const gkSaving = Number(
-    goalkeeper.baseSkill?.saving || goalkeeper.skill?.saving || 75,
-  );
-  const gkPer = Number(
-    goalkeeper.baseSkill?.perception || goalkeeper.skill?.perception || 75,
-  );
-
-  const directions = ["left", "center", "right"];
-  const chosenDir = directions[common.getRandomNumber(0, 2)];
-  const gkDiveDir = directions[common.getRandomNumber(0, 2)];
-
-  // Probabilidad de que el remate vaya al arco según PEN + SHO
-  const accuracyChance = Math.min(96, 52 + penSkill * 0.36 + shootSkill * 0.1);
-  const accuracyRoll = common.getRandomNumber(1, 100);
-
-  if (accuracyRoll > accuracyChance) {
-    return {
-      scored: false,
-      outcome: "missed", // Afuera o al travesaño
-      kickerName: kicker.name,
-      gkName: goalkeeper.name,
-      kickerDir: chosenDir,
-      gkDir: gkDiveDir,
-    };
-  }
-
-  // Si va al arco, ver si el arquero adivina el palo y alcanza a atajarlo
-  const sameSide = chosenDir === gkDiveDir;
-  const savePower = gkSaving * 0.65 + gkPer * 0.35 - penSkill * 0.35;
-  const saveChance = sameSide
-    ? Math.max(18, Math.min(72, savePower))
-    : Math.max(3, Math.min(14, savePower * 0.2));
-  const saveRoll = common.getRandomNumber(1, 100);
-
-  if (saveRoll <= saveChance) {
-    return {
-      scored: false,
-      outcome: "saved", // Atajado por el arquero
-      kickerName: kicker.name,
-      gkName: goalkeeper.name,
-      kickerDir: chosenDir,
-      gkDir: gkDiveDir,
-    };
-  }
-
-  return {
-    scored: true,
-    outcome: "goal",
-    kickerName: kicker.name,
-    gkName: goalkeeper.name,
-    kickerDir: chosenDir,
-    gkDir: gkDiveDir,
-  };
+  return resolvePsychologicalPenalty(kicker, goalkeeper);
 }
